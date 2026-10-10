@@ -1,0 +1,103 @@
+{
+  "device": {
+    "type": "pc",
+    "shortcut_path": "C:\\Users\\Amigo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Google Play Games\\Clash of Clans.lnk",
+    "window_title": "Clash of Clans",
+    "adb_path": "",
+    "adb_serial": "127.0.0.1:5555",
+    "scrcpy_dir": "C:\\scrcpy"
+  },
+  "profile": "pc-1920x1080",
+  "mode": "loot_all",
+  "loot": {
+    "watch": {
+      "gold": false,
+      "elixir": true,
+      "dark": false
+    },
+    "full_rule": "any",
+    "min_loot": {
+      "gold": 0,
+      "elixir": 1200000,
+      "dark": 0
+    },
+    "min_loot_rule": "any",
+    "max_searches": 150,
+    "max_attacks_per_account": 0,
+    "battle_seconds": 40,
+    "attack_plan": "edrag_spread",
+    "zoom_out": true,
+    "stuck_attacks": 2,
+    "roles": {
+      "main": true,
+      "loot": true,
+      "feeder": false
+    }
+  },
+  "full_at": {
+    "19": {
+      "gold": 40500000,
+      "elixir": 40500000,
+      "dark": 500000
+    },
+    "18": {
+      "gold": 30500000,
+      "elixir": 30500000,
+      "dark": 480000
+    },
+    "17": {
+      "gold": 27500000,
+      "elixir": 27500000,
+      "dark": 440000
+    },
+    "16": {
+      "gold": 25500000,
+      "elixir": 25500000,
+      "dark": 400000
+    },
+    "15": {
+      "gold": 22500000,
+      "elixir": 22500000,
+      "dark": 380000
+    },
+    "14": {
+      "gold": 20500000,
+      "elixir": 20500000,
+      "dark": 360000
+    },
+    "13": {
+      "gold": 17500000,
+      "elixir": 17500000,
+      "dark": 340000
+    },
+    "12": {
+      "gold": 14000000,
+      "elixir": 14000000,
+      "dark": 300000
+    },
+    "11": {
+      "gold": 8000000,
+      "elixir": 8000000,
+      "dark": 200000
+    }
+  },
+  "when_full": "switch",
+  "when_done": "nothing",
+  "repeat_rounds": 1,
+  "donate": {
+    "min_elixir_keep": 4000000,
+    "rounds": 0,
+    "troops": [],
+    "remove_cc_before_request": true,
+    "request_text": ""
+  },
+  "hotkeys": {
+    "continue": "f8",
+    "pause": "f9",
+    "stop": "f10"
+  },
+  "minimize_on_start": true,
+  "save_error_screenshots": true,
+  "current_account": "Buggu02",
+  "current_th": 0
+}

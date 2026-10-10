@@ -1,0 +1,43 @@
+"""Every template image the bot uses, with where to capture it.
+
+The Templates tab lists these and shows which are missing. "required" ones must
+exist before the bot can run its basic loop.
+"""
+
+CATALOG = [
+    # key, screen, how to capture, required
+    ("home/attack_button", "Home", "The 'Attack!' button, bottom-left of the village", True),
+    ("home/settings_button", "Home", "The settings gear, bottom-right", True),
+    ("home/chat_button", "Home", "The chat button on the left edge", False),
+    ("attack_menu/find_match", "Attack menu", "The words 'Find a Match' on the Battle card (not the cost)", True),
+    ("army/my_army_title", "Army", "The 'My Army' tab title", True),
+    ("army/attack_button", "Army (after Find a Match)", "The green 'Attack!' button", True),
+    ("army/close", "Army", "The red X, top-right", True),
+    ("scout/available_loot", "Scouting", "The text 'Available Loot:'", True),
+    ("scout/next", "Scouting", "The word 'Next' and magnifier on the orange button (not the cost)", True),
+    ("scout/end_battle", "Scouting", "The red 'End Battle' button before deploying", True),
+    ("battle/surrender", "Battle", "The red 'Surrender' button bottom-left after deploying", True),
+    ("battle/confirm_okay", "Battle", "The green 'Okay' in the surrender confirmation", False),
+    ("results/claim_reward", "Results", "The green 'Claim Reward' button after a battle", True),
+    ("results/return_home", "Results", "The 'Return Home' button after a battle (when there is no reward)", True),
+    ("chest/pedestal", "Chest", "The stone pedestal with the hammer row under a reward chest", False),
+    ("chest/continue", "Chest", "The green 'Continue' after opening a chest", False),
+    ("settings/title", "Settings", "The 'Settings' title", True),
+    ("settings/switch_id", "Settings", "The blue switch-account button (two arrows)", True),
+    ("settings/close", "Settings", "The red X, top-right", True),
+    ("sid/switch_id_label", "Supercell ID", "The 'SWITCH ID' label in the account panel", True),
+    ("sid/close", "Supercell ID", "The X, top-right of the account panel", True),
+    ("load/loading", "Loading", "Something unique on the loading screen", False),
+    ("popup/reload", "Popups", "The 'Reload' button (connection lost / inactive)", False),
+    ("popup/try_again", "Popups", "The 'Try Again' button", False),
+    ("popup/okay", "Popups", "A green 'Okay' button on info popups", False),
+    ("army/request_button", "Army", "The green Clan Castle request button (castle + speech bubble)", False),
+    ("army/cc_remove", "Army", "The Clan Castle trash button", False),
+    ("request/send", "Request", "The 'Send' button in the request window", False),
+    ("chat/donate_button", "Chat", "A 'Donate' button under a troop request", False),
+    ("chat/close", "Chat", "The arrow/close that hides the chat", False),
+    ("donate/window_title", "Donate", "Something unique on the donate window", False),
+]
+
+KEYS = [c[0] for c in CATALOG]
+REQUIRED = [c[0] for c in CATALOG if c[3]]

@@ -1,0 +1,317 @@
+{
+  "army/attack_button": {
+    "box": [
+      1470,
+      892,
+      300,
+      56
+    ],
+    "region": [
+      1410,
+      832,
+      420,
+      176
+    ],
+    "threshold": 0.85
+  },
+  "army/close": {
+    "box": [
+      1735,
+      120,
+      55,
+      55
+    ],
+    "region": [
+      1675,
+      60,
+      175,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "army/my_army_title": {
+    "box": [
+      370,
+      138,
+      160,
+      38
+    ],
+    "region": [
+      310,
+      78,
+      280,
+      158
+    ],
+    "threshold": 0.85
+  },
+  "attack_menu/find_match": {
+    "box": [
+      105,
+      712,
+      335,
+      44
+    ],
+    "region": [
+      45,
+      652,
+      455,
+      164
+    ],
+    "threshold": 0.85
+  },
+  "battle/confirm_okay": {
+    "box": [
+      995,
+      615,
+      280,
+      108
+    ],
+    "region": [
+      935,
+      555,
+      400,
+      228
+    ],
+    "threshold": 0.85
+  },
+  "battle/surrender": {
+    "box": [
+      28,
+      828,
+      172,
+      42
+    ],
+    "region": [
+      0,
+      768,
+      260,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "chest/continue": {
+    "box": [
+      850,
+      945,
+      250,
+      62
+    ],
+    "region": [
+      790,
+      885,
+      370,
+      182
+    ],
+    "threshold": 0.85
+  },
+  "chest/pedestal": {
+    "box": [
+      640,
+      860,
+      640,
+      150
+    ],
+    "region": [
+      580,
+      800,
+      760,
+      270
+    ],
+    "threshold": 0.8
+  },
+  "home/attack_button": {
+    "box": [
+      30,
+      905,
+      150,
+      140
+    ],
+    "region": [
+      0,
+      845,
+      240,
+      235
+    ],
+    "threshold": 0.85
+  },
+  "home/chat_button": {
+    "box": [
+      28,
+      455,
+      80,
+      80
+    ],
+    "region": [
+      0,
+      395,
+      168,
+      200
+    ],
+    "threshold": 0.85
+  },
+  "home/settings_button": {
+    "box": [
+      1820,
+      798,
+      74,
+      70
+    ],
+    "region": [
+      1760,
+      738,
+      160,
+      190
+    ],
+    "threshold": 0.85
+  },
+  "results/claim_reward": {
+    "box": [
+      805,
+      895,
+      320,
+      66
+    ],
+    "region": [
+      745,
+      835,
+      440,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "results/return_home": {
+    "box": [
+      852,
+      892,
+      218,
+      82
+    ],
+    "region": [
+      792,
+      832,
+      338,
+      202
+    ],
+    "threshold": 0.85
+  },
+  "scout/available_loot": {
+    "box": [
+      80,
+      95,
+      136,
+      24
+    ],
+    "region": [
+      20,
+      35,
+      256,
+      144
+    ],
+    "threshold": 0.85
+  },
+  "scout/end_battle": {
+    "box": [
+      28,
+      828,
+      172,
+      42
+    ],
+    "region": [
+      0,
+      768,
+      260,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "scout/next": {
+    "box": [
+      1662,
+      772,
+      236,
+      50
+    ],
+    "region": [
+      1602,
+      712,
+      318,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "settings/close": {
+    "box": [
+      1515,
+      90,
+      62,
+      60
+    ],
+    "region": [
+      1455,
+      30,
+      182,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "settings/switch_id": {
+    "box": [
+      1202,
+      194,
+      72,
+      66
+    ],
+    "region": [
+      1142,
+      134,
+      192,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "settings/title": {
+    "box": [
+      880,
+      100,
+      186,
+      44
+    ],
+    "region": [
+      820,
+      40,
+      306,
+      164
+    ],
+    "threshold": 0.85
+  },
+  "sid/close": {
+    "box": [
+      1845,
+      32,
+      42,
+      42
+    ],
+    "region": [
+      1785,
+      0,
+      135,
+      134
+    ],
+    "threshold": 0.85
+  },
+  "sid/switch_id_label": {
+    "box": [
+      1560,
+      385,
+      120,
+      85
+    ],
+    "region": [
+      1500,
+      325,
+      240,
+      205
+    ],
+    "threshold": 0.85
+  }
+}
