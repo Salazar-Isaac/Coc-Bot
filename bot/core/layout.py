@@ -30,6 +30,10 @@ DEFAULT_LAYOUT = {
         "sid.close": [1866, 53],
         "sid.scroll_from": [1620, 1010],
         "sid.scroll_to": [1620, 610],
+        "chat.close": [655, 497],
+        "chat.scroll_from": [300, 300],      # swipe down in the chat = older messages
+        "chat.scroll_to": [300, 760],
+        "donate.close": [300, 240],          # a spot in the chat beside the donate window
     },
     "regions": {
         "home.gold": [1600, 28, 230, 44],

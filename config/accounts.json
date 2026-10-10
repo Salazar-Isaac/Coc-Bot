@@ -1,8 +1,8 @@
 [
   {
     "name": "Buggu01",
-    "enabled": true,
     "role": "main",
+    "enabled": true,
     "th": 18,
     "full_at": {
       "gold": 0,
@@ -12,8 +12,8 @@
   },
   {
     "name": "Omishrisha",
-    "enabled": true,
     "role": "loot",
+    "enabled": true,
     "th": 16,
     "full_at": {
       "gold": 0,
@@ -23,8 +23,8 @@
   },
   {
     "name": "Buggu02",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 17,
     "full_at": {
       "gold": 0,
@@ -34,8 +34,8 @@
   },
   {
     "name": "Buggu03",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 17,
     "full_at": {
       "gold": 0,
@@ -45,8 +45,8 @@
   },
   {
     "name": "Buggu04",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 16,
     "full_at": {
       "gold": 0,
@@ -56,8 +56,8 @@
   },
   {
     "name": "Buggu05",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 16,
     "full_at": {
       "gold": 0,
@@ -67,8 +67,8 @@
   },
   {
     "name": "Buggu06",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 14,
     "full_at": {
       "gold": 0,
@@ -78,8 +78,8 @@
   },
   {
     "name": "Buggu07",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -89,8 +89,8 @@
   },
   {
     "name": "Buggu1",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -100,8 +100,8 @@
   },
   {
     "name": "Buggu2",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -111,8 +111,8 @@
   },
   {
     "name": "Buggu3",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -122,8 +122,8 @@
   },
   {
     "name": "Buggu4",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -133,8 +133,8 @@
   },
   {
     "name": "Buggu5",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 15,
     "full_at": {
       "gold": 0,
@@ -144,8 +144,8 @@
   },
   {
     "name": "Buggu6",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 14,
     "full_at": {
       "gold": 0,
@@ -155,8 +155,8 @@
   },
   {
     "name": "Buggu7",
+    "role": "both",
     "enabled": true,
-    "role": "loot",
     "th": 14,
     "full_at": {
       "gold": 0,
@@ -166,8 +166,8 @@
   },
   {
     "name": "Buggu8",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 11,
     "full_at": {
       "gold": 0,
@@ -177,8 +177,8 @@
   },
   {
     "name": "Buggu9",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 11,
     "full_at": {
       "gold": 0,
@@ -188,8 +188,8 @@
   },
   {
     "name": "Buggu10",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -199,8 +199,8 @@
   },
   {
     "name": "Buggu11",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -210,8 +210,8 @@
   },
   {
     "name": "Buggu12",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -221,8 +221,8 @@
   },
   {
     "name": "Buggu13",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -232,8 +232,8 @@
   },
   {
     "name": "Buggu14",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -243,8 +243,8 @@
   },
   {
     "name": "Buggu15",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -254,8 +254,8 @@
   },
   {
     "name": "Buggu16",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -265,8 +265,8 @@
   },
   {
     "name": "Buggu17",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -276,8 +276,8 @@
   },
   {
     "name": "Buggu18",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -287,8 +287,8 @@
   },
   {
     "name": "Buggu19",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -298,8 +298,8 @@
   },
   {
     "name": "Buggu20",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -309,8 +309,8 @@
   },
   {
     "name": "Buggu21",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -320,8 +320,8 @@
   },
   {
     "name": "Buggu22",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -331,8 +331,8 @@
   },
   {
     "name": "Buggu23",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -342,8 +342,8 @@
   },
   {
     "name": "Buggu24",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -353,8 +353,8 @@
   },
   {
     "name": "Buggu25",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -364,8 +364,8 @@
   },
   {
     "name": "Buggu26",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -375,8 +375,8 @@
   },
   {
     "name": "Buggu27",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -386,8 +386,8 @@
   },
   {
     "name": "Buggu28",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -397,8 +397,8 @@
   },
   {
     "name": "Buggu29",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -408,8 +408,8 @@
   },
   {
     "name": "Buggu30",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -419,8 +419,8 @@
   },
   {
     "name": "Buggu31",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -430,8 +430,8 @@
   },
   {
     "name": "Buggu32",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -441,8 +441,8 @@
   },
   {
     "name": "Buggu33",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 10,
     "full_at": {
       "gold": 0,
@@ -452,8 +452,8 @@
   },
   {
     "name": "Buggu34",
-    "enabled": true,
     "role": "feeder",
+    "enabled": true,
     "th": 6,
     "full_at": {
       "gold": 0,

@@ -37,12 +37,14 @@ class TemplateStore:
     def __init__(self):
         self._lock = threading.Lock()
         self._images = {}
+        self._variants = {}
         self.index = {}
         self.reload()
 
     def reload(self):
         with self._lock:
             self._images.clear()
+            self._variants = {}
             if os.path.exists(profile.template_index):
                 with open(profile.template_index, encoding="utf-8") as f:
                     self.index = json.load(f)
@@ -54,6 +56,26 @@ class TemplateStore:
 
     def has(self, key):
         return os.path.exists(self.path(key))
+
+    def variants(self, key):
+        """The template and its extra looks (e.g. another scenery): key, key~2, key~3 ..."""
+        v = self._variants.get(key)
+        if v is None:
+            p = self.path(key)
+            folder, base = os.path.dirname(p), os.path.basename(p)[:-4]
+            v = [key] if os.path.exists(p) else []
+            if os.path.isdir(folder):
+                for f in sorted(os.listdir(folder)):
+                    if f.startswith(base + "~") and f.endswith(".png"):
+                        v.append(key + f[len(base):-4])
+            self._variants[key] = v
+        return v
+
+    def next_variant(self, key):
+        n = 2
+        while os.path.exists(self.path(f"{key}~{n}")):
+            n += 1
+        return f"{key}~{n}"
 
     def image(self, key):
         with self._lock:
@@ -67,7 +89,8 @@ class TemplateStore:
             return img
 
     def meta(self, key):
-        return self.index.get(key, {})
+        """A variant without its own settings uses the main template's (region, threshold)."""
+        return self.index.get(key) or self.index.get(key.split("~")[0], {})
 
     def save(self, key, frame, box, region=None, threshold=DEFAULT_THRESHOLD, pad=60):
         """Cut `box` out of `frame` and store it as template `key`.
@@ -88,6 +111,7 @@ class TemplateStore:
         with self._lock:
             self.index[key] = {"box": box_b, "region": region_b, "threshold": threshold}
             self._images.pop(key, None)
+            self._variants = {}
             with open(profile.template_index, "w", encoding="utf-8") as f:
                 json.dump(self.index, f, indent=2, sort_keys=True)
 
@@ -131,8 +155,7 @@ def _brightness_ok(frame, box, tpl):
     return 0.75 <= ratio <= 1.3
 
 
-def find(frame, key, threshold=None, region=None, any_brightness=False):
-    """Best match of template `key`, or None if below its threshold (or dimmed)."""
+def _find_one(frame, key, threshold, region, any_brightness):
     res, ox, oy, tpl = match_map(frame, key, region)
     _, score, _, loc = cv2.minMaxLoc(res)
     thr = threshold if threshold is not None else templates.meta(key).get("threshold", DEFAULT_THRESHOLD)
@@ -145,9 +168,19 @@ def find(frame, key, threshold=None, region=None, any_brightness=False):
     return Match(x + w // 2, y + h // 2, float(score), (x, y, w, h))
 
 
+def find(frame, key, threshold=None, region=None, any_brightness=False):
+    """Best match of template `key` (or any of its variants), or None if below the
+    threshold (or dimmed behind a popup)."""
+    best = None
+    for k in templates.variants(key) or [key]:
+        m = _find_one(frame, k, threshold, region, any_brightness)
+        if m and (best is None or m.score > best.score):
+            best = m
+    return best
+
+
 def score(frame, key, region=None):
-    res, *_ = match_map(frame, key, region)
-    return float(res.max())
+    return max(float(match_map(frame, k, region)[0].max()) for k in (templates.variants(key) or [key]))
 
 
 def find_all(frame, key, threshold=None, region=None, max_results=20, any_brightness=False):

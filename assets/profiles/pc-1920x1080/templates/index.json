@@ -14,6 +14,36 @@
     ],
     "threshold": 0.85
   },
+  "army/cc_remove": {
+    "box": [
+      1395,
+      760,
+      40,
+      40
+    ],
+    "region": [
+      1335,
+      700,
+      160,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "army/cc_title": {
+    "box": [
+      845,
+      760,
+      135,
+      40
+    ],
+    "region": [
+      785,
+      700,
+      255,
+      160
+    ],
+    "threshold": 0.85
+  },
   "army/close": {
     "box": [
       1735,
@@ -41,6 +71,51 @@
       78,
       280,
       158
+    ],
+    "threshold": 0.85
+  },
+  "army/remove_title": {
+    "box": [
+      755,
+      340,
+      415,
+      55
+    ],
+    "region": [
+      695,
+      280,
+      535,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "army/request_button": {
+    "box": [
+      1633,
+      800,
+      150,
+      72
+    ],
+    "region": [
+      1573,
+      740,
+      270,
+      192
+    ],
+    "threshold": 0.85
+  },
+  "army/request_cooldown": {
+    "box": [
+      1675,
+      795,
+      115,
+      70
+    ],
+    "region": [
+      1615,
+      735,
+      235,
+      190
     ],
     "threshold": 0.85
   },
@@ -89,6 +164,81 @@
     ],
     "threshold": 0.85
   },
+  "chat/challenge": {
+    "box": [
+      318,
+      1005,
+      140,
+      50
+    ],
+    "region": [
+      258,
+      945,
+      260,
+      135
+    ],
+    "threshold": 0.85
+  },
+  "chat/close": {
+    "box": [
+      625,
+      450,
+      58,
+      100
+    ],
+    "region": [
+      565,
+      390,
+      178,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "chat/donate_button": {
+    "box": [
+      410,
+      893,
+      134,
+      40
+    ],
+    "region": [
+      0,
+      80,
+      615,
+      920
+    ],
+    "threshold": 0.85
+  },
+  "chat/request_button": {
+    "box": [
+      482,
+      1000,
+      108,
+      60
+    ],
+    "region": [
+      422,
+      940,
+      228,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "chat/rules_understand": {
+    "box": [
+      140,
+      683,
+      316,
+      52
+    ],
+    "region": [
+      80,
+      623,
+      436,
+      172
+    ],
+    "threshold": 0.85
+  },
   "chest/continue": {
     "box": [
       850,
@@ -118,6 +268,51 @@
       270
     ],
     "threshold": 0.8
+  },
+  "donate/archer": {
+    "box": [
+      772,
+      400,
+      86,
+      60
+    ],
+    "region": [
+      630,
+      380,
+      840,
+      520
+    ],
+    "threshold": 0.85
+  },
+  "donate/balloon": {
+    "box": [
+      1229,
+      400,
+      86,
+      60
+    ],
+    "region": [
+      630,
+      380,
+      840,
+      520
+    ],
+    "threshold": 0.85
+  },
+  "donate/window_title": {
+    "box": [
+      662,
+      268,
+      352,
+      46
+    ],
+    "region": [
+      602,
+      208,
+      472,
+      166
+    ],
+    "threshold": 0.85
   },
   "home/attack_button": {
     "box": [
@@ -191,6 +386,51 @@
       540,
       272,
       154
+    ],
+    "threshold": 0.85
+  },
+  "request/send": {
+    "box": [
+      1005,
+      668,
+      295,
+      120
+    ],
+    "region": [
+      945,
+      608,
+      415,
+      240
+    ],
+    "threshold": 0.85
+  },
+  "request/text_box": {
+    "box": [
+      600,
+      466,
+      724,
+      166
+    ],
+    "region": [
+      540,
+      406,
+      844,
+      286
+    ],
+    "threshold": 0.8
+  },
+  "request/title": {
+    "box": [
+      640,
+      132,
+      640,
+      60
+    ],
+    "region": [
+      580,
+      72,
+      760,
+      180
     ],
     "threshold": 0.85
   },

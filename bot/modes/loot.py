@@ -11,8 +11,10 @@ from .common import StopRun, active_accounts, when_full, with_recovery
 log = logging.getLogger("bot")
 
 
-def _loot_account(bot, acc, state, switch=True):
-    """Loot one account until full, applying 'when full'. Returns when we should move on."""
+def _loot_account(bot, acc, state, switch=True, cycle=False):
+    """Loot one account until full, applying 'when full'. Returns when we should move on.
+    In the donation cycle (cycle=True) "switch to the next account" is implied, but
+    "wait for me" and "stop" still apply."""
     if switch:
         ok = with_recovery(bot, f"switch to {acc['name']}",
                            lambda: account_actions.switch_to(bot, acc, state))
@@ -26,6 +28,8 @@ def _loot_account(bot, acc, state, switch=True):
             return                                   # gave up after retries
         log.info("%s: %s", acc["name"], {"full": "storages full", "stuck": "storages full (stopped growing)",
                                           "limit": "attack limit reached"}[result])
+        if cycle and bot.settings.get("when_full") == "switch":
+            return
         if when_full(bot, acc) == "next":
             return
 
@@ -34,7 +38,7 @@ def _loot_account(bot, acc, state, switch=True):
           "Switch through the enabled accounts (roles ticked in Loot Settings) in list order and loot "
           "each one until its watched storages are full.", order=1)
 def run_loot_all(bot, state):
-    roles = [r for r, on in bot.settings["loot"].get("roles", {}).items() if on] or ["main", "loot"]
+    roles = [r for r, on in bot.settings["loot"].get("roles", {}).items() if on] or ["main", "loot", "both"]
     accounts = active_accounts(bot, roles)
     if not accounts:
         raise StopRun("No enabled accounts with the roles ticked in Loot Settings.")

@@ -45,6 +45,10 @@ class Device:
         """Press a key. Returns False if this device has no keyboard."""
         return False
 
+    def type_text(self, text):
+        """Type text into the focused text box."""
+        return False
+
     def zoom_out(self):
         raise NotImplementedError
 
@@ -116,20 +120,60 @@ class PcDevice(Device):
         self._kb = Controller()
         self._Key = Key
         self.window = GameWindow(title_prefix, shortcut_path)
+        self._viewport = None        # (x, y, w, h) of the game inside the window's client area
+        self._viewport_for = None    # client size it was measured for
 
     def describe(self):
         return "Google Play Games (PC)"
 
+    @staticmethod
+    def find_viewport(img):
+        """The game picture inside the window. In windowed mode Google Play Games draws its
+        own dark title bar and sidebar inside the client area; strip those off."""
+        h, w = img.shape[:2]
+        dark = img.max(axis=2) < 45
+        col = dark[h // 6: h * 5 // 6].mean(axis=0)
+        row = dark[:, w // 6: w * 5 // 6].mean(axis=1)
+
+        def edge(fr, limit, rev=False):
+            idx = range(len(fr) - 1, len(fr) - 1 - limit, -1) if rev else range(limit)
+            n = 0
+            for i in idx:
+                if fr[i] < 0.8:
+                    break
+                n += 1
+            return n
+
+        left, right = edge(col, w // 4), edge(col, w // 4, rev=True)
+        top, bottom = edge(row, h // 4), edge(row, h // 4, rev=True)
+        vw, vh = w - left - right, h - top - bottom
+        if vw < w * 0.5 or vh < h * 0.5 or not (1.2 <= vw / vh <= 2.4):
+            return 0, 0, w, h
+        return left, top, vw, vh
+
     def _screen(self, x, y):
         left, top, _, _ = self.window.client_rect()
-        return left + x, top + y
+        vx, vy = (self._viewport or (0, 0, 0, 0))[:2]
+        return left + vx + x, top + vy + y
 
     def prepare(self):
         if not self.window.is_foreground():
             self.window.focus()
 
     def _capture_native(self):
-        return self.window.capture()
+        img = self.window.capture()
+        h, w = img.shape[:2]
+        # (re)measure the game area when the window size changes; skip dark frames
+        # (loading / black screens) so a black picture is not mistaken for chrome
+        if self._viewport_for != (w, h) and img.mean() > 40:
+            self._viewport = self.find_viewport(img)
+            self._viewport_for = (w, h)
+            if self._viewport != (0, 0, w, h):
+                log.info("Game area inside the window: %s (window %dx%d)", self._viewport, w, h)
+        if self._viewport_for != (w, h) or not self._viewport:
+            return img
+        x, y, vw, vh = self._viewport
+        return img[y:y + vh, x:x + vw]
 
     def _tap_native(self, x, y):
         self._pg.click(*self._screen(x, y))
@@ -149,6 +193,11 @@ class PcDevice(Device):
         k = getattr(self._Key, name) if len(name) > 1 else name
         self._kb.press(k)
         self._kb.release(k)
+        return True
+
+    def type_text(self, text):
+        self.prepare()
+        self._kb.type(text)
         return True
 
     def zoom_out(self, steps=10):
@@ -201,7 +250,7 @@ EMULATOR_PORTS = {
     "MEmu": "127.0.0.1:21503",
 }
 
-ANDROID_KEYS = {"back": 4, "esc": 4, "home": 3, "enter": 66, "space": 62}
+ANDROID_KEYS = {"back": 4, "esc": 4, "home": 3, "enter": 66, "space": 62, "backspace": 67, "end": 123}
 
 
 class AdbDevice(Device):
@@ -281,6 +330,12 @@ class AdbDevice(Device):
         if code is None:
             return False
         self._sh(f"input keyevent {code}")
+        return True
+
+    def type_text(self, text):
+        safe = "".join(ch if ch.isalnum() else ("%s" if ch == " " else "") for ch in text)
+        if safe:
+            self._sh(f"input text '{safe}'")
         return True
 
     def zoom_out(self, steps=3):

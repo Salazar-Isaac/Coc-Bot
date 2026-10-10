@@ -67,6 +67,15 @@ def main(argv):
             dev.swipe(x1, y1, x2, y2, int(args[4]) if len(args) > 4 else 500)
         elif cmd == "zoomout":
             dev.zoom_out()
+        elif cmd == "variant":                       # variant KEY X Y W H [shot]: another look of KEY
+            key, box = args[0], list(map(int, args[1:5]))
+            frame = load(args[5]) if len(args) > 5 else dev.capture()
+            vk = vision.templates.next_variant(key)
+            x, y, w, h = box
+            p = vision.templates.path(vk)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            cv2.imencode(".png", frame[y:y + h, x:x + w])[1].tofile(p)
+            print("saved variant", p)
         elif cmd == "crop":
             key, box = args[0], list(map(int, args[1:5]))
             thr = float(args[5]) if len(args) > 5 else vision.DEFAULT_THRESHOLD

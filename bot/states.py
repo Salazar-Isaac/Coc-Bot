@@ -22,7 +22,7 @@ STATES = [
     ("confirm", ["battle/confirm_okay"]),
     ("scout", ["scout/next"]),              # "Available Loot" stays visible in battle, Next does not
     ("battle", ["battle/surrender"]),
-    ("home", ["home/attack_button"]),
+    ("home", ["home/attack_button", "home/settings_button"]),
     ("loading", ["load/loading"]),
 ]
 

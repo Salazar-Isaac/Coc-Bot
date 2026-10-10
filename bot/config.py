@@ -51,7 +51,7 @@ DEFAULT_SETTINGS = {
         "attack_plan": "edrag_spread",
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
-        "roles": {"main": True, "loot": True, "feeder": False},   # who "Loot all accounts" loots
+        "roles": {"main": True, "loot": True, "both": True, "feeder": False},   # who "Loot all accounts" loots
     },
     "full_at": DEFAULT_FULL_AT,
     "when_full": "switch",                  # "switch" / "wait" / "stop"
@@ -71,7 +71,8 @@ DEFAULT_SETTINGS = {
     "save_error_screenshots": True,
 }
 
-# role: "main" (donates), "loot" (loot only), "feeder" (requests troops), "skip"
+# role: "main" (loots + donates), "loot" (loot only), "both" (loots in Loot all + requests),
+#       "feeder" (only requests), "skip"
 DEFAULT_ACCOUNTS = []
 
 

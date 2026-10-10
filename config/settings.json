@@ -33,6 +33,7 @@
     "roles": {
       "main": true,
       "loot": true,
+      "both": true,
       "feeder": false
     }
   },
@@ -92,8 +93,20 @@
     "remove_cc_before_request": true,
     "request_text": "",
     "loot_before_donate": true,
-    "items": [],
-    "troops": []
+    "items": [
+      {
+        "name": "Balloon",
+        "template": "donate/balloon",
+        "clicks": 6,
+        "enabled": true
+      },
+      {
+        "name": "Archer",
+        "template": "donate/archer",
+        "clicks": 10,
+        "enabled": true
+      }
+    ]
   },
   "hotkeys": {
     "continue": "f8",
