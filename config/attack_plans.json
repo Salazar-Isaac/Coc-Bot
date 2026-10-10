@@ -105,47 +105,56 @@
       {
         "key": "a",
         "slot": 9,
-        "points": "spells"
+        "points": "spells",
+        "type": "spell"
       },
       {
         "key": "3",
         "slot": 3,
-        "points": "ring"
+        "points": "ring",
+        "type": "troop"
       },
       {
         "key": "1",
         "slot": 1,
-        "points": "ring"
+        "points": "ring",
+        "type": "troop"
       },
       {
         "key": "2",
         "slot": 2,
-        "points": "ring"
+        "points": "ring",
+        "type": "troop"
       },
       {
         "key": "q",
         "slot": 5,
-        "points": "king"
+        "points": "king",
+        "type": "hero"
       },
       {
         "key": "w",
         "slot": 6,
-        "points": "queen"
+        "points": "queen",
+        "type": "hero"
       },
       {
         "key": "e",
         "slot": 7,
-        "points": "warden"
+        "points": "warden",
+        "type": "hero"
       },
       {
         "key": "r",
         "slot": 8,
-        "points": "champion"
+        "points": "champion",
+        "type": "hero"
       },
       {
         "key": "z",
         "slot": 4,
-        "points": "ring"
+        "points": "ring",
+        "type": "siege"
       }
     ]
   }

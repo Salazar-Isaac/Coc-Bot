@@ -3,8 +3,8 @@
   PcDevice   Google Play Games on Windows (PrintWindow capture + real mouse/keyboard)
   AdbDevice  Any Android over ADB: BlueStacks, LDPlayer, MuMu, Nox or a USB/Wi-Fi phone
 
-The bot works in "game space" (the active profile's size, 1920x1080 by default).
-Each device converts to and from its own native resolution.
+The bot works in "game space" (see space.py): the device image scaled uniformly
+to the profile's height (1080), so any window size or aspect ratio works.
 """
 
 import logging
@@ -16,7 +16,7 @@ import time
 import cv2
 import numpy as np
 
-from .profile import profile
+from .space import space
 from .window import GameWindow
 
 log = logging.getLogger("bot")
@@ -71,8 +71,10 @@ class Device:
         frame = self._capture_native()
         h, w = frame.shape[:2]
         self._native = (w, h)
-        if (w, h) != profile.size:
-            frame = cv2.resize(frame, profile.size, interpolation=cv2.INTER_AREA)
+        gw, gh = space.update(w, h)
+        if (w, h) != (gw, gh):
+            interp = cv2.INTER_AREA if w > gw else cv2.INTER_LINEAR
+            frame = cv2.resize(frame, (gw, gh), interpolation=interp)
         return frame
 
     def native_size(self):
@@ -81,8 +83,8 @@ class Device:
         return self._native
 
     def to_native(self, x, y):
-        w, h = self.native_size()
-        return round(x * w / profile.width), round(y * h / profile.height)
+        self.native_size()
+        return round(x * space.scale), round(y * space.scale)
 
     def tap(self, x, y):
         self.prepare()

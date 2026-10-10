@@ -10,6 +10,7 @@ import json
 import os
 
 from .profile import profile
+from .space import space
 
 DEFAULT_LAYOUT = {
     "points": {
@@ -60,10 +61,12 @@ class Layout:
         self.regions = data["regions"]
 
     def point(self, name):
-        return tuple(self.points[name])
+        """A click point in the current game space (pinned to its screen edge)."""
+        return space.point(*self.points[name])
 
     def region(self, name):
-        return tuple(self.regions[name])
+        """A read region in the current game space (pinned to its screen edge)."""
+        return space.region(*self.regions[name])
 
 
 layout = Layout()

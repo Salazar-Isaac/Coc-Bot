@@ -45,7 +45,9 @@ DEFAULT_SETTINGS = {
         "min_loot_rule": "any",             # attack when "any" / "all" watched resources reach the minimum
         "max_searches": 150,                # give up searching after this many "Next" (then retry)
         "max_attacks_per_account": 0,       # 0 = no limit
-        "battle_seconds": 40,               # wait after deploying before ending the battle
+        "battle_seconds": 60,               # max battle time: end the battle after this many seconds
+        "smart_deploy": True,               # find the red no-deploy area and drop troops just outside it
+        "count_troops": True,               # read each troop count and tap exactly that many times
         "attack_plan": "edrag_spread",
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
@@ -58,9 +60,11 @@ DEFAULT_SETTINGS = {
     "donate": {
         "min_elixir_keep": 4000000,         # main account donates while elixir is above this
         "rounds": 0,                        # 0 = until elixir drops below min_elixir_keep
-        "troops": [],                       # template keys of troops/spells to donate, in order
         "remove_cc_before_request": True,
         "request_text": "",
+        "loot_before_donate": True,         # Loot + Donate: main and loot-only accounts loot until full first
+        # what the main account donates, in priority order (icons captured as templates "donate/<name>")
+        "items": [],
     },
     "hotkeys": {"continue": "f8", "pause": "f9", "stop": "f10"},
     "minimize_on_start": True,

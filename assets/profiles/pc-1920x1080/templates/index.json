@@ -164,6 +164,36 @@
     ],
     "threshold": 0.85
   },
+  "popup/anyone_there": {
+    "box": [
+      584,
+      448,
+      200,
+      36
+    ],
+    "region": [
+      524,
+      388,
+      320,
+      156
+    ],
+    "threshold": 0.85
+  },
+  "popup/reload": {
+    "box": [
+      584,
+      600,
+      152,
+      34
+    ],
+    "region": [
+      524,
+      540,
+      272,
+      154
+    ],
+    "threshold": 0.85
+  },
   "results/claim_reward": {
     "box": [
       805,

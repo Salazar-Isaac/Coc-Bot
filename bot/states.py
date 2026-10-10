@@ -6,12 +6,13 @@ import time
 from .core import vision
 from .core.context import BotError
 from .core.control import control
+from .core.space import space
 
 log = logging.getLogger("bot")
 
 # Order matters: popups and overlays first, the village (behind them) last.
 STATES = [
-    ("reload", ["popup/reload", "popup/try_again"]),
+    ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
     ("switcher", ["sid/switch_id_label"]),
     ("settings", ["settings/title"]),
     ("army", ["army/my_army_title"]),
@@ -107,7 +108,7 @@ def go_home(bot, timeout=60.0):
             if m:
                 bot.tap_match(m)
             else:
-                bot.tap(960, 600, jitter=20)       # each tap breaks one lock on the chest
+                bot.tap(*space.center(960, 600), jitter=20)   # each tap breaks one lock on the chest
         elif state == "reload":
             for k in ("popup/reload", "popup/try_again"):
                 m = vision.templates.has(k) and vision.find(frame, k)

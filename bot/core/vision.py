@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 
 from .profile import profile
+from .space import space
 
 DEFAULT_THRESHOLD = 0.85
 
@@ -75,15 +76,17 @@ class TemplateStore:
         only looks where the button actually appears.
         """
         x, y, w, h = [int(v) for v in box]
-        crop = frame[y:y + h, x:x + w]
+        crop = frame[y:y + h, x:x + w].copy()
         p = self.path(key)
         os.makedirs(os.path.dirname(p), exist_ok=True)
         cv2.imencode(".png", crop)[1].tofile(p)
         if region is None:
             rx, ry = max(0, x - pad), max(0, y - pad)
             region = [rx, ry, min(frame.shape[1], x + w + pad) - rx, min(frame.shape[0], y + h + pad) - ry]
+        # stored in base-screen coordinates so they work at any window size
+        box_b, region_b = space.region_to_base(x, y, w, h), space.region_to_base(*region)
         with self._lock:
-            self.index[key] = {"box": [x, y, w, h], "region": [int(v) for v in region], "threshold": threshold}
+            self.index[key] = {"box": box_b, "region": region_b, "threshold": threshold}
             self._images.pop(key, None)
             with open(profile.template_index, "w", encoding="utf-8") as f:
                 json.dump(self.index, f, indent=2, sort_keys=True)
@@ -110,8 +113,8 @@ def match_map(frame, key, region=None):
     """Return (score map, offset_x, offset_y, template) for `key` searched in `region`."""
     tpl = templates.image(key)
     meta = templates.meta(key)
-    if region is None:
-        region = meta.get("region")
+    if region is None and meta.get("region"):
+        region = space.region(*meta["region"])
     area, ox, oy = _crop(frame, region)
     if area.shape[0] < tpl.shape[0] or area.shape[1] < tpl.shape[1]:
         area, ox, oy = frame, 0, 0
