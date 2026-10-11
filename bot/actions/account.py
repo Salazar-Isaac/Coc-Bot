@@ -9,6 +9,7 @@ import numpy as np
 
 from .. import config
 from ..core import vision
+from ..core.space import space
 from ..core.context import BotError
 from ..states import go_home
 
@@ -73,9 +74,10 @@ def read_switcher(bot, frame=None):
 def read_town_hall(frame, name_box):
     """'Town Hall: 17' is two lines below the name."""
     x, y, w, h = name_box
-    if y + 56 + h + 4 > frame.shape[0]:
+    off = space.s(56)
+    if y + off + h + 4 > frame.shape[0]:
         return 0                                   # card cut off at the bottom of the panel
-    text, _ = vision.text_reader.read_line(frame, (x, y + 56, 200, h + 4))
+    text, _ = vision.text_reader.read_line(frame, (x, y + off, space.s(200), h + 4))
     m = re.search(r"(\d{1,2})\s*$", text)
     return int(m.group(1)) if m else 0
 
@@ -171,7 +173,9 @@ def switch_to(bot, account, state=None):
     if state is None:
         state = bot.state if bot.state is not None else {}
     state.pop("switcher_pages", None)                 # from the older, shorter scroll
-    pages = state.setdefault("switcher_at", {})
+    # each screen scrolls the list its own amount per drag: remember the pages per screen size
+    native = space.native or (1920, 1080)
+    pages = state.setdefault("switcher_at" if native == (1920, 1080) else f"switcher_at_{native[0]}x{native[1]}", {})
 
     def try_page():
         frame = bot.shot()

@@ -83,7 +83,7 @@ def dialog_box(frame):
 def _button_boxes(frame, box):
     """Text groups in the bottom row of the dialog = its buttons (light-blue capitals)."""
     x, y, w, h = box
-    x0, y0 = x + 20, y + h - 110
+    x0, y0 = x + 20, y + int(h * 0.55)                 # the buttons are in the lower part
     strip = frame[y0:y + h - 12, x0:x + w - 20].astype(np.int16)
     ink = np.abs(strip - DIALOG_BGR).max(axis=2) > 60
     cols = np.where(ink.any(axis=0))[0]
@@ -350,6 +350,10 @@ def ensure_game(bot, timeout=150.0):
             if time.monotonic() - start > 60:
                 raise BotError("Clash of Clans did not start")
             control.sleep(2)
+    if dev.kind == "adb" and not getattr(bot, "_calibrated", False):
+        from .core.calibrate import calibrate
+        calibrate(bot)                    # phones draw the interface bigger, with side margins
+        bot._calibrated = True
     if not go_home(bot, timeout):
         raise BotError("Could not reach the home village")
     return True

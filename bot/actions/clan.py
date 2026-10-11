@@ -212,14 +212,22 @@ BASE_TITLE_Y = 268      # where the donate window's title sits for a request at 
 
 def _window_dy(frame):
     """The donate window is drawn next to its request, so it moves up for requests higher in
-    the chat. Returns how far it moved (pixels), or None if the window is not open."""
+    the chat. Returns where its title is now (top-left), or None if the window is not open."""
     m = vision.find(frame, "donate/window_title")
-    return None if m is None else m.box[1] - BASE_TITLE_Y
+    return None if m is None else (m.box[0], m.box[1])
 
 
-def _shifted(region, dy):
-    x, y, w, h = space.region(*region)
-    return (x, max(0, y + dy), w, h)
+def _shifted(region, anchor):
+    """A part of the donate window (measured on the base screen with the window at its lowest
+    place), placed relative to where the window's title is now, at the screen's UI scale."""
+    tx, ty = vision.templates.meta("donate/window_title").get("box", [0, BASE_TITLE_Y])[:2]
+    if not anchor:
+        anchor = space.region(tx, ty, 1, 1)[:2]
+    ax, ay = anchor
+    x, y, w, h = region
+    k = space.ui
+    return (max(0, int(round(ax + (x - tx) * k))), max(0, int(round(ay + (y - ty) * k))),
+            int(round(w * k)), int(round(h * k)))
 
 
 def _donated_strip(frame, dy=0):
@@ -246,14 +254,18 @@ def read_request(frame, button):
     """What a request card says, from its Donate button's position:
     {"name", "message", "troop": (have, max), "spell": (...), "siege": (...)}."""
     bx, by = button.x, button.y
-    name, _ = vision.text_reader.read_line(frame, (max(0, bx - 420), by - 152, 380, 38))
-    msg, _ = vision.text_reader.read_line(frame, (max(0, bx - 432), by - 88, 470, 40))
+    s = space.s
+
+    def box(dx, dy, w, h):
+        return (max(0, bx + s(dx)), by + s(dy), s(w), s(h))
+    name, _ = vision.text_reader.read_line(frame, box(-420, -152, 380, 38))
+    msg, _ = vision.text_reader.read_line(frame, box(-432, -88, 470, 40))
     return {
         "name": name.strip(),
         "message": msg.strip(),
-        "troop": _fraction(frame, (max(0, bx - 374), by - 16, 84, 32)),
-        "spell": _fraction(frame, (max(0, bx - 236), by - 16, 64, 32)),
-        "siege": _fraction(frame, (max(0, bx - 140), by - 16, 56, 32)),
+        "troop": _fraction(frame, box(-374, -16, 84, 32)),
+        "spell": _fraction(frame, box(-236, -16, 64, 32)),
+        "siege": _fraction(frame, box(-140, -16, 56, 32)),
     }
 
 
@@ -298,7 +310,7 @@ def _find_item(bot, frame, key, dy, cat):
             break
         x, y, w, h = region
         cy = y + h // 3
-        bot.swipe((x + w - 60, cy), (x + 60, cy), 500)   # slide the row to see further right
+        bot.swipe((x + w - space.s(60), cy), (x + space.s(60), cy), 500)   # slide the row to see further right
         bot.sleep(0.8)
         frame = bot.shot()
     return None
@@ -368,7 +380,7 @@ def _find_fast(bot, frame, key, dy, cat):
         if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
             return None, frame                      # visible but grey: not available for this request
         before = frame[y:y + h, x:x + w].astype(np.int16)
-        bot.swipe((x + w - 40, cy), (max(5, x - 600), cy), 450)
+        bot.swipe((x + w - space.s(40), cy), (max(5, x - space.s(600)), cy), 450)
         bot.sleep(0.6)
         frame = bot.shot()
         m = _active(frame, key, region=region)

@@ -50,7 +50,7 @@ def collect(bot):
     if vision.templates.has("village/loot_cart_label"):
         m = vision.find(frame, "village/loot_cart_label", region=full)
         if m:
-            bot.tap(m.x + 10, m.y + 45, jitter=3)          # the cart sits under its label
+            bot.tap(m.x + space.s(10), m.y + space.s(45), jitter=3)   # the cart sits under its label
             if bot.tap_template("village/collect_button", timeout=2.5, after=0.4):
                 tapped.append("loot cart")
             bot.tap_point("home.safe", jitter=5)
@@ -85,7 +85,7 @@ def read_counter(bot, which):
 def _icon_resource(frame, box):
     """Which resource icon is just left of a cost: gold / elixir / dark."""
     x, y, w, h = box
-    patch = frame[max(0, y - 2):y + h + 2, max(0, x - 30):x]
+    patch = frame[max(0, y - 2):y + h + 2, max(0, x - space.s(30)):x]
     if patch.size == 0:
         return None
     hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3)
@@ -127,7 +127,7 @@ def read_menu(bot, which):
 
 def parse_menu(frame, cx):
     """Rows of an open builder/lab menu whose counter is at x=cx (see read_menu)."""
-    region = (max(0, cx - 430), space.point(0, 118)[1], 860, 590)
+    region = (max(0, cx - space.s(430)), space.point(0, 118)[1], space.s(860), space.s(590))
     lines = sorted(vision.text_reader.read(frame, region), key=lambda t: (t[2][1], t[2][0]))
     # the panel is see-through: only trust text in its name column (starts at the section
     # headers' x) and its cost column (right-aligned like the other costs)

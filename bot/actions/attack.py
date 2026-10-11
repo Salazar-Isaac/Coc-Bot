@@ -99,7 +99,7 @@ def step_type(step):
 
 def detect_slots(frame, region=None):
     """X centres of the troop-bar cards, left to right (cards are ~108 px wide)."""
-    x, y, w, h = region or (0, frame.shape[0] - 140, frame.shape[1], 120)
+    x, y, w, h = region or (0, frame.shape[0] - space.s(140), frame.shape[1], space.s(120))
     gray = cv2.cvtColor(frame[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY).astype(np.float32)
     edge = np.abs(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)) > 60
     cols = np.where(edge.mean(axis=0) > 0.6)[0]
@@ -113,7 +113,8 @@ def detect_slots(frame, region=None):
     cards, i = [], 0
     while i < len(borders):
         a = borders[i]
-        pair = next((j for j in range(i + 1, len(borders)) if 98 <= borders[j] - a <= 120), None)
+        pair = next((j for j in range(i + 1, len(borders))
+                     if space.s(98) <= borders[j] - a <= space.s(120)), None)
         if pair is None:
             i += 1
             continue
@@ -147,9 +148,11 @@ def card_keys(frame, slots):
     hints = _hint_templates()
     raw = []
     for cx in slots:
-        area = frame[y:y + 56, cx + 20:cx + 68]               # tall: a raised (selected) card moves up
+        area = frame[y:y + space.s(56), cx + space.s(20):cx + space.s(68)]   # tall: a raised card moves up
         best, best_s = "", 0.0
         for k, tpl in hints.items():
+            if space.ui != 1:
+                tpl = cv2.resize(tpl, None, fx=space.ui, fy=space.ui, interpolation=cv2.INTER_LINEAR)
             if area.shape[0] >= tpl.shape[0] and area.shape[1] >= tpl.shape[1]:
                 sc = float(cv2.matchTemplate(area, tpl, cv2.TM_CCOEFF_NORMED).max())
                 if sc > best_s:
@@ -157,7 +160,8 @@ def card_keys(frame, slots):
         if best_s >= 0.8:
             raw.append((best, best_s))
             continue
-        text, conf = vision.text_reader.read_line(frame, (cx + 22, y + 10, 42, 40))   # unknown letter: OCR
+        text, conf = vision.text_reader.read_line(frame, (cx + space.s(22), y + space.s(10), space.s(42),
+                                                          space.s(40)))   # unknown letter: OCR
         text = text.strip()
         if text in OCR_FIX:
             raw.append((OCR_FIX[text], max(conf, 0.5)))       # a known look-alike: trust the mapping
@@ -208,7 +212,7 @@ def read_count(frame, cx):
     longer number wins."""
     best = None
     for top in (924, 915):
-        v = vision.digits.read(frame, (cx - 10, space.point(0, top)[1], 62, 32))
+        v = vision.digits.read(frame, (cx - space.s(10), space.point(0, top)[1], space.s(62), space.s(32)))
         if v is not None and (best is None or len(str(v)) > len(str(best))):
             best = v
     return best
@@ -217,13 +221,13 @@ def read_count(frame, cx):
 def slot_empty(frame, cx):
     """Used-up cards turn grey."""
     y = space.point(0, 960)[1]
-    card = frame[y:y + 70, max(0, cx - 45):cx + 45]
+    card = frame[y:y + space.s(70), max(0, cx - space.s(45)):cx + space.s(45)]
     return cv2.cvtColor(card, cv2.COLOR_BGR2HSV)[:, :, 1].mean() < 25
 
 
 def _card(frame, cx):
     y = space.point(0, 925)[1]
-    return frame[y:y + 130, max(0, cx - 50):cx + 50].astype(np.int16)
+    return frame[y:y + space.s(130), max(0, cx - space.s(50)):cx + space.s(50)].astype(np.int16)
 
 
 def select(bot, step, slots):
@@ -261,7 +265,7 @@ def _nudge(pt, centre, outward=True, step=34):
 
 def _label(frame, cx):
     y = space.point(0, 910)[1]
-    return frame[y:y + 50, max(0, cx - 12):cx + 54].astype(np.int16)
+    return frame[y:y + space.s(50), max(0, cx - space.s(12)):cx + space.s(54)].astype(np.int16)
 
 
 def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):

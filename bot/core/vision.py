@@ -38,6 +38,7 @@ class TemplateStore:
     def __init__(self):
         self._lock = threading.Lock()
         self._images = {}
+        self._scaled = {}
         self._variants = {}
         self.index = {}
         self.reload()
@@ -45,6 +46,7 @@ class TemplateStore:
     def reload(self):
         with self._lock:
             self._images.clear()
+            self._scaled = {}
             self._variants = {}
             if os.path.exists(profile.template_index):
                 with open(profile.template_index, encoding="utf-8") as f:
@@ -89,6 +91,21 @@ class TemplateStore:
                 self._images[key] = img
             return img
 
+    def scaled(self, key):
+        """The template at the size the game draws it on this screen (phones: bigger)."""
+        k = space.ui
+        if k == 1:
+            return self.image(key)
+        ck = (key, round(k, 3))
+        with self._lock:
+            img = self._scaled.get(ck)
+        if img is None:
+            base = self.image(key)
+            img = cv2.resize(base, None, fx=k, fy=k, interpolation=cv2.INTER_LINEAR if k > 1 else cv2.INTER_AREA)
+            with self._lock:
+                self._scaled[ck] = img
+        return img
+
     def meta(self, key):
         """A variant without its own settings uses the main template's (region, threshold)."""
         return self.index.get(key) or self.index.get(key.split("~")[0], {})
@@ -101,6 +118,8 @@ class TemplateStore:
         """
         x, y, w, h = [int(v) for v in box]
         crop = frame[y:y + h, x:x + w].copy()
+        if space.ui != 1:                                  # stored at the profile's size
+            crop = cv2.resize(crop, None, fx=1 / space.ui, fy=1 / space.ui, interpolation=cv2.INTER_AREA)
         p = self.path(key)
         os.makedirs(os.path.dirname(p), exist_ok=True)
         cv2.imencode(".png", crop)[1].tofile(p)
@@ -112,6 +131,7 @@ class TemplateStore:
         with self._lock:
             self.index[key] = {"box": box_b, "region": region_b, "threshold": threshold}
             self._images.pop(key, None)
+            self._scaled = {}
             self._variants = {}
             with open(profile.template_index, "w", encoding="utf-8") as f:
                 json.dump(self.index, f, indent=2, sort_keys=True)
@@ -136,7 +156,7 @@ def _crop(frame, region):
 
 def match_map(frame, key, region=None):
     """Return (score map, offset_x, offset_y, template) for `key` searched in `region`."""
-    tpl = templates.image(key)
+    tpl = templates.scaled(key)
     meta = templates.meta(key)
     if region is None and meta.get("region"):
         region = space.region(*meta["region"])
@@ -162,7 +182,7 @@ COARSE_AREA = 250_000      # areas bigger than this are searched coarse-to-fine
 def _coarse_fine(frame, key, region):
     """Same result as match_map + minMaxLoc, ~4x faster on big areas: find the best spot at half
     size, then measure the exact score at full size around it."""
-    tpl = templates.image(key)
+    tpl = templates.scaled(key)
     meta = templates.meta(key)
     if region is None and meta.get("region"):
         region = space.region(*meta["region"])
@@ -220,7 +240,7 @@ def find(frame, key, threshold=None, region=None, any_brightness=False):
 def find_scaled(frame, key, scales=None, threshold=None, region=None):
     """Like find(), but tries the template at several sizes (for things drawn at different
     zoom levels, e.g. the boat icon). Returns (Match, scale) or (None, None)."""
-    tpl0 = templates.image(key)
+    tpl0 = templates.scaled(key)
     meta = templates.meta(key)
     if region is None and meta.get("region"):
         region = space.region(*meta["region"])
