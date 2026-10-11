@@ -93,6 +93,7 @@ DEFAULT_SETTINGS = {
         "after_bonus": False,               # keep attacking after the daily Star Bonus is complete
         "army": "auto",                     # "auto" (P.E.K.K.A if unlocked, else Sneaky Archer), "keep" or a unit name
         "max_attacks": 20,                  # safety limit per visit (0 = none)
+        "battle_seconds": 60,               # each Builder Base attack is ended after this many seconds
         "stuck_attacks": 3,                 # storages not growing after this many attacks = full
         "full_margin": 50000,               # Builder Base storages count as full this close to capacity
         "collect": True,

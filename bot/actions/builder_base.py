@@ -275,11 +275,19 @@ def attack(bot):
         raise BotError("Builder Base battle did not start")
     control.sleep(0.6)
     stage_seen = 0
+    started = time.monotonic()
+    limit = bot.settings.get("builder", {}).get("battle_seconds", 60)
+    ended = False
     end = time.monotonic() + 7 * 60
     while time.monotonic() < end:
         f = bot.shot()
         if vision.templates.has("bb/return_home") and vision.find(f, "bb/return_home"):
             break
+        if limit and not ended and time.monotonic() - started > limit:
+            ended = _end_battle(bot, f)                # each attack lasts at most `limit` seconds
+            if ended:
+                log.info("Builder Base battle ended after %d s", limit)
+            continue
         stage_start = vision.find(f, "bb/battle_starts") is not None
         if stage_start and stage_seen < 2:
             stage_seen += 1
@@ -302,6 +310,17 @@ def attack(bot):
              f"{gold:+,}" if gold is not None else "?")
     bot.stats["bb_attacks"] = bot.stats.get("bb_attacks", 0) + 1
     return stars
+
+
+def _end_battle(bot, frame):
+    """Surrender / End Battle, then Okay. Returns True if the battle was ended."""
+    for key in ("bb/surrender", "bb/end_battle"):
+        m = vision.templates.has(key) and vision.find(frame, key)
+        if m:
+            bot.tap_match(m)
+            bot.tap_template("battle/confirm_okay", timeout=4, after=1.0)
+            return True
+    return False
 
 
 def bonus_done(bot, st=None):

@@ -123,6 +123,9 @@ class BuilderTab(QWidget):
         atk.add(divider())
         self.max_attacks = Spin(0, 100, special="No limit")
         atk.add(SettingRow("Max attacks per visit", "Then sail back and go on", self.max_attacks, 120))
+        self.battle_seconds = Spin(0, 180, " s", special="Until it ends")
+        self.battle_seconds.setFixedWidth(150)
+        atk.add(SettingRow("End each attack after", "The bot surrenders when this time is up", self.battle_seconds))
         self.stuck = Spin(1, 10, suffix=" attacks")
         self.stuck.setToolTip("If the storages do not grow after this many attacks, they count as full")
         atk.add(SettingRow("Full if storages stop growing after", "Handles accounts whose storages are smaller "
@@ -193,7 +196,7 @@ class BuilderTab(QWidget):
         for t in (self.after_main, self.after_bonus, self.collect, self.upgrade, self.gear_up, self.research,
                   *self.roles.values()):
             t.toggled.connect(self.changed)
-        for sp in (self.max_attacks, self.stuck, self.full_margin, self.max_upgrades):
+        for sp in (self.max_attacks, self.battle_seconds, self.stuck, self.full_margin, self.max_upgrades):
             sp.valueChanged.connect(self.changed)
         self.upgrade_skip.changed.connect(self.changed)
         self.research_skip.changed.connect(self.changed)
@@ -241,6 +244,7 @@ class BuilderTab(QWidget):
         self.army.select(b.get("army", d.get("army", "auto")))
         self.army.blockSignals(False)
         self.max_attacks.setValue(int(b.get("max_attacks", d.get("max_attacks", 20)) or 0))
+        self.battle_seconds.setValue(int(b.get("battle_seconds", 60)))
         self.stuck.setValue(int(b.get("stuck_attacks", d.get("stuck_attacks", 3)) or 3))
         self.full_margin.setValue(int(b.get("full_margin", d.get("full_margin", 50000)) or 0))
         self.collect.setChecked(bool(b.get("collect", d.get("collect", True))))
@@ -262,6 +266,7 @@ class BuilderTab(QWidget):
         b["after_bonus"] = self.after_bonus.isChecked()
         b["army"] = self.army.currentData() or "auto"
         b["max_attacks"] = self.max_attacks.value()
+        b["battle_seconds"] = self.battle_seconds.value()
         b["stuck_attacks"] = self.stuck.value()
         b["full_margin"] = self.full_margin.value()
         b["collect"] = self.collect.isChecked()
