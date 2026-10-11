@@ -884,6 +884,21 @@
     ],
     "threshold": 0.85
   },
+  "clan/edit_button": {
+    "box": [
+      760,
+      575,
+      240,
+      55
+    ],
+    "region": [
+      700,
+      515,
+      360,
+      175
+    ],
+    "threshold": 0.85
+  },
   "clan/info_close": {
     "box": [
       1645,

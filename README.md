@@ -25,15 +25,21 @@ Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.
 |---|---|
 | **Loot all accounts** | Switches through the enabled accounts (roles ticked on the Loot page) and loots each until its watched storages are full. |
 | **Loot current account only** | Loots the open account. With "When full: Wait for me" you spend the resources, press Continue (F8) and it loots again. |
-| **Loot + Donate cycle** | Main and Loot-only accounts loot until full → every "Loot + request" and Feeder account empties its Clan Castle and requests → Main donates to all requests → repeat while Main has more elixir than "Main keeps at least" → loot again. |
-| **Donate only** | The request → donate part of the cycle. |
+| **Loot + Donate cycle** | Like XpIncrease, always starting on Main: not enough elixir for a whole round ("Main keeps at least" + what the last round cost) → Main and the Looter accounts loot until full. Enough → Main first donates to requests that are still open, then every Looter / "Loot + request" / Feeder account empties its Clan Castle and requests → Main donates → repeat while the elixir covers another round → loot again. |
+| **Donate only** | The same without looting: stops when Main's elixir is too low for a round. |
 | **Village chores only** | Visits the accounts without attacking: collects resources, starts building upgrades and research. |
 | **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |
 
 "Loot the Builder Base after the home village is full" (Builder Base page) makes every loot mode do the
 night village too, right after each account's home village.
 
-Account roles: **Main** (loots, donates) · **Loot only** · **Loot + request** (loots in "Loot all", requests in donation modes) · **Feeder** (only requests) · **Skip**.
+Account roles: **Main** (loots, donates) · **Looter** (loots in every mode, also in the cycle, and requests) · **Loot + request** (loots in "Loot all", only requests in donation modes) · **Feeder** (only requests) · **Skip**.
+
+Accounts are switched the way the old completeid/XpIncrease scripts did it: one 0.5 s drag moves the Supercell ID
+list exactly 4 accounts, so the bot drags straight to the account's page (keep the Accounts page in the game's
+list order), reads the names there and taps. If the game shows **Try Again** (connection lost) the bot waits for
+the internet and taps it; **Reload** (another device opened the account) or **Reload Game** (idle) are tapped and
+the bot checks it is still on the same account, else opens it again.
 
 ## When is an account full?
 
