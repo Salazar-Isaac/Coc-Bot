@@ -3,12 +3,21 @@
 Clash of Clans bot with a window, for Google Play Games on PC or Android over ADB
 (BlueStacks, LDPlayer, MuMu, Nox or a phone).
 
+## Setup (once)
+
+1. Install **Python 3.10+** from python.org (tick "Add python.exe to PATH").
+2. Double-click **`setup.bat`**. It installs the packages from `requirements.txt` (no virtual
+   environment), checks everything with `tools/check_setup.py` and can put a **Coc-Bot** shortcut on
+   the desktop.
+
+No PaddleOCR is needed: numbers are read with the game's own digit images, and the few words
+(account names, request messages) with RapidOCR, which is small and starts in a few seconds.
+
+To check an existing install at any time: `python tools/check_setup.py`
+
 ## Start
 
-```
-python main.py
-```
-or double-click `run.bat` (no console window).
+Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.py`.
 
 ## Modes
 

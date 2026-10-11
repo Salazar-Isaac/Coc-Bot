@@ -8,7 +8,7 @@
     "scrcpy_dir": "C:\\scrcpy"
   },
   "profile": "pc-1920x1080",
-  "mode": "loot_all",
+  "mode": "loot_donate",
   "loot": {
     "watch": {
       "gold": false,
