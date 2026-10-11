@@ -194,6 +194,261 @@
     ],
     "threshold": 0.85
   },
+  "bb/attack_button": {
+    "box": [
+      30,
+      900,
+      150,
+      145
+    ],
+    "region": [
+      0,
+      840,
+      240,
+      240
+    ],
+    "threshold": 0.85
+  },
+  "bb/battle_starts": {
+    "box": [
+      870,
+      18,
+      185,
+      30
+    ],
+    "region": [
+      810,
+      0,
+      305,
+      108
+    ],
+    "threshold": 0.85
+  },
+  "bb/boat": {
+    "box": [
+      1680,
+      530,
+      130,
+      135
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.75
+  },
+  "bb/boat_bubble": {
+    "box": [
+      1740,
+      490,
+      50,
+      50
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "bb/bubble_elixir": {
+    "box": [
+      1092,
+      702,
+      38,
+      38
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "bb/bubble_gold": {
+    "box": [
+      1432,
+      466,
+      38,
+      38
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "bb/end_battle": {
+    "box": [
+      28,
+      780,
+      175,
+      50
+    ],
+    "region": [
+      0,
+      720,
+      263,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "bb/find_now": {
+    "box": [
+      1300,
+      680,
+      255,
+      55
+    ],
+    "region": [
+      1240,
+      620,
+      375,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "bb/menu_close": {
+    "box": [
+      1595,
+      162,
+      75,
+      72
+    ],
+    "region": [
+      1535,
+      102,
+      195,
+      192
+    ],
+    "threshold": 0.85
+  },
+  "bb/overall_damage": {
+    "box": [
+      1675,
+      805,
+      200,
+      30
+    ],
+    "region": [
+      1615,
+      745,
+      305,
+      150
+    ],
+    "threshold": 0.85
+  },
+  "bb/return_home": {
+    "box": [
+      850,
+      870,
+      220,
+      85
+    ],
+    "region": [
+      790,
+      810,
+      340,
+      205
+    ],
+    "threshold": 0.85
+  },
+  "bb/rewards_label": {
+    "box": [
+      1165,
+      580,
+      125,
+      32
+    ],
+    "region": [
+      1105,
+      520,
+      245,
+      152
+    ],
+    "threshold": 0.85
+  },
+  "bb/star_bonus_okay": {
+    "box": [
+      825,
+      778,
+      270,
+      100
+    ],
+    "region": [
+      765,
+      718,
+      390,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "bb/star_bonus_title": {
+    "box": [
+      775,
+      205,
+      370,
+      60
+    ],
+    "region": [
+      715,
+      145,
+      490,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "bb/start_attack_title": {
+    "box": [
+      785,
+      180,
+      405,
+      55
+    ],
+    "region": [
+      725,
+      120,
+      525,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "bb/surrender": {
+    "box": [
+      28,
+      780,
+      175,
+      50
+    ],
+    "region": [
+      0,
+      720,
+      263,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "bb/trophy_hammer": {
+    "box": [
+      200,
+      120,
+      64,
+      70
+    ],
+    "region": [
+      140,
+      60,
+      184,
+      190
+    ],
+    "threshold": 0.85
+  },
   "building/upgrade_button": {
     "box": [
       1150,
@@ -434,6 +689,36 @@
     ],
     "threshold": 0.85
   },
+  "home/boat": {
+    "box": [
+      390,
+      785,
+      115,
+      110
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.75
+  },
+  "home/boat_bubble": {
+    "box": [
+      440,
+      742,
+      50,
+      50
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
   "home/chat_button": {
     "box": [
       28,
@@ -536,6 +821,21 @@
       60,
       560,
       260
+    ],
+    "threshold": 0.85
+  },
+  "popup/close_x~tournament": {
+    "box": [
+      1548,
+      48,
+      70,
+      70
+    ],
+    "region": [
+      1488,
+      0,
+      190,
+      178
     ],
     "threshold": 0.85
   },

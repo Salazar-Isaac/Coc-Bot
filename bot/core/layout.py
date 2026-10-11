@@ -37,6 +37,10 @@ DEFAULT_LAYOUT = {
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
         "top.builders_menu": [960, 50],      # builder counter -> upgrades list
         "army.recipes_arrow": [1140, 155],   # Saved Recipes drop-down arrow in the army screen
+        "home.boat": [450, 925],             # boat to the Builder Base (home village, zoomed out)
+        "bb.boat": [1620, 120],              # boat back home (Builder Base, zoomed out; top right)
+        "bb.attack": [105, 975],
+        "bb.builders_menu": [1080, 50],
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
         "request.cancel": [768, 722],        # Cancel of the request window
         "top.lab_menu": [760, 50],           # laboratory counter -> research list
@@ -54,6 +58,11 @@ DEFAULT_LAYOUT = {
         "battle.troop_bar": [260, 915, 1660, 160],
         "top.builders": [950, 32, 66, 40],   # "1/5" free builders
         "army.recipe_list": [865, 210, 550, 560],   # the Saved Recipes drop-down list
+        "bb.gold": [1600, 28, 230, 44],
+        "bb.elixir": [1600, 112, 230, 46],
+        "bb.stars": [75, 900, 100, 42],      # star bonus "4/8" on the Attack button
+        "bb.builders": [1075, 32, 70, 40],
+        "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },
 }

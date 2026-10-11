@@ -99,8 +99,10 @@ def _icon_resource(frame, box):
     hue = float(np.median(bright[:, 0]))
     if 15 <= hue <= 35:
         return "gold"
-    if 130 <= hue <= 170:
+    if 125 <= hue <= 170:
         return "elixir"
+    if 40 <= hue <= 95:
+        return "gems"                         # green gem price: never paid by the bot
     return "dark"
 
 
@@ -123,6 +125,12 @@ def read_menu(bot, which):
     bot.sleep(1.0)
     frame = bot.shot()
     cx = bot.layout.point(f"top.{which}_menu")[0]
+    rows = parse_menu(frame, cx)
+    return rows
+
+
+def parse_menu(frame, cx):
+    """Rows of an open builder/lab menu whose counter is at x=cx (see read_menu)."""
     region = (max(0, cx - 430), space.point(0, 118)[1], 860, 590)
     lines = sorted(vision.text_reader.read(frame, region), key=lambda t: (t[2][1], t[2][0]))
     # the panel is see-through: only trust text in its name column (starts at the section
@@ -144,7 +152,11 @@ def read_menu(bot, which):
             continue
         digits = re.sub(r"\D", "", text)
         if len(digits) >= 4 and not re.search(r"[A-Za-z]{3,}", text) and abs(x + w - right) < 40:
-            rows.append({"cost": int(digits), "box": box, "section": section})
+            # prefer the game-font digit reader for the price; OCR drops leading digits on some rows
+            exact = vision.digits.read(frame, (x - 4, y - 2, w + 8, h + 4))
+            cost = exact if exact and len(str(exact)) >= len(digits) else int(digits)
+            if cost >= 100:
+                rows.append({"cost": cost, "box": box, "section": section})
         elif conf > 0.5 and section in ("suggested", "other") and left - 10 <= x < right - 120:
             names.append((text, box, conf))
     out = []
@@ -192,6 +204,8 @@ def _pick(bot, rows, which):
     if not v.get("include_other", True):
         order = [r for r in order if r["section"] == "suggested"]
     for r in order:
+        if r["res"] not in ("gold", "elixir", "dark"):
+            continue                              # gem prices are never paid
         have = res_now.get(r["res"])
         if r["red"] or have is None:
             continue
@@ -232,7 +246,7 @@ def _priced_confirm(bot, frame):
     return None, None
 
 
-def _confirm(bot, item, which):
+def _confirm(bot, item, which, home=None):
     """The upgrade/research window is open: check its price, then press the resource Confirm."""
     if not bot.wait("upgrade/confirm", 5):
         log.info("%s: no Confirm button (maybe needs gems or is locked)", item["name"])
@@ -251,12 +265,16 @@ def _confirm(bot, item, which):
         return False
     bot.tap_match(m)
     bot.sleep(1.5)
-    go_home(bot, 10)
-    after = loot.home_resources(bot).get(item["res"])
+    (home or go_home)(bot, 10)
+    if home is not None:                          # Builder Base: read its own resource bar
+        from . import builder_base
+        after = builder_base.status(bot).get(item["res"])
+    else:
+        after = loot.home_resources(bot).get(item["res"])
     if bot.exists("upgrade/confirm") or (after is not None and have is not None and after >= have):
         # still open, or nothing was paid: a gem offer or an error popup -> back out
         _close_offer(bot)
-        go_home(bot)
+        (home or go_home)(bot, 30)
         log.info("%s: the game did not accept the upgrade", item["name"])
         return False
     log.info("%s %s started for %s %s", "Research" if which == "lab" else "Upgrade", item["name"],

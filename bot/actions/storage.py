@@ -20,6 +20,8 @@ BARS = {
     "elixir": {"left": 1585, "right": 1898, "rows": (149, 150)},
     "dark":   {"left": 1666, "right": 1898, "rows": (232, 233)},
 }
+# Builder Base: same bars (no dark elixir); same geometry on the 1920x1080 screen.
+BB_BARS = {"gold": BARS["gold"], "elixir": BARS["elixir"]}
 SCAN_FROM = 1825          # just left of the resource icon
 
 
@@ -32,9 +34,9 @@ def _filled(px, res):
     return g < 25 and b > g + 25 and r > g + 12          # dark purple
 
 
-def fill_fraction(frame, res):
+def fill_fraction(frame, res, bars=None):
     """How full the bar is (0..1), or None if it cannot be measured."""
-    geo = BARS[res]
+    geo = (bars or BARS)[res]
     left = space.point(geo["left"], 0)[0]
     right = space.point(geo["right"], 0)[0]
     x0 = space.point(SCAN_FROM, 0)[0]
@@ -56,9 +58,9 @@ def fill_fraction(frame, res):
     return max(0.0, min(1.0, (right - start) / (right - left)))
 
 
-def estimate(frame, res, amount):
+def estimate(frame, res, amount, bars=None):
     """(capacity, fill) from this frame, or (None, fill)."""
-    f = fill_fraction(frame, res)
+    f = fill_fraction(frame, res, bars)
     if not amount or not f or f < 0.08:            # too little bar to measure reliably
         return None, f
     return int(round(amount / f)), f
