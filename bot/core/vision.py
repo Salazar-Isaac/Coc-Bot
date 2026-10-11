@@ -272,6 +272,19 @@ def find(frame, key, threshold=None, region=None, any_brightness=False, learn=Fa
         m = _find_one(frame, k, threshold, region, any_brightness)
         if m and (best is None or m.score > best.score):
             best = m
+    if best is None and region is None and space.ui != 1:
+        from .space import group_of
+        g = group_of(key)
+        if g in space.windows:                       # a learned window size is a little off: try around it
+            k = space.windows[g]
+            try:
+                for d in (-0.04, 0.04):
+                    space.windows[g] = round(k + d, 2)
+                    best = _find_one(frame, key, threshold, None, any_brightness)
+                    if best:
+                        break
+            finally:
+                space.windows[g] = k
     if best is None and learn and region is None:
         best = learn_window(frame, key, threshold)
     return best
@@ -301,8 +314,7 @@ def learn_window(frame, key, threshold=None):
     _learn_tried[key] = now
     meta = templates.meta(key)
     thr = threshold if threshold is not None else meta.get("threshold", DEFAULT_THRESHOLD)
-    best = None
-    for sc in [0.85 + 0.03 * i for i in range(17)]:                  # 0.85 .. 1.33
+    def try_scale(sc, best):
         space.windows[g] = sc
         region = space.region(*meta["region"], name=key) if meta.get("region") else None
         if region:
@@ -312,11 +324,20 @@ def learn_window(frame, key, threshold=None):
         tpl = cv2.resize(templates.image(key), None, fx=sc, fy=sc, interpolation=cv2.INTER_LINEAR)
         area, ox, oy = _crop(frame, region)
         if area.shape[0] < tpl.shape[0] or area.shape[1] < tpl.shape[1]:
-            continue
+            return best
         _, s, _, loc = cv2.minMaxLoc(cv2.matchTemplate(area, tpl, cv2.TM_CCOEFF_NORMED))
         if s >= thr and (best is None or s > best[0]):
             h, w = tpl.shape[:2]
             best = (s, sc, Match(ox + loc[0] + w // 2, oy + loc[1] + h // 2, float(s), (ox + loc[0], oy + loc[1], w, h)))
+        return best
+
+    best = None
+    for sc in [0.85 + 0.03 * i for i in range(17)]:                  # 0.85 .. 1.33
+        best = try_scale(round(sc, 2), best)
+    if best:                                                         # then to the nearest 0.01
+        c = best[1]
+        for d in (-0.02, -0.01, 0.01, 0.02):
+            best = try_scale(round(c + d, 2), best)
     space.windows.pop(g, None)
     if not best:
         return None
