@@ -1334,6 +1334,21 @@
     ],
     "threshold": 0.85
   },
+  "popup/reload_device": {
+    "box": [
+      578,
+      597,
+      99,
+      40
+    ],
+    "region": [
+      458,
+      477,
+      339,
+      280
+    ],
+    "threshold": 0.8
+  },
   "popup/shield_continue": {
     "box": [
       885,
