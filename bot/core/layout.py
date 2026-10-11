@@ -45,6 +45,9 @@ DEFAULT_LAYOUT = {
         "bb.attack": [105, 975],
         "bb.builders_menu": [1080, 50],
         "bb.lab_menu": [880, 50],
+        "bb.army": [65, 830],                # Builder Base army button (left)
+        "bb.army_clear": [1493, 575],        # red trash button in "Choose Army"
+        "bb.army_close": [1600, 220],
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
         "request.cancel": [768, 722],        # Cancel of the request window
         "top.lab_menu": [760, 50],           # laboratory counter -> research list

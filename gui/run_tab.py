@@ -44,6 +44,7 @@ MODE_STATS = {"loot_all": ("attacks", "searches"), "loot_current": ("attacks", "
 # mode list density: (card height, gap, columns). The first that fits without scrolling the setup column wins;
 # the last one (two columns of small tiles) is for small windows.
 MODE_DENSITY = [(58, 8, 1), (50, 6, 1), (42, 8, 2)]
+MAX_OPTION_ROWS = 4      # the most option rows any mode shows (see _mode_changed)
 
 
 def _clean(desc):
@@ -267,6 +268,11 @@ class RunTab(QWidget):
         if not self.mode_buttons:
             return
         other = self.left_scroll.widget().sizeHint().height() - self._modes_height(self._density)
+        # size for the mode with the most option rows (4: Loot all / Loot current), so picking a
+        # mode never changes the layout
+        spacing = max(0, self.rows["full"].parentWidget().layout().spacing()) if self.rows["full"].parentWidget() else 8
+        shown = sum(1 for r in self.rows.values() if not r.isHidden())
+        other += max(0, MAX_OPTION_ROWS - shown) * (self.rows["full"].sizeHint().height() + spacing)
         avail = self.left_scroll.viewport().height()
         best = next((d for d in range(len(MODE_DENSITY)) if other + self._modes_height(d) <= avail),
                     len(MODE_DENSITY) - 1)

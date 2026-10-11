@@ -435,6 +435,9 @@ def session(bot, account):
     bot.status(action="Builder Base")
     if cfg.get("collect", True):
         collect(bot)
+    if cfg.get("army", "auto") != "keep" and account.get("_bb_army") != cfg.get("army", "auto"):
+        set_army(bot, cfg.get("army", "auto"))
+        account["_bb_army"] = cfg.get("army", "auto")      # once per visit
     attacks, stuck, prev = 0, 0, None
     max_attacks = cfg.get("max_attacks", 20)
     while True:
@@ -475,3 +478,65 @@ def session(bot, account):
     except BotError as e:
         log.warning("%s: %s", name, e)
     return True
+
+
+# --- Builder Base army ------------------------------------------------------------------------
+
+BB_UNITS = ["pekka", "night_witch", "archer", "barbarian", "boxer_giant", "bomber", "cannon_cart", "drop_ship",
+            "hog_glider", "beta_minion", "baby_dragon", "electrofire_wizard"]
+AUTO_ORDER = ["pekka", "archer", "barbarian"]          # "Auto": P.E.K.K.A when unlocked, else Sneaky Archer
+SLOTS_REGION = (455, 340, 1120, 170)                    # starting + reinforcement slots
+LIST_REGION = (320, 640, 1300, 270)                     # the unit list
+
+
+def _unit(frame, name, region):
+    key = f"bb/unit_{name}"
+    return vision.find(frame, key, region=space.region(*region)) if vision.templates.has(key) else None
+
+
+def set_army(bot, choice):
+    """Fill the Builder Base army with one unit type (plus the Battle Machine).
+    choice: "keep", "auto" (P.E.K.K.A if unlocked, else Sneaky Archer) or a unit name.
+    Returns the unit used, or None if the army was left as it was."""
+    if not choice or choice == "keep":
+        return None
+    wanted = AUTO_ORDER if choice == "auto" else [choice] + [u for u in AUTO_ORDER if u != choice]
+    bot.tap_point("bb.army")
+    if not bot.wait("bb/army_title", 5, interval=0.25):
+        log.warning("Builder Base army screen did not open")
+        go_home_bb(bot, 15)
+        return None
+    try:
+        bot.sleep(0.4)
+        f = bot.shot()
+        # already this army (first slot and a reinforcement slot show the wanted unit)? then leave it
+        u = wanted[0]                                   # only the first choice counts as "already set"
+        if _unit(f, u, (455, 340, 140, 170)) and _unit(f, u, (1300, 340, 280, 170)):
+            log.info("Builder Base army is already %s", u.replace("_", " "))
+            return u
+        bot.tap_point("bb.army_clear")                  # empty the army (no confirmation)
+        bot.sleep(0.6)
+        f = bot.shot()
+        unit = next((u for u in wanted if _unit(f, u, LIST_REGION)), None)   # in colour = unlocked
+        if unit is None:
+            log.info("None of %s unlocked on this Builder Base; using what is available", ", ".join(wanted))
+            unit = next((u for u in BB_UNITS if _unit(f, u, LIST_REGION)), None)
+        hero = _unit(f, "battle_machine", LIST_REGION) or _unit(f, "battle_copter", LIST_REGION)
+        if hero:
+            bot.tap_match(hero, jitter=2)
+            bot.sleep(0.4)
+        if unit:
+            m = _unit(bot.shot(), unit, LIST_REGION)
+            for _ in range(8):                          # every free slot (6 + 2 at the top Builder Hall)
+                control.checkpoint()
+                bot.tap_match(m, jitter=2)
+                bot.sleep(0.3)
+        bot.sleep(0.4)
+        ok = unit and _unit(bot.shot(), unit, SLOTS_REGION)
+        log.info("Builder Base army: Battle Machine + %s%s", (unit or "?").replace("_", " "),
+                 "" if ok else " (could not confirm)")
+        return unit
+    finally:
+        bot.tap_point("bb.army_close")
+        bot.sleep(0.5)
+        go_home_bb(bot, 15)

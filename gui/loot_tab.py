@@ -180,10 +180,17 @@ class LootTab(QWidget):
         rb.setSpacing(6)
         rb.addWidget(label("Army recipe to use before looting", "rowTitle"))
         rb.addWidget(self.recipe)
-        rb.addWidget(label("Every account switches to this saved army (e.g. E-Dragons + Clone) before attacking. "
-                           "Accounts without that recipe keep their army. Empty = keep each army.", "rowDesc",
-                           wrap=True))
+        rb.addWidget(label("Set right before the first attack of an account (never for a full one). Any "
+                           "Clan Castle confirmation is accepted. Accounts without that recipe keep their army. "
+                           "Empty = keep each army.", "rowDesc", wrap=True))
         atk.add(recipe_box)
+        self.must_edrag = Toggle()
+        self.must_clone = Toggle()
+        atk.add(SettingRow("Army must have E-Dragons", "Checked after the recipe; the log says which account's "
+                           "recipe is missing them", self.must_edrag))
+        atk.add(SettingRow("Army must have Clone spells", "Checked after the recipe", self.must_clone))
+        self.must_edrag.toggled.connect(self.changed)
+        self.must_clone.toggled.connect(self.changed)
         atk.add(divider())
 
         self.battle_seconds = Spin(20, 180, suffix=" s")
@@ -294,6 +301,11 @@ class LootTab(QWidget):
         self.full_mode.setCurrentIndex(max(0, self.full_mode.findData(lo.get("full_mode",
                                                                              d.get("full_mode", "capacity")))))
         self.recipe.setText(str(lo.get("army_recipe", d.get("army_recipe", "")) or ""))
+        must = lo.get("army_must_have", d.get("army_must_have", ["edrag", "clone"]))
+        for t, k in ((self.must_edrag, "edrag"), (self.must_clone, "clone")):
+            t.blockSignals(True)
+            t.setChecked(k in must)
+            t.blockSignals(False)
         self.plan.blockSignals(True)
         self.plan.clear()
         try:
@@ -331,6 +343,7 @@ class LootTab(QWidget):
         lo["full_mode"] = self.full_mode.currentData()
         lo["full_margin"] = {r: self.margin[r].value() for r in config.RESOURCES}
         lo["army_recipe"] = self.recipe.text().strip()
+        lo["army_must_have"] = [k for t, k in ((self.must_edrag, "edrag"), (self.must_clone, "clone")) if t.isChecked()]
         lo["attack_plan"] = self.plan.currentData() or lo.get("attack_plan") or "edrag_spread"
         lo["battle_seconds"] = self.battle_seconds.value()
         lo["smart_deploy"] = self.smart_deploy.isChecked()

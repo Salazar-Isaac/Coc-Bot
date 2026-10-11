@@ -12,8 +12,15 @@ from gui import theme as T
 from gui.components import (Banner, Card, ChipToggle, FlowLayout, Pill, SettingRow, TagEditor, Toggle, divider, label,
                             scroll)
 from gui.village_tab import ROLES
-from gui.widgets import BigSpin, Spin
+from gui.widgets import BigSpin, Combo, Spin
 
+BB_ARMIES = [("auto", "Auto: P.E.K.K.A, else Sneaky Archer", "Best unlocked: P.E.K.K.A when the Builder Base has it, otherwise Sneaky Archers"),
+             ("keep", "Keep each account's army", "Never change the Builder Base army"),
+             ("pekka", "P.E.K.K.A"), ("night_witch", "Night Witch"), ("archer", "Sneaky Archer"),
+             ("barbarian", "Raged Barbarian"), ("boxer_giant", "Boxer Giant"), ("bomber", "Bomber"),
+             ("cannon_cart", "Cannon Cart"), ("drop_ship", "Drop Ship"), ("hog_glider", "Hog Glider"),
+             ("beta_minion", "Beta Minion"), ("baby_dragon", "Baby Dragon"),
+             ("electrofire_wizard", "Electrofire Wizard")]
 NIGHT = "#8c9bff"          # accent of the Builder Base (same as its mode card on the Dashboard)
 
 # the source of truth for keys and defaults is bot/config.py
@@ -108,6 +115,11 @@ class BuilderTab(QWidget):
         self.after_bonus = Toggle()
         atk.add(SettingRow("Keep attacking after the daily Star Bonus is complete",
                            "Off: stop once the Star Bonus is done (e.g. 8/8 stars).", self.after_bonus))
+        self.army = Combo(BB_ARMIES)
+        self.army.currentIndexChanged.connect(self.changed)
+        atk.add(SettingRow("Army", "Battle Machine + this unit in every slot (the bot only rebuilds it when "
+                           "it differs). Units the account has not unlocked fall back to the next best.",
+                           self.army, 260))
         atk.add(divider())
         self.max_attacks = Spin(0, 100, special="No limit")
         atk.add(SettingRow("Max attacks per visit", "Then sail back and go on", self.max_attacks, 120))
@@ -225,6 +237,9 @@ class BuilderTab(QWidget):
         d = DEFAULTS
         self.after_main.setChecked(bool(b.get("after_main", d.get("after_main", False))))
         self.after_bonus.setChecked(bool(b.get("after_bonus", d.get("after_bonus", False))))
+        self.army.blockSignals(True)
+        self.army.select(b.get("army", d.get("army", "auto")))
+        self.army.blockSignals(False)
         self.max_attacks.setValue(int(b.get("max_attacks", d.get("max_attacks", 20)) or 0))
         self.stuck.setValue(int(b.get("stuck_attacks", d.get("stuck_attacks", 3)) or 3))
         self.full_margin.setValue(int(b.get("full_margin", d.get("full_margin", 50000)) or 0))
@@ -245,6 +260,7 @@ class BuilderTab(QWidget):
         b = settings.setdefault("builder", {})        # keys this page does not show (e.g. zoom_out) are kept
         b["after_main"] = self.after_main.isChecked()
         b["after_bonus"] = self.after_bonus.isChecked()
+        b["army"] = self.army.currentData() or "auto"
         b["max_attacks"] = self.max_attacks.value()
         b["stuck_attacks"] = self.stuck.value()
         b["full_margin"] = self.full_margin.value()

@@ -44,6 +44,21 @@
     ],
     "threshold": 0.85
   },
+  "army/clone": {
+    "box": [
+      878,
+      600,
+      80,
+      55
+    ],
+    "region": [
+      840,
+      300,
+      960,
+      420
+    ],
+    "threshold": 0.8
+  },
   "army/close": {
     "box": [
       1735,
@@ -58,6 +73,21 @@
       175
     ],
     "threshold": 0.85
+  },
+  "army/edrag": {
+    "box": [
+      875,
+      360,
+      85,
+      60
+    ],
+    "region": [
+      840,
+      300,
+      960,
+      420
+    ],
+    "threshold": 0.8
   },
   "army/my_army_title": {
     "box": [
@@ -191,6 +221,21 @@
       768,
       260,
       162
+    ],
+    "threshold": 0.85
+  },
+  "bb/army_title": {
+    "box": [
+      795,
+      195,
+      335,
+      55
+    ],
+    "region": [
+      735,
+      135,
+      455,
+      175
     ],
     "threshold": 0.85
   },
@@ -448,6 +493,216 @@
       190
     ],
     "threshold": 0.85
+  },
+  "bb/unit_archer": {
+    "box": [
+      475,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_baby_dragon": {
+    "box": [
+      729,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_barbarian": {
+    "box": [
+      475,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_battle_copter": {
+    "box": [
+      349,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_battle_machine": {
+    "box": [
+      349,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_beta_minion": {
+    "box": [
+      602,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_bomber": {
+    "box": [
+      729,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_boxer_giant": {
+    "box": [
+      602,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_cannon_cart": {
+    "box": [
+      855,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_drop_ship": {
+    "box": [
+      981,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_electrofire_wizard": {
+    "box": [
+      1108,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_hog_glider": {
+    "box": [
+      1108,
+      668,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_night_witch": {
+    "box": [
+      855,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
+  },
+  "bb/unit_pekka": {
+    "box": [
+      981,
+      796,
+      80,
+      58
+    ],
+    "region": [
+      320,
+      330,
+      1300,
+      580
+    ],
+    "threshold": 0.8
   },
   "boat/icon": {
     "box": [

@@ -435,7 +435,7 @@ class MainWindow(QMainWindow):
             self.toasts.show("info", "Run stopped", "", 4000)
         else:
             self.toasts.show("success", "Run finished", "All done.", 5000)
-        self.showNormal()
+        self.showMaximized()
         self.raise_()
         self.activateWindow()
 

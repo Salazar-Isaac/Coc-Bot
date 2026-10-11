@@ -127,9 +127,6 @@ def loot_until_full(bot, account):
     """Attack until the account's watched storages are full.
     Returns "full", "limit" (max attacks reached) or "stuck"."""
     s = bot.settings["loot"]
-    if s.get("army_recipe") and account.get("_recipe_set") != s["army_recipe"]:
-        if clan.use_recipe(bot, s["army_recipe"]):
-            account["_recipe_set"] = s["army_recipe"]      # once per visit
     attacks = 0
     stuck = 0
     before = None
@@ -156,8 +153,31 @@ def loot_until_full(bot, account):
                 if res.get(r) is not None and before.get(r) is not None and res[r] > before[r]:
                     bot.stats["loot"][r] += res[r] - before[r]
         before = res
+        ensure_army(bot, account)                # only now: the account really is going to attack
         if attack_once(bot) is not None:
             attacks += 1
+
+
+def ensure_army(bot, account):
+    """Switch to the chosen Saved Recipe once per visit and check the army really has the units
+    you require (Loot page). Done right before attacking, never for a full account."""
+    s = bot.settings["loot"]
+    name = s.get("army_recipe")
+    if not name or account.get("_army_checked") == name:
+        return
+    account["_army_checked"] = name
+    for attempt in range(2):
+        applied, missing = clan.use_recipe(bot, name, check=s.get("army_must_have", ["edrag", "clone"]))
+        if applied and not missing:
+            return
+        if not applied:
+            log.warning("%s has no saved recipe called '%s': attacking with its current army",
+                        account["name"], name)
+            return
+        if attempt == 0:
+            log.info("%s: army is missing %s after the recipe, trying once more", account["name"], ", ".join(missing))
+    log.warning("%s: recipe '%s' has no %s - edit that recipe in the game to include it. Attacking with it anyway.",
+                account["name"], name, " / ".join(missing))
 
 
 def _fmt(d):

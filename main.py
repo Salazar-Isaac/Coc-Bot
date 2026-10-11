@@ -29,7 +29,7 @@ def main():
     app.setApplicationName("Coc-Bot")
     apply_theme(app)
     w = MainWindow()
-    w.show()
+    w.showMaximized()
     sys.exit(app.exec())
 
 

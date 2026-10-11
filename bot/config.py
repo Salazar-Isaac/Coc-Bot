@@ -57,6 +57,7 @@ DEFAULT_SETTINGS = {
         "roles": {"main": True, "loot": True, "both": True, "feeder": False},   # who "Loot all accounts" loots
         "full_mode": "capacity",            # "capacity": measured storage size - margin; "table": TH table
         "army_recipe": "",                  # Saved Recipe to use before looting on every account (e.g. "loot")
+        "army_must_have": ["edrag", "clone"],   # units checked after applying the recipe
         "full_margin": {"gold": 500000, "elixir": 500000, "dark": 5000},
     },
     "full_at": DEFAULT_FULL_AT,
@@ -87,6 +88,7 @@ DEFAULT_SETTINGS = {
     "builder": {
         "after_main": False,                # loot modes: after an account's home village is full, loot its Builder Base
         "after_bonus": False,               # keep attacking after the daily Star Bonus is complete
+        "army": "auto",                     # "auto" (P.E.K.K.A if unlocked, else Sneaky Archer), "keep" or a unit name
         "max_attacks": 20,                  # safety limit per visit (0 = none)
         "stuck_attacks": 3,                 # storages not growing after this many attacks = full
         "full_margin": 50000,               # Builder Base storages count as full this close to capacity

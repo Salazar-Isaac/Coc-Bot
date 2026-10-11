@@ -18,6 +18,7 @@ STATES = [
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
     ("chat", ["chat/close"]),                     # clan chat open over the village
+    ("bb_army", ["bb/army_title"]),               # Builder Base "Choose Army": close with its X
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
     ("home", ["home/attack_button", "home/settings_button"]),
     ("daily", ["popup/daily_title"]),
@@ -152,6 +153,8 @@ def go_home(bot, timeout=60.0):
             bot.tap_point("dialog.cancel")
         elif state == "request_window":
             bot.tap_point("request.cancel")
+        elif state == "bb_army":
+            bot.tap_point("bb.army_close")
         elif state == "shop":
             m = vision.find(frame, "shop/close") if vision.templates.has("shop/close") else None
             bot.tap_match(m, jitter=1) if m else bot.tap_point("shop.close", jitter=0)

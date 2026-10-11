@@ -395,12 +395,26 @@ def donate_all(bot, settings, max_requests=60):
 
 # --- army recipes ------------------------------------------------------------------------
 
-def use_recipe(bot, name):
+ARMY_UNITS = {"edrag": "army/edrag", "clone": "army/clone"}
+
+
+def army_has(frame, units):
+    """Which of the required units are NOT in the army screen."""
+    return [u for u in units if ARMY_UNITS.get(u) and vision.templates.has(ARMY_UNITS[u])
+            and not vision.find(frame, ARMY_UNITS[u], region=bot_army_region())]
+
+
+def bot_army_region():
+    return space.region(840, 300, 960, 420)      # troops + spells rows of the army screen
+
+
+def use_recipe(bot, name, check=()):
     """Switch the army to the Saved Recipe called `name` (e.g. your E-Dragon + Clone "loot"
-    recipe). Returns True if it was applied, False if the account has no such recipe."""
+    recipe). Any confirmation the game asks (Clan Castle troops present, a request still open,
+    ...) is accepted with Okay. Returns (applied, missing_units)."""
     from .account import same_name
     if not name:
-        return False
+        return False, []
     open_army(bot)
     try:
         bot.tap_point("army.recipes_arrow")
@@ -417,12 +431,24 @@ def use_recipe(bot, name):
                      ", ".join(t for t, c, _ in rows if c > 0.5) or "none")
             bot.tap_point("army.recipes_arrow")          # close the list
             bot.sleep(0.4)
-            return False
+            return False, []
         bot.tap(*target, jitter=4)
-        if bot.wait("army/use_recipe_title", 3, interval=0.2):
-            bot.tap_template("battle/confirm_okay", timeout=3, after=0.6)
-        log.info("Army set to recipe '%s'", name)
-        return True
+        # a confirmation may follow ("Use Army Recipe?": Clan Castle troops / open request): Okay
+        end = time.monotonic() + 2.5
+        while time.monotonic() < end:
+            f = bot.shot()
+            if vision.find(f, "army/use_recipe_title") or vision.find(f, "battle/confirm_okay"):
+                m = vision.find(f, "battle/confirm_okay")
+                if m:
+                    bot.tap_match(m)
+                    bot.sleep(0.7)
+                    log.info("Confirmed the army recipe change")
+                    break
+            bot.sleep(0.25)
+        bot.sleep(0.6)
+        missing = army_has(bot.shot(), check)
+        log.info("Army set to recipe '%s'%s", name, f" (missing: {', '.join(missing)})" if missing else "")
+        return True, missing
     finally:
         close_army(bot)
         go_home(bot)

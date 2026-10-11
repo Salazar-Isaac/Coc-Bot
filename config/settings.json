@@ -159,6 +159,27 @@
       "feeder"
     ]
   },
+  "builder": {
+    "after_main": false,
+    "after_bonus": false,
+    "max_attacks": 20,
+    "stuck_attacks": 3,
+    "full_margin": 50000,
+    "collect": true,
+    "upgrade": false,
+    "gear_up": true,
+    "max_upgrades": 1,
+    "research": false,
+    "upgrade_skip": [],
+    "research_skip": [],
+    "zoom_out": true,
+    "on_roles": [
+      "main",
+      "loot",
+      "both",
+      "feeder"
+    ]
+  },
   "hotkeys": {
     "continue": "f8",
     "pause": "f9",
