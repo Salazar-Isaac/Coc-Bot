@@ -55,6 +55,7 @@ CATALOG = [
     ("request/text_box", "Request", "The message box in the request window", False),
     ("chat/request_button", "Chat", "The request button at the bottom of the chat", False),
     ("chat/challenge", "Chat", "The 'Challenge' button at the bottom of the chat", False),
+    ("chat/jump_latest", "Chat", "The green down-arrow that jumps to the newest messages", False),
     ("chat/rules_understand", "Chat", "'I Understand' on the first-time chat rules", False),
     ("popup/anyone_there", "Popups", "The title 'Anyone there?' of the inactivity popup", False),
     ("donate/balloon", "Donate", "Balloon icon in the donate window (example item)", False),

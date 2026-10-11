@@ -142,6 +142,10 @@ def open_chat(bot):
         bot.tap_template("chat/rules_understand", timeout=2, after=0.8)
     if not bot.wait_any(["chat/close", "chat/challenge"], 6)[0]:
         raise BotError("Clan chat did not open")
+    m = bot.find("chat/jump_latest")                # chat remembers its scroll: go to the newest
+    if m:
+        bot.tap_match(m)
+        bot.sleep(1.0)
 
 
 def close_chat(bot):
@@ -176,6 +180,11 @@ def _donated_strip(frame):
     """The 'Donated Troops and Spells' row at the bottom of the donate window."""
     x, y, w, h = space.region(640, 945, 820, 100)
     return frame[y:y + h, x:x + w].astype(np.int16)
+
+
+def _strip_changed(before, after):
+    """True if the donated row changed (a new unit, or an 'x1' -> 'x2' label)."""
+    return int((np.abs(after - before).max(axis=2) > 45).sum()) > 20
 
 
 def _fraction(frame, box):
@@ -242,11 +251,16 @@ def fill_request(bot, items, left=None):
                 break                               # not trained / not available
             before = _donated_strip(frame)
             bot.tap_match(m, jitter=2)
-            time.sleep(0.3)
-            after = bot.shot()
-            if not vision.find(after, "donate/window_title"):
-                return donated + 1                  # that tap filled the request and closed the window
-            if np.abs(_donated_strip(after) - before).mean() < 2:
+            changed = False
+            for _ in range(4):                      # the row updates 0.2-0.5 s after the tap
+                time.sleep(0.15)
+                after = bot.shot()
+                if not vision.find(after, "donate/window_title"):
+                    return donated + 1              # that tap filled the request and closed the window
+                if _strip_changed(before, _donated_strip(after)):
+                    changed = True
+                    break
+            if not changed:
                 break                               # the game refused (no room for this unit)
             donated += 1
             if left.get(cat) is not None:

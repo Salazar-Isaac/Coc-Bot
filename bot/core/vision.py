@@ -268,6 +268,8 @@ class DigitReader:
         return [(self._normalise(binary[t:t + h, l:l + w]), (l + ox, t + oy, w, h)) for l, t, w, h in keep]
 
     def classify(self, glyph):
+        if self._templates is None:
+            self._load()
         best, best_score = None, -1.0
         for digit, tpl in self._templates:
             s = float(cv2.matchTemplate(glyph, tpl, cv2.TM_CCOEFF_NORMED)[0][0])
@@ -291,6 +293,8 @@ class DigitReader:
 
     def read_fraction(self, frame, region, min_score=0.6, min_level=None):
         """'34/50' -> (34, 50), or None."""
+        if not self.ready:
+            return None
         found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level)]
         text = "".join(d for d, s in found if s >= min_score)
         m = re.fullmatch(r"(\d+)/(\d+)", text)

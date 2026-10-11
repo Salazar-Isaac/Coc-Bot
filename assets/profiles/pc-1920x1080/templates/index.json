@@ -224,6 +224,21 @@
     ],
     "threshold": 0.85
   },
+  "chat/jump_latest": {
+    "box": [
+      22,
+      912,
+      62,
+      72
+    ],
+    "region": [
+      0,
+      852,
+      144,
+      192
+    ],
+    "threshold": 0.85
+  },
   "chat/request_button": {
     "box": [
       482,
