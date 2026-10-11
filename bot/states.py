@@ -15,12 +15,14 @@ STATES = [
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
     ("daily", ["popup/daily_title"]),
     ("lab_window", ["lab/in_progress_title"]),     # laboratory after starting research (has a gems button!)
-    ("upgrade_window", ["upgrade/confirm"]),
+    ("upgrade_window", ["upgrade/confirm", "upgrade/close", "lab/close"]),   # any big window with a red X
     ("dialog", ["popup/speech_corner"]),          # event/tutorial character talking
     ("switcher", ["sid/switch_id_label"]),
     ("settings", ["settings/title"]),
     ("army", ["army/my_army_title"]),
     ("attack_menu", ["attack_menu/find_match"]),
+    ("remove_dialog", ["army/remove_title"]),      # "Remove troops?" -> Cancel when lost
+    ("request_window", ["request/title"]),         # request window -> Cancel when lost
     ("results", ["results/claim_reward", "results/return_home"]),
     ("chest", ["chest/continue", "chest/pedestal"]),
     ("confirm", ["battle/confirm_okay"]),
@@ -120,12 +122,19 @@ def go_home(bot, timeout=60.0):
         elif state == "chat":
             bot.tap_point("chat.close", jitter=2)
         elif state in ("lab_window", "upgrade_window"):
-            key = "lab/close" if state == "lab_window" else "upgrade/close"
-            m = vision.templates.has(key) and vision.find(frame, key)
+            m = None
+            for key in ("lab/close", "upgrade/close"):
+                m = vision.templates.has(key) and vision.find(frame, key)
+                if m:
+                    break
             if m:
-                bot.tap_match(m, jitter=1)
+                bot.tap_match(m, jitter=1)          # never the Finish Now (gems / magic item) buttons
             else:
                 bot.tap_point("home.safe", jitter=3)
+        elif state == "remove_dialog":
+            bot.tap_point("dialog.cancel")
+        elif state == "request_window":
+            bot.tap_point("request.cancel")
         elif state == "daily":
             # the X only works after claiming today's reward
             m = vision.templates.has("popup/daily_claim") and vision.find(frame, "popup/daily_claim")

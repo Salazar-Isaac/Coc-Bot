@@ -36,6 +36,8 @@ DEFAULT_LAYOUT = {
         "donate.close": [300, 240],          # a spot in the chat beside the donate window
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
         "top.builders_menu": [960, 50],      # builder counter -> upgrades list
+        "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
+        "request.cancel": [768, 722],        # Cancel of the request window
         "top.lab_menu": [760, 50],           # laboratory counter -> research list
     },
     "regions": {

@@ -225,6 +225,8 @@ def _priced_confirm(bot, frame):
     for m in vision.find_all(frame, "upgrade/confirm", region=bottom):
         x, y, w, h = m.box
         price = vision.digits.read(frame, (x - 70, y + h + 4, w + 140, 50))
+        if not price:   # on sale: the new price is bright green, the old one crossed out below it
+            price = vision.digits.read(frame, (x - 70, y + h + 2, w + 140, 40), color="sale")
         if price:
             return m, price
     return None, None

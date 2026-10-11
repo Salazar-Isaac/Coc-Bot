@@ -247,11 +247,16 @@ class DigitReader:
         glyph = cv2.copyMakeBorder(glyph, 0, 0, pad // 2, pad - pad // 2, cv2.BORDER_CONSTANT, value=0)
         return cv2.resize(glyph, self.SIZE, interpolation=cv2.INTER_AREA)
 
-    def glyphs(self, frame, region, min_level=None):
-        """Cut out each digit in `region`, left to right. Returns [(image, box)]."""
+    def glyphs(self, frame, region, min_level=None, color="white"):
+        """Cut out each digit in `region`, left to right. Returns [(image, box)].
+        color "white": white/cream/pink game numbers; "sale": the bright green discounted prices."""
         area, ox, oy = _crop(frame, region)
         level = min_level or self.MIN_LEVEL
-        binary = ((area.min(axis=2) >= level) * 255).astype(np.uint8)
+        if color == "sale":
+            b, g, r = area[:, :, 0].astype(int), area[:, :, 1].astype(int), area[:, :, 2].astype(int)
+            binary = (((g >= 235) & (r <= 160) & (b <= 80)) * 255).astype(np.uint8)
+        else:
+            binary = ((area.min(axis=2) >= level) * 255).astype(np.uint8)
         n, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
         comps = [stats[i] for i in range(1, n)
                  if stats[i][cv2.CC_STAT_AREA] >= 12 and stats[i][cv2.CC_STAT_WIDTH] >= 4]
@@ -277,11 +282,11 @@ class DigitReader:
                 best, best_score = digit, s
         return best, best_score
 
-    def read(self, frame, region, min_score=0.6, min_level=None):
+    def read(self, frame, region, min_score=0.6, min_level=None, color="white"):
         """The number in `region`, or None if it could not be read confidently."""
         if not self.ready:
             raise RuntimeError("Digit images missing: capture them in the Templates tab")
-        found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level)]
+        found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level, color)]
         # a weak glyph at either end is usually a speck of background: drop it
         while found and found[0][1] < min_score:
             found.pop(0)
