@@ -11,6 +11,7 @@ Donate only: steps 2-4, repeated (Repeat rounds / until elixir runs low).
 """
 
 import logging
+import time
 
 from .. import config
 from ..actions import account as account_actions
@@ -22,6 +23,7 @@ from .loot import _loot_account
 log = logging.getLogger("bot")
 
 REQUEST_ROLES = ("both", "feeder")
+NO_CLAN_RECHECK = 3600          # an account found without a clan is skipped for an hour, then checked again
 
 
 def _main_account(bot):
@@ -52,12 +54,20 @@ def request_round(bot, state):
             continue
         state["request_next"] = i - 1
         config.save_state(state)
+        no_clan = state.setdefault("no_clan", {})
+        if time.time() - no_clan.get(acc["name"], 0) < NO_CLAN_RECHECK:
+            continue                                   # had no clan recently: do not switch to it again
+
         bot.status(account=acc["name"], progress=f"request {i}/{len(requesters)}", action="Requesting")
         if not _switch(bot, acc, state):
             continue
         chores(bot, acc, "arrive")
-        if with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings)):
+        result = with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings))
+        if result:
             sent += 1
+        if acc.get("_no_clan"):
+            state.setdefault("no_clan", {})[acc["name"]] = time.time()
+            config.save_state(state)
     state["request_next"] = 0
     config.save_state(state)
     log.info("Requests sent: %d of %d accounts", sent, len(requesters))

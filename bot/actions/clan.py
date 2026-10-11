@@ -117,8 +117,9 @@ def in_clan(bot):
 def feeder_turn(bot, account, settings):
     """On a feeder account: empty the CC (optional) and request."""
     if not in_clan(bot):
-        log.warning("%s is not in a clan: it cannot request. Join it to the Main's clan or set it to Skip.",
-                    account["name"])
+        log.warning("%s is not in a clan: it cannot request. Join it to the Main's clan or set it to Skip. "
+                    "(Skipped for the next hour.)", account["name"])
+        account["_no_clan"] = True
         return False
     open_army(bot)
     try:
