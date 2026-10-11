@@ -113,12 +113,19 @@ def travel(bot, to):
                            "(it needs Town Hall 4+ and the boat repaired)")
         raise BotError("Could not find the boat back to the home village")
     bot.tap_match(boat, jitter=3)
-    end = time.monotonic() + 25
-    while time.monotonic() < end:
+    start = time.monotonic()
+    retapped = False
+    while time.monotonic() - start < 60:              # loading the other village can take a while
         control.sleep(1.0)
-        if where(bot) == to:
+        now = where(bot)
+        if now == to:
             log.info("Now in the %s village", "Builder Base" if to == "builder" else "home")
             return True
+        if now == here and not retapped and time.monotonic() - start > 8:
+            boat = _find_boat(bot, here)                # the tap did not register: tap the boat again
+            if boat:
+                bot.tap_match(boat, jitter=3)
+            retapped = True
         f = bot.shot()
         m = vision.templates.has("bb/star_bonus_okay") and vision.find(f, "bb/star_bonus_okay")
         if m:
