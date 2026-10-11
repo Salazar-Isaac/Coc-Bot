@@ -43,9 +43,9 @@ def close_army(bot):
     bot.sleep(0.5)
 
 
-def _active(frame, key):
+def _active(frame, key, region=None):
     """A button that is in colour (enabled), not greyed out."""
-    m = vision.find(frame, key, any_brightness=True)
+    m = vision.find(frame, key, any_brightness=True, region=region)
     if not m:
         return None
     x, y, w, h = m.box
@@ -176,9 +176,24 @@ def _donate_items(settings):
     return out
 
 
-def _donated_strip(frame):
+BASE_TITLE_Y = 268      # where the donate window's title sits for a request at the bottom of the chat
+
+
+def _window_dy(frame):
+    """The donate window is drawn next to its request, so it moves up for requests higher in
+    the chat. Returns how far it moved (pixels), or None if the window is not open."""
+    m = vision.find(frame, "donate/window_title")
+    return None if m is None else m.box[1] - BASE_TITLE_Y
+
+
+def _shifted(region, dy):
+    x, y, w, h = space.region(*region)
+    return (x, max(0, y + dy), w, h)
+
+
+def _donated_strip(frame, dy=0):
     """The 'Donated Troops and Spells' row at the bottom of the donate window."""
-    x, y, w, h = space.region(640, 945, 820, 100)
+    x, y, w, h = _shifted((640, 945, 820, 100), dy)
     return frame[y:y + h, x:x + w].astype(np.int16)
 
 
@@ -244,20 +259,22 @@ def fill_request(bot, items, left=None):
             if left.get(cat) is not None and left[cat] < size:
                 break                               # this unit no longer fits
             frame = bot.shot()
-            if not vision.find(frame, "donate/window_title"):
+            dy = _window_dy(frame)
+            if dy is None:
                 return donated                      # window closed itself: request filled
-            m = _active(frame, key)
+            meta = vision.templates.meta(key).get("region") or [630, 375, 840, 530]
+            m = _active(frame, key, region=_shifted(meta, dy))
             if not m:
                 break                               # not trained / not available
-            before = _donated_strip(frame)
+            before = _donated_strip(frame, dy)
             bot.tap_match(m, jitter=2)
             changed = False
             for _ in range(4):                      # the row updates 0.2-0.5 s after the tap
                 time.sleep(0.15)
                 after = bot.shot()
-                if not vision.find(after, "donate/window_title"):
+                if _window_dy(after) is None:
                     return donated + 1              # that tap filled the request and closed the window
-                if _strip_changed(before, _donated_strip(after)):
+                if _strip_changed(before, _donated_strip(after, dy)):
                     changed = True
                     break
             if not changed:
@@ -283,7 +300,7 @@ def donate_all(bot, settings, max_requests=60):
     open_chat(bot)
     total, handled = 0, 0
     page, empty_pages = 0, 0
-    tried = set()
+    tried, skipped, done_names, retries = set(), set(), set(), {}
     try:
         while handled < max_requests and empty_pages < 3:
             frame = bot.shot()
@@ -300,8 +317,15 @@ def donate_all(bot, settings, max_requests=60):
             handled += 1
             req = read_request(frame, b)
             who = req["name"] or "?"
+            ident = re.sub(r"[^a-z0-9]", "", req["name"].lower()) or f"?{page}:{b.y}"
+            if ident in done_names:
+                handled -= 1
+                continue                               # already handled this requester in this pass
             if only_mine and req["name"] and not _is_mine(bot, req["name"]):
-                log.info("Skipping %s's request (not one of your accounts)", who)
+                if req["name"] not in skipped:
+                    log.info("Skipping %s's request (not one of your accounts)", who)
+                    skipped.add(req["name"])
+                handled -= 1
                 continue
             order, left, asked = plan(req, items)
             log.info("Request from %s%s - space left: troops %s, spells %s, siege %s", who,
@@ -309,13 +333,28 @@ def donate_all(bot, settings, max_requests=60):
                      *(("?" if left[c] is None else left[c]) for c in ("troop", "spell", "siege")))
             if not order:
                 log.info("Nothing to give %s: request full or nothing fits", who)
+                done_names.add(ident)
                 continue
             if asked:
                 log.info("%s asks for: %s", who,
                          ", ".join(i["name"] for i in order if troops.wants(req["message"], i)))
-            bot.tap_match(b)
-            if not bot.wait("donate/window_title", 4):
+            # the chat may have moved while reading (a filled request disappears): re-find the button
+            now = [m for m in donate_buttons(bot.shot()) if abs(m.y - b.y) < 14]
+            if not now:
+                tried.discard((page, b.y // 12))
+                handled -= 1
+                bot.sleep(0.6)
                 continue
+            bot.tap_match(now[0])
+            if not bot.wait("donate/window_title", 4):
+                retries[ident] = retries.get(ident, 0) + 1
+                if retries[ident] >= 2:
+                    log.info("The donate window for %s did not open; skipping it", who)
+                    done_names.add(ident)
+                else:
+                    tried.discard((page, b.y // 12))
+                continue
+            done_names.add(ident)
             n = fill_request(bot, order, left)
             total += n
             bot.stats["donated"] = bot.stats.get("donated", 0) + n

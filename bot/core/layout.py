@@ -33,7 +33,7 @@ DEFAULT_LAYOUT = {
         "chat.close": [655, 497],
         "chat.scroll_from": [300, 300],      # swipe down in the chat = older messages
         "chat.scroll_to": [300, 760],
-        "donate.close": [300, 240],          # a spot in the chat beside the donate window
+        "donate.close": [1660, 640],         # village right of the donate window (it moves up and down)
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
         "top.builders_menu": [960, 50],      # builder counter -> upgrades list
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
