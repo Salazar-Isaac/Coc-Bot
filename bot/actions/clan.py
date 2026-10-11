@@ -245,6 +245,29 @@ def plan(req, items):
     return usable, left, False
 
 
+ROWS = {"troop": (630, 375, 840, 320), "siege": (630, 375, 840, 320), "spell": (630, 720, 840, 180)}
+
+
+def _find_item(bot, frame, key, dy, cat):
+    """Find an item's icon in the donate window. If it is not visible, slide its row to the left
+    (more troops / siege machines further right) a few times. Returns a usable match or None."""
+    region = _shifted(ROWS.get(cat, ROWS["troop"]), dy)
+    for slide in range(4):
+        m = _active(frame, key, region=region)
+        if m:
+            return m
+        if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
+            return None                             # visible but greyed out: not available
+        if slide == 3:
+            break
+        x, y, w, h = region
+        cy = y + h // 3
+        bot.swipe((x + w - 60, cy), (x + 60, cy), 500)   # slide the row to see further right
+        bot.sleep(0.8)
+        frame = bot.shot()
+    return None
+
+
 def fill_request(bot, items, left=None):
     """Donate window is open: donate items in order until each category's space is used.
     Returns the number of units donated. A tap counts only if the 'donated' row changed."""
@@ -262,10 +285,10 @@ def fill_request(bot, items, left=None):
             dy = _window_dy(frame)
             if dy is None:
                 return donated                      # window closed itself: request filled
-            meta = vision.templates.meta(key).get("region") or [630, 375, 840, 530]
-            m = _active(frame, key, region=_shifted(meta, dy))
+            m = _find_item(bot, frame, key, dy, cat)
             if not m:
                 break                               # not trained / not available
+            frame = bot.frame
             before = _donated_strip(frame, dy)
             bot.tap_match(m, jitter=2)
             changed = False

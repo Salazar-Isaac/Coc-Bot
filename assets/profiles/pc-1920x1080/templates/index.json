@@ -359,6 +359,21 @@
     ],
     "threshold": 0.8
   },
+  "donate/lightning": {
+    "box": [
+      668,
+      760,
+      56,
+      44
+    ],
+    "region": [
+      630,
+      700,
+      840,
+      200
+    ],
+    "threshold": 0.8
+  },
   "donate/window_title": {
     "box": [
       662,
