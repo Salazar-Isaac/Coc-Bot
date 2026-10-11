@@ -95,17 +95,61 @@
     "loot_before_donate": true,
     "items": [
       {
-        "name": "Balloon",
-        "template": "donate/balloon",
-        "clicks": 6,
-        "enabled": true
-      },
-      {
         "name": "Archer",
         "template": "donate/archer",
         "clicks": 10,
-        "enabled": true
+        "enabled": true,
+        "category": "troop",
+        "space": 1,
+        "keywords": ""
+      },
+      {
+        "name": "Balloon",
+        "template": "donate/balloon",
+        "clicks": 6,
+        "enabled": true,
+        "category": "troop",
+        "space": 5,
+        "keywords": "loon"
+      },
+      {
+        "name": "Lightning Spell",
+        "template": "donate/lightning",
+        "clicks": 3,
+        "enabled": true,
+        "category": "spell",
+        "space": 1,
+        "keywords": "zap, light"
       }
+    ],
+    "donate_to": "all"
+  },
+  "village": {
+    "collect": true,
+    "upgrade_buildings": false,
+    "research": false,
+    "max_upgrades": 2,
+    "include_other": true,
+    "upgrade_skip": [
+      "Wall",
+      "Barbarian King",
+      "Archer Queen",
+      "Grand Warden",
+      "Royal Champion",
+      "Minion Prince",
+      "Dragon Duke"
+    ],
+    "research_skip": [],
+    "reserve": {
+      "gold": 0,
+      "elixir": 0,
+      "dark": 0
+    },
+    "on_roles": [
+      "main",
+      "loot",
+      "both",
+      "feeder"
     ]
   },
   "hotkeys": {
