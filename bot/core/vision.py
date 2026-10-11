@@ -332,9 +332,10 @@ class DigitReader:
         color "white": white/cream/pink game numbers; "sale": the bright green discounted prices."""
         area, ox, oy = _crop(frame, region)
         level = min_level or self.MIN_LEVEL
-        if color == "sale":
-            b, g, r = area[:, :, 0].astype(int), area[:, :, 1].astype(int), area[:, :, 2].astype(int)
-            binary = (((g >= 235) & (r <= 160) & (b <= 80)) * 255).astype(np.uint8)
+        if color == "sale":                     # bright saturated green (hue ~47), any shade of it
+            hsv = cv2.cvtColor(area, cv2.COLOR_BGR2HSV)
+            h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+            binary = (((h >= 35) & (h <= 62) & (s >= 170) & (v >= 190)) * 255).astype(np.uint8)
         else:
             binary = ((area.min(axis=2) >= level) * 255).astype(np.uint8)
         n, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
