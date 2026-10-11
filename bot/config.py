@@ -65,11 +65,11 @@ DEFAULT_SETTINGS = {
     "when_done": "nothing",                 # "nothing" / "close_game" / "shutdown" / "sleep"
     "repeat_rounds": 1,                     # 0 = loop forever over the accounts
     "donate": {
-        "min_elixir_keep": 4000000,         # main account donates while elixir is above this
+        "min_elixir_keep": 4000000,         # a round starts if Main's elixir > this + one round's cost (learned)
         "rounds": 0,                        # 0 = until elixir drops below min_elixir_keep
         "remove_cc_before_request": True,
         "request_text": "",
-        "loot_before_donate": True,         # Loot + Donate: main and loot-only accounts loot until full first
+        "loot_before_donate": False,        # Loot + Donate: loot to full before the first round (XpIncrease: no)
         "clan_tag": "",                     # the Main's clan; accounts without a clan join it (e.g. "#2RPLP89CY")
         "method": "fast",                   # "fast": XpIncrease-style bursts of taps; "careful": verify each unit
         "special_template": "donate/super_wizard",   # in colour = big request -> items marked "big"
@@ -79,6 +79,7 @@ DEFAULT_SETTINGS = {
     },
     "village": {
         "collect": True,                    # collectors + loot cart when arriving on an account
+        "collect_every": 60,                # minutes: an account is collected at most this often
         "upgrade_buildings": False,         # spend resources on builder upgrades before leaving
         "research": False,                  # start laboratory research before leaving
         "max_upgrades": 2,                  # building upgrades started per visit

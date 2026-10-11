@@ -101,6 +101,17 @@ class Device:
         c, d = self.to_native(x2, y2)
         self._swipe_native(a, b, c, d, ms)
 
+    def drag(self, x1, y1, x2, y2, ms=500):
+        """Like swipe, but released while still moving (no pause at either end), exactly like the
+        old completeid/XpIncrease scroll: on the Supercell ID list one drag moves exactly 4 rows."""
+        self.prepare()
+        a, b = self.to_native(x1, y1)
+        c, d = self.to_native(x2, y2)
+        self._drag_native(a, b, c, d, ms)
+
+    def _drag_native(self, x1, y1, x2, y2, ms):
+        self._swipe_native(x1, y1, x2, y2, ms)
+
 
 # =============================================================================
 # Google Play Games (Windows)
@@ -190,6 +201,14 @@ class PcDevice(Device):
             time.sleep(0.08)
             self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
             time.sleep(0.08)
+        finally:
+            self._pg.mouseUp()
+
+    def _drag_native(self, x1, y1, x2, y2, ms):
+        self._pg.moveTo(*self._screen(x1, y1))
+        self._pg.mouseDown()
+        try:
+            self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
         finally:
             self._pg.mouseUp()
 

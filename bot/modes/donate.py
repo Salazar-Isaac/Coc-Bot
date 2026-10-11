@@ -1,13 +1,12 @@
 """Donation modes.
 
-Loot + Donate cycle (your flow):
-  1. Main loots until full, then the Loot-only account(s) loot until full.
-  2. Every requesting account (roles "Loot + request" and "Feeder") empties its
-     Clan Castle and requests.
-  3. Main donates to all those requests.
-  4. Repeat 2-3 while Main still has more elixir than "Main keeps at least".
-  5. Back to 1.
-Donate only: steps 2-4, repeated (Repeat rounds / until elixir runs low).
+Loot + Donate cycle (the XpIncrease way):
+  1. On Main: donate to any request that is still open.
+  2. If Main has enough elixir for a whole round ("Main keeps at least" + what one round
+     cost last time): every requesting account (Looter, Loot + request, Feeder) empties
+     its Clan Castle and requests, then Main donates to all of them. Back to 2.
+  3. Not enough elixir: Main and the Looter account(s) loot until full, then back to 1.
+Donate only: steps 1-2, until the elixir runs low (or for the set number of rounds).
 """
 
 import logging
@@ -22,7 +21,7 @@ from .loot import _loot_account
 
 log = logging.getLogger("bot")
 
-REQUEST_ROLES = ("both", "feeder")
+REQUEST_ROLES = ("loot", "both", "feeder")   # Looters (e.g. your second account) request too
 NO_CLAN_RECHECK = 3600          # an account found without a clan is skipped for an hour, then checked again
 
 
@@ -75,44 +74,72 @@ def request_round(bot, state):
 
 
 def main_elixir(bot):
-    return loot.home_resources(bot).get("elixir")
+    for _ in range(2):
+        value = loot.home_resources(bot).get("elixir")
+        if value is not None:
+            return value
+        bot.sleep(1.0)
+    return None
 
 
-def donate_round(bot, main, state):
-    """Switch to Main and donate to every open request. Returns donations made."""
+def donate_round(bot, main, state, label="donate", learn=True):
+    """Switch to Main and donate to every open request; learns what a round costs in elixir.
+    Returns (units donated, Main's elixir afterwards or None)."""
     bot.status(account=main["name"], progress="", action="Donating")
     if not _switch(bot, main, state):
-        return 0
-    return with_recovery(bot, "donate", lambda: clan.donate_all(bot, bot.settings)) or 0
+        return 0, None
+    before = main_elixir(bot)
+    donated = with_recovery(bot, label, lambda: clan.donate_all(bot, bot.settings)) or 0
+    after = main_elixir(bot)
+    if learn and donated and before is not None and after is not None and 0 < before - after < before // 2:
+        spent = before - after                         # (a bigger drop would be a misread number)
+        old = state.get("round_elixir", 0)
+        state["round_elixir"] = spent if not old else (old + spent) // 2
+        config.save_state(state)
+        log.info("This round cost %s elixir (%s left)", f"{spent:,}", f"{after:,}")
+    return donated, after
 
 
-def donation_cycle(bot, main, state):
-    """Request + donate rounds while Main has elixir (or for the configured rounds)."""
-    d = bot.settings["donate"]
-    keep, max_rounds = d.get("min_elixir_keep", 0), d.get("rounds", 0)
+def round_need(bot, state):
+    """Elixir Main must have to start a round: what it keeps + what one round cost last time."""
+    return bot.settings["donate"].get("min_elixir_keep", 0) + state.get("round_elixir", 0)
+
+
+def donation_cycle(bot, main, state, check_open=True):
+    """The XpIncrease way: on Main, first donate to requests that are still open; then, while Main
+    has enough elixir for a whole round, every requesting account requests and Main donates.
+    check_open=False right after looting (Main is full; the request round can start where we are).
+    Returns "low" (not enough elixir: time to loot), "rounds" (round limit) or "idle"."""
+    max_rounds = bot.settings["donate"].get("rounds", 0)
+    resume = state.get("request_next", 0) > 0          # a stopped run was in the middle of a request round
+    elixir = None
+    if check_open and not resume:
+        log.info("Main: donating to requests that are still open")
+        _, elixir = donate_round(bot, main, state, "donate open requests", learn=False)
     n = 0
     while True:
+        need = round_need(bot, state)
+        if elixir is not None and elixir < need:
+            log.info("%s has %s elixir; a round needs %s: time to loot", main["name"], f"{elixir:,}", f"{need:,}")
+            return "low"
         n += 1
-        log.info("Donation round %d%s", n, f" of {max_rounds}" if max_rounds else "")
+        log.info("Donation round %d%s (Main's elixir %s; a round needs %s)", n,
+                 f" of {max_rounds}" if max_rounds else "", f"{elixir:,}" if elixir is not None else "full",
+                 f"{need:,}")
         request_round(bot, state)
-        donated = donate_round(bot, main, state)
-        elixir = main_elixir(bot)
-        log.info("%s elixir after donating: %s (keeps at least %s)", main["name"],
-                 f"{elixir:,}" if elixir is not None else "?", f"{keep:,}")
+        donated, elixir = donate_round(bot, main, state)
         if max_rounds and n >= max_rounds:
-            return
-        if elixir is not None and elixir < keep:
-            log.info("Main's elixir is below the limit: donation cycle done")
-            return
+            return "rounds"
         if donated == 0:
-            log.info("Nothing was donated this round (no requests or nothing to give): stopping the cycle")
-            return
+            log.info("Nothing was donated this round (no requests or nothing to give)")
+            return "idle"
 
 
 @register("loot_donate", "Loot + Donate cycle",
-          "Main and Loot-only accounts loot until full; then every 'Loot + request' and Feeder account "
-          "empties its Clan Castle and requests, and Main donates to all of them. Repeats while Main has "
-          "elixir, then loots again.", order=3)
+          "Like XpIncrease: Main first donates to open requests; while it has enough elixir for a round, "
+          "every Looter / 'Loot + request' / Feeder account empties its Clan Castle and requests and Main "
+          "donates. When the elixir runs low, Main and the Looter accounts loot until full, then it repeats.",
+          order=3)
 def run_loot_donate(bot, state):
     main = _main_account(bot)
     looters = [main] + active_accounts(bot, ["loot"])
@@ -121,23 +148,30 @@ def run_loot_donate(bot, state):
     while rounds == 0 or n < rounds:
         n += 1
         log.info("Cycle %d%s", n, f" of {rounds}" if rounds else "")
-        if bot.settings["donate"].get("loot_before_donate", True):
-            for acc in looters:
-                bot.status(account=acc["name"], progress="loot", action="Looting")
-                _loot_account(bot, acc, state, cycle=True)
-        donation_cycle(bot, main, state)
+        if n == 1 and bot.settings["donate"].get("loot_before_donate", False) and not state.get("request_next"):
+            _loot_all(bot, looters, state)              # "Always loot to full first"
+        donation_cycle(bot, main, state, check_open=(n == 1))
+        _loot_all(bot, looters, state)
+
+
+def _loot_all(bot, looters, state):
+    for acc in looters:
+        bot.status(account=acc["name"], progress="loot", action="Looting")
+        _loot_account(bot, acc, state, cycle=True)
 
 
 @register("donate_only", "Donate only",
-          "Every 'Loot + request' and Feeder account empties its Clan Castle and requests, then Main "
-          "donates to all of them; repeats while Main has elixir.", order=4)
+          "Main first donates to open requests; then, while it has enough elixir for a round, every "
+          "requesting account requests and Main donates.", order=4)
 def run_donate_only(bot, state):
     main = _main_account(bot)
     rounds = bot.settings.get("repeat_rounds", 1)
     n = 0
     while rounds == 0 or n < rounds:
         n += 1
-        donation_cycle(bot, main, state)
+        if donation_cycle(bot, main, state) == "low":
+            log.info("Main's elixir is low: Donate only is done")
+            return
 
 
 @register("join_clan", "Join clan",

@@ -5,7 +5,7 @@ import threading
 import time
 
 from . import catalog, config
-from .core import vision
+from .core import net, vision
 from .core.context import Bot
 from .core.control import BotStopped, control, is_user_abort
 from .core.devices import make_device
@@ -55,6 +55,7 @@ class Runner(threading.Thread):
             device = make_device(self.settings)
             self.bot = Bot(device, self.settings, self.accounts, self.on_status)
             state = config.load_state()
+            self.bot.state = state                    # e.g. to reopen the right account after a reload
             if not self.resume:
                 state.pop("loot_all_next", None)
             log.info("Starting '%s' on %s", mode.title, device.describe())
@@ -75,6 +76,7 @@ class Runner(threading.Thread):
                                   restarts, MAX_AUTO_RESTARTS)
                     self.bot.save_error("crash")
                     try:
+                        net.wait_until_online(self.bot)       # no point restarting without internet
                         restart_game(self.bot)
                     except (BotStopped, StopRun):
                         raise

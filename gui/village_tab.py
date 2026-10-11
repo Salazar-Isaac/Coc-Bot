@@ -16,6 +16,7 @@ NAMES = T.RESOURCE_NAME
 
 DEFAULTS = {
     "collect": True,
+    "collect_every": 60,
     "upgrade_buildings": False,
     "max_upgrades": 2,
     "include_other": True,
@@ -29,7 +30,7 @@ DEFAULTS = {
 
 # key, title, description, icon, colour (same look as the roles on the Accounts page)
 ROLES = [("main", "Main", "Loots and donates to the others", "crown", T.GOLD),
-         ("loot", "Loot only", "Just loots, never requests troops", "swords", T.ELIXIR_HI),
+         ("loot", "Looter", "Loots in every mode and requests troops", "swords", T.ELIXIR_HI),
          ("both", "Loot + request", "Loots and also requests troops", "sparkles", "#4fd1c5"),
          ("feeder", "Feeder", "Only requests troops", "send", "#5cc8ff")]
 
@@ -93,6 +94,12 @@ class VillageTab(QWidget):
         col, self.collect = self._switch_card("Collect resources", "When the bot arrives on an account: gold "
                                               "mines, elixir collectors, dark elixir drills and the loot cart.",
                                               "pickaxe", T.GOLD)
+        self.collect_every = Spin(0, 1440, " min", special="Every visit")
+        self.collect_every.setSingleStep(15)
+        self.collect_every.setFixedWidth(150)
+        self.collect_every_row = SettingRow("At most every", "Collectors fill slowly; skipping recent ones saves "
+                                            "time in request rounds", self.collect_every)
+        col.add(self.collect_every_row)
         left.addWidget(col)
 
         # --- reserve ---
@@ -164,11 +171,12 @@ class VillageTab(QWidget):
 
         for t in (self.collect, self.upgrade, self.include_other, self.research, *self.roles.values()):
             t.toggled.connect(self.changed)
-        for sp in (self.max_upgrades, *self.reserve.values()):
+        for sp in (self.max_upgrades, self.collect_every, *self.reserve.values()):
             sp.valueChanged.connect(self.changed)
         self.upgrade_skip.changed.connect(self.changed)
         self.research_skip.changed.connect(self.changed)
         self.upgrade.toggled.connect(self._sync)
+        self.collect.toggled.connect(self._sync)
         self.research.toggled.connect(self._sync)
         self._sync()
 
@@ -193,6 +201,7 @@ class VillageTab(QWidget):
 
     def _sync(self, *_):
         """Options of a chore are dimmed while the chore itself is off."""
+        self.collect_every_row.setEnabled(self.collect.isChecked())
         on = self.upgrade.isChecked()
         for w in (self.max_upgrades_row, self.include_other_row, self.upgrade_skip_block):
             w.setEnabled(on)
@@ -203,6 +212,7 @@ class VillageTab(QWidget):
         v = copy.deepcopy(DEFAULTS)
         v.update(settings.get("village") or {})
         self.collect.setChecked(bool(v.get("collect", True)))
+        self.collect_every.setValue(int(v.get("collect_every", 60)))
         self.upgrade.setChecked(bool(v.get("upgrade_buildings", False)))
         self.max_upgrades.setValue(int(v.get("max_upgrades", 2) or 2))
         self.include_other.setChecked(bool(v.get("include_other", True)))
@@ -221,6 +231,7 @@ class VillageTab(QWidget):
     def apply(self, settings, accounts):
         v = settings.setdefault("village", {})
         v["collect"] = self.collect.isChecked()
+        v["collect_every"] = self.collect_every.value()
         v["upgrade_buildings"] = self.upgrade.isChecked()
         v["max_upgrades"] = self.max_upgrades.value()
         v["include_other"] = self.include_other.isChecked()

@@ -4,6 +4,7 @@ import logging
 import subprocess
 import winsound
 
+from ..core import net
 from ..core.context import BotError
 from ..core.control import BotStopped, control, is_user_abort
 from ..states import ensure_game, go_home, restart_game
@@ -16,8 +17,11 @@ class StopRun(Exception):
 
 
 def with_recovery(bot, label, fn, attempts=3):
-    """Run fn(); on errors save a screenshot, get the game back to the village and retry."""
-    for attempt in range(1, attempts + 1):
+    """Run fn(); on errors save a screenshot, get the game back to the village and retry.
+    A network outage does not use up attempts: the bot waits for the internet and tries again."""
+    attempt, outages = 0, 0
+    while attempt < attempts:
+        attempt += 1
         try:
             return fn()
         except (BotStopped, StopRun):
@@ -30,6 +34,11 @@ def with_recovery(bot, label, fn, attempts=3):
             else:
                 log.exception("%s: unexpected error (attempt %d/%d)", label, attempt, attempts)
             bot.save_error(label.replace(" ", "-"))
+            if outages < 20 and net.wait_until_online(bot):
+                outages += 1
+                attempt -= 1                           # not the action's fault: does not count
+                go_home(bot, 120)                      # taps the game's Try Again until it is back
+                continue
             try:
                 if attempt == attempts - 1 or not bot.device.is_game_running() or not go_home(bot, 45):
                     restart_game(bot)

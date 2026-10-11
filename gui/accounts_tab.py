@@ -11,10 +11,12 @@ from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, IconButt
                             ToggleDelegate, hbox)
 from gui.widgets import BigSpin, Spin
 
-# role, label, icon, colour, hint.  Main loots and donates; Loot only just loots (never requests); Loot + request
-# loots in "Loot all" and also requests in the donation modes; Feeder only requests; Skip is ignored.
+# role, label, icon, colour, hint.  Main loots and donates; Looter loots in every mode (also in the Loot + Donate
+# cycle) and requests; Loot + request loots in "Loot all" and only requests in the donation modes; Feeder only
+# requests; Skip is ignored.
 ROLES = [("main", "Main (donates)", "crown", T.GOLD, "Loots and donates to the others"),
-         ("loot", "Loot only", "swords", T.ELIXIR_HI, "Just loots, never requests troops"),
+         ("loot", "Looter", "swords", T.ELIXIR_HI, "Loots in every mode (also in the Loot + Donate cycle) and "
+          "requests troops"),
          ("both", "Loot + request", "sparkles", "#4fd1c5",
           "Loots in “Loot all” and also requests in the donation modes"),
          ("feeder", "Feeder (requests)", "send", "#5cc8ff", "Only requests troops"),
@@ -172,7 +174,7 @@ class AccountsTab(QWidget):
         rows = [self._row_data(r) for r in range(self.table.rowCount())]
         on = [a for a in rows if a["enabled"] and a["role"] != "skip"]
         self.pills["total"].set(f"{len(rows)} accounts")
-        for k, text in (("main", "Main"), ("loot", "Loot only"), ("both", "Loot + request"), ("feeder", "Feeder")):
+        for k, text in (("main", "Main"), ("loot", "Looter"), ("both", "Loot + request"), ("feeder", "Feeder")):
             n = sum(1 for a in on if a["role"] == k)
             self.pills[k].set(f"{n} {text}")
             self.pills[k].setVisible(n > 0)
@@ -197,7 +199,13 @@ class AccountsTab(QWidget):
         self._summary()
 
     def apply(self, settings, accounts):
-        accounts[:] = [d for d in (self._row_data(r) for r in range(self.table.rowCount())) if d["name"]]
+        # keep what the bot learned that the table does not show (in-game name, storage size, ...)
+        known = {a["name"].lower(): a for a in list(accounts) + config.load_accounts()}
+        rows = [d for d in (self._row_data(r) for r in range(self.table.rowCount())) if d["name"]]
+        for d in rows:
+            extra = {k: v for k, v in known.get(d["name"].lower(), {}).items() if k not in d}
+            d.update(extra)
+        accounts[:] = rows
 
     def merge_scanned(self, found):
         """Add accounts read from the game that are not in the table yet; fill in Town Halls."""

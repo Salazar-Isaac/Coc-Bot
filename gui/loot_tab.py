@@ -138,7 +138,7 @@ class LootTab(QWidget):
         roles = Card("Who does “Loot all accounts” loot?", icon="users")
         self.roles = {}
         for i, (key, title, desc) in enumerate((("main", "Main", "Loots and donates to the others"),
-                                                ("loot", "Loot only", "Just loot, never request troops"),
+                                                ("loot", "Looter", "Loots in every mode and requests troops"),
                                                 ("both", "Loot + request", "Loot here and also request troops in "
                                                  "the donation modes"),
                                                 ("feeder", "Feeders", "Only request troops"))):

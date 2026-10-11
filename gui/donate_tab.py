@@ -79,14 +79,17 @@ class DonateTab(QWidget):
 
         row = QHBoxLayout()
         row.setSpacing(16)
-        cycle = Card("Donation cycle", "Loot + Donate and Donate only.", icon="refresh", color=T.ELIXIR_HI)
+        cycle = Card("Donation cycle", "Like XpIncrease: open requests first, then request + donate while the Main "
+                     "has elixir for a whole round, then loot.", icon="refresh", color=T.ELIXIR_HI)
         self.loot_first = Toggle()
-        cycle.add(SettingRow("Loot before donating", "In the Loot + Donate cycle the Main and Loot-only accounts "
-                             "loot until full first", self.loot_first))
+        cycle.add(SettingRow("Always loot to full first", "Off: start donating right away when the Main has "
+                             "enough elixir (XpIncrease); On: Main and Looters loot until full first",
+                             self.loot_first))
         cycle.add(divider())
         self.min_keep = BigSpin(maximum=100_000_000, step=500_000)
         self.min_keep.setFixedWidth(170)
-        cycle.add(SettingRow("Main keeps at least", "Donates only while its elixir is above this", self.min_keep))
+        cycle.add(SettingRow("Main keeps at least", "A round starts only if the elixir is above this plus what "
+                             "one round cost last time", self.min_keep))
         self.rounds = Spin(0, 999, special="Until elixir low")
         self.rounds.setFixedWidth(170)
         cycle.add(SettingRow("Request / donate rounds", "0 = until the Main's elixir runs low", self.rounds))
@@ -355,7 +358,7 @@ class DonateTab(QWidget):
     # ------------------------------------------------------------------ settings io
     def load(self, settings, accounts):
         d = settings.get("donate", {})
-        self.loot_first.setChecked(d.get("loot_before_donate", True))
+        self.loot_first.setChecked(d.get("loot_before_donate", False))
         self.min_keep.setValue(d.get("min_elixir_keep", 4_000_000))
         self.rounds.setValue(d.get("rounds", 0))
         self.remove_cc.setChecked(d.get("remove_cc_before_request", True))

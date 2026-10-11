@@ -3,6 +3,7 @@
 import difflib
 import logging
 import re
+import time
 
 import numpy as np
 
@@ -84,43 +85,90 @@ def open_switcher(bot):
         raise BotError("Not on the home village")
     for attempt in range(2):                      # a tap during an animation can be lost: tap again
         bot.tap_point("home.settings")
-        if bot.wait("settings/title", 4, interval=0.25):
+        if bot.wait("settings/title", 4, interval=0.15):
             break
         if not go_home(bot, 10):
             raise BotError("Not on the home village")
     else:
         raise BotError("Settings did not open")
     bot.tap_point("settings.switch_id")
-    if not bot.wait("sid/switch_id_label", 10, interval=0.25):
+    if not bot.wait("sid/switch_id_label", 10, interval=0.15):
         raise BotError("Supercell ID panel did not open")
     # the list slides in: wait until the name column stops moving (max 1.2 s)
     prev = None
-    for _ in range(8):
+    for _ in range(12):
         f = bot.shot()
         x, y, w, h = bot.layout.region("sid.name_column")
         cur = f[y:y + h, x:x + w].astype("int16")
         if prev is not None and abs(cur - prev).mean() < 1.0:
             break
         prev = cur
-        bot.sleep(0.15)
+        bot.sleep(0.1)
+
+
+ROWS_PER_PAGE = 4       # one page drag moves the list exactly 4 accounts (measured; same as completeid)
+
+
+def _page(bot, down=True):
+    """One page of the account list, scrolled the way completeid/XpIncrease do it: a 0.5 s drag
+    released while still moving. The list moves exactly 4 accounts and is still right away."""
+    if down:
+        bot.drag(bot.layout.point("sid.page_from"), bot.layout.point("sid.page_to"), 500)
+    else:
+        bot.drag(bot.layout.point("sid.page_up_from"), bot.layout.point("sid.page_up_to"), 500)
 
 
 def _scroll(bot, down=True):
-    a, b = bot.layout.point("sid.scroll_from"), bot.layout.point("sid.scroll_to")
-    bot.swipe(a, b, 700) if down else bot.swipe(b, a, 700)
-    bot.sleep(0.45)
+    _page(bot, down)
+    bot.sleep(0.25)
+
+
+def _list_index(bot, name):
+    """Where the account is on the Accounts page (keep it in the game's list order)."""
+    for i, a in enumerate(bot.accounts):
+        if same_name(a["name"], name):
+            return i
+    return None
+
+
+def read_player(bot, frame=None):
+    """The in-game player name at the top left of the village ("" if unreadable)."""
+    frame = bot.shot() if frame is None else frame
+    text, conf = vision.text_reader.read_line(frame, bot.layout.region("home.player_name"))
+    return text.strip() if text and conf > 0.6 else ""
+
+
+def on_account(bot, account):
+    """True if the village on screen is this account: its in-game name matches the one learned on
+    an earlier visit; without a learned name, the account the bot last switched to."""
+    player = account.get("player")
+    unique = player and not any(a is not account and a.get("player") and same_name(a["player"], player)
+                                for a in bot.accounts)
+    if unique:
+        seen = read_player(bot)
+        if seen:
+            return same_name(seen, player)
+    return bot.current_account == account["name"]
 
 
 def switch_to(bot, account, state=None):
     """Switch to `account` (dict with "name"). Learns its Town Hall level. Returns True."""
     name = account["name"]
+    if go_home(bot, 30) and on_account(bot, account):
+        log.info("Already on %s", name)
+        bot.current_account, bot.current_acc = name, account
+        return True
     log.info("Switching to %s", name)
+    started = time.monotonic()
     for k in [k for k in account if k.startswith("_")]:
         account.pop(k)                                # per-visit flags (army recipe set, ...)
     bot.status(account=name, action="Switching account")
     open_switcher(bot)
-    state = state if state is not None else {}
-    pages = state.setdefault("switcher_pages", {})
+    save = state is not None or bot.state is not None   # (a test without a run has nothing to save to)
+    if state is None:
+        state = bot.state if bot.state is not None else {}
+    state.pop("switcher_pages", None)                 # from the older, shorter scroll
+    pages = state.setdefault("switcher_at", {})
 
     def try_page():
         frame = bot.shot()
@@ -135,16 +183,21 @@ def switch_to(bot, account, state=None):
                 return True, visible
         return False, visible
 
-    # 1) jump straight to the page where we found this account last time
-    cached = pages.get(name, 0)
-    for _ in range(cached):
-        _scroll(bot, down=True)
+    # 1) straight to its page: learned on an earlier visit, else from its place on the Accounts page
+    index = _list_index(bot, name)
+    target = pages.get(name, index // ROWS_PER_PAGE if index is not None else 0)
+    for _ in range(target):
+        _page(bot)                                    # the list stops at once: no wait in between
+    if target:
+        bot.sleep(0.25)
     found, visible = try_page()
-    scrolled = cached
+    scrolled, went_up = target, False
 
-    # 2) otherwise search down to the end, then up to the top
+    # 2) not there (list changed): search towards it, then the whole list
     if not found:
-        for down in (True, False):
+        seen = [i for i in (_list_index(bot, t) for t, _, _ in visible) if i is not None]
+        first = (index is None or not seen or index > max(seen))
+        for down in ((True, False) if first else (False, True)):
             last = None
             for _ in range(40):
                 sig = tuple(t for t, _, _ in visible)
@@ -152,7 +205,8 @@ def switch_to(bot, account, state=None):
                     break                      # list stopped moving: reached the end
                 last = sig
                 _scroll(bot, down=down)
-                scrolled += 1 if down else -1
+                scrolled += 1 if down else 0
+                went_up = went_up or not down
                 found, visible = try_page()
                 if found:
                     break
@@ -163,15 +217,21 @@ def switch_to(bot, account, state=None):
         go_home(bot)
         raise BotError(f"Account '{name}' not found in the Supercell ID list")
 
-    pages[name] = max(0, scrolled)
-    config.save_state(state)
+    if went_up:
+        pages.pop(name, None)                         # up-drags are shorter: guess from the list next time
+    else:
+        pages[name] = scrolled                        # page drags from the top to reach it
+    if save:
+        config.save_state(state)
     if not go_home(bot, timeout=90):
         raise BotError(f"'{name}' did not finish loading")
-    bot.current_account = name
-    player, conf = vision.text_reader.read_line(bot.shot(), bot.layout.region("home.player_name"))
-    if player and conf > 0.6:
-        account["player"] = player.strip()             # in-game name, as shown in clan chat
-    log.info("Now on %s (Town Hall %s)", name, account.get("th") or "?")
+    player = read_player(bot)
+    if player and account.get("player") and not same_name(player, account["player"]):
+        log.warning("%s shows the name '%s' (was '%s' last time)", name, player, account["player"])
+    bot.current_account, bot.current_acc = name, account
+    if player:
+        account["player"] = player                    # in-game name, as shown in clan chat
+    log.info("Now on %s (Town Hall %s) in %.0f s", name, account.get("th") or "?", time.monotonic() - started)
     return True
 
 

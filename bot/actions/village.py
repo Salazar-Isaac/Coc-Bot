@@ -12,6 +12,7 @@ Upgrade / Research and Confirm. It never taps anything that costs gems
 
 import logging
 import re
+import time
 
 import cv2
 import numpy as np
@@ -33,35 +34,30 @@ BUBBLES = {"gold": "village/bubble_gold", "elixir": "village/bubble_elixir", "da
 
 def collect(bot):
     """Tap one full-collector bubble per resource (one tap collects all of that kind) and the
-    loot cart. Returns {resource: amount gained}."""
+    loot cart. Bubbles do not move, so one picture finds them all. Returns what was tapped."""
     if not go_home(bot):
         raise BotError("Not on the home village")
-    before = loot.home_resources(bot)
-    full = (0, 0, *bot.shot().shape[1::-1])
+    frame = bot.shot()
+    full = (0, 0, *frame.shape[1::-1])
     tapped = []
     for res, key in BUBBLES.items():
-        if not vision.templates.has(key):
-            continue
-        ms = vision.find_all(bot.shot(), key, region=full)
-        if ms:
-            bot.tap_match(ms[0], jitter=2)
-            tapped.append(res)
-            bot.sleep(0.8)
+        if vision.templates.has(key):
+            m = vision.find(frame, key, region=full)
+            if m:
+                bot.tap_match(m, jitter=2)
+                tapped.append(res)
+                bot.sleep(0.35)
     if vision.templates.has("village/loot_cart_label"):
-        m = vision.find(bot.shot(), "village/loot_cart_label", region=full)
+        m = vision.find(frame, "village/loot_cart_label", region=full)
         if m:
             bot.tap(m.x + 10, m.y + 45, jitter=3)          # the cart sits under its label
-            if bot.tap_template("village/collect_button", timeout=3, after=1.0):
+            if bot.tap_template("village/collect_button", timeout=2.5, after=0.4):
                 tapped.append("loot cart")
             bot.tap_point("home.safe", jitter=5)
-            bot.sleep(0.5)
-    after = loot.home_resources(bot)
-    gained = {r: (after.get(r) or 0) - (before.get(r) or 0) for r in config.RESOURCES
-              if after.get(r) is not None and before.get(r) is not None}
+            bot.sleep(0.3)
     if tapped:
-        log.info("Collected (%s): %s", ", ".join(tapped),
-                 ", ".join(f"+{v:,} {r}" for r, v in gained.items() if v > 0) or "storages full")
-    return gained
+        log.info("Collected: %s", ", ".join(tapped))
+    return tapped
 
 
 # --- top counters and menus ------------------------------------------------------------------
@@ -349,8 +345,10 @@ def chores(bot, account, phase="arrive"):
     if detect(bot.shot()) != "home" and not go_home(bot):
         return
     try:
-        if phase == "arrive" and v.get("collect", True):
+        every = v.get("collect_every", 60) * 60           # collectors fill slowly: not on every visit
+        if phase == "arrive" and v.get("collect", True) and time.time() - account.get("collected_at", 0) >= every:
             collect(bot)
+            account["collected_at"] = int(time.time())
         if phase == "leave":
             if v.get("upgrade_buildings", False):
                 n = upgrade_buildings(bot)

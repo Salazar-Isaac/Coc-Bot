@@ -1,9 +1,12 @@
 """Which screen is the game on, and how to get back to the home village."""
 
 import logging
+import re
 import time
 
-from .core import vision
+import numpy as np
+
+from .core import net, vision
 from .core.context import BotError
 from .core.control import control
 from .core.space import space
@@ -15,7 +18,7 @@ log = logging.getLogger("bot")
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
-    ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
+    ("reload", ["popup/try_again", "popup/reload_device", "popup/reload", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
     ("chat", ["chat/close"]),                     # clan chat open over the village
     ("bb_army", ["bb/army_title"]),               # Builder Base "Choose Army": close with its X
@@ -45,11 +48,133 @@ CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close"]
 # Buttons worth tapping wherever they appear when the screen is not recognised.
 ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "popup/continue_green",
                     "battle/confirm_okay",
-                    "popup/reload", "popup/try_again", "popup/okay", "popup/daily_claim", "popup/close_x"]
+                    "popup/try_again", "popup/reload_device", "popup/reload", "popup/okay", "popup/daily_claim",
+                    "popup/close_x"]
+
+
+# The game's own dialogs (dark box, light-blue capital buttons): connection lost -> TRY AGAIN,
+# another device opened this account -> RELOAD, idle too long -> RELOAD GAME.
+RELOAD_KEYS = ["popup/try_again", "popup/reload_device", "popup/reload"]
+SYSTEM_TEXT = [("try again", "popup/try_again"), ("reload game", "popup/reload"), ("reload", "popup/reload_device")]
+SYSTEM_REGION = (160, 120, 1600, 840)
+DIALOG_BGR = (30, 28, 25)          # the flat dark grey of those dialogs
+RELOAD_LOG = {"popup/try_again": "Connection lost: tapping Try Again",
+              "popup/reload_device": "Another device opened this account: opening it here again",
+              "popup/reload": "The game asks to reload (idle too long): Reload Game"}
+
+
+def dialog_box(frame):
+    """The game's dark-grey system dialog, if one is on screen: (x, y, w, h) or None. Cheap, so the
+    (slow) text reading only runs when there really is such a dialog."""
+    x, y, w, h = space.region(*SYSTEM_REGION)
+    step = 4                                         # every 4th pixel is plenty for a box this big
+    roi = frame[y:y + h:step, x:x + w:step].astype(np.int16)
+    mask = np.abs(roi - DIALOG_BGR).max(axis=2) <= 4
+    if mask.sum() < 30000 // step ** 2:
+        return None
+    rows = np.where(mask.sum(axis=1) > 200 // step)[0]
+    cols = np.where(mask.sum(axis=0) > 60 // step)[0]
+    if len(rows) < 60 // step or len(cols) < 200 // step:
+        return None
+    x0, y0 = x + int(cols.min()) * step, y + int(rows.min()) * step
+    return (x0, y0, int(cols.max() - cols.min() + 1) * step, int(rows.max() - rows.min() + 1) * step)
+
+
+def _button_boxes(frame, box):
+    """Text groups in the bottom row of the dialog = its buttons (light-blue capitals)."""
+    x, y, w, h = box
+    x0, y0 = x + 20, y + h - 110
+    strip = frame[y0:y + h - 12, x0:x + w - 20].astype(np.int16)
+    ink = np.abs(strip - DIALOG_BGR).max(axis=2) > 60
+    cols = np.where(ink.any(axis=0))[0]
+    out = []
+    if len(cols) == 0:
+        return out
+    start = prev = cols[0]
+    for c in list(cols[1:]) + [None]:
+        if c is None or c - prev > 30:                 # a wide gap separates two buttons
+            rows = np.where(ink[:, start:prev + 1].any(axis=1))[0]
+            out.append((x0 + int(start) - 6, y0 + int(rows.min()) - 6, int(prev - start) + 13,
+                        int(rows.max() - rows.min()) + 13))
+            start = c
+        prev = c if c is not None else prev
+    return out
+
+
+def system_button(frame):
+    """Read the game's Try Again / Reload buttons on its dark system dialog (for when there is no
+    template for them yet). Returns (template key, (x, y, w, h)) or (None, None)."""
+    box = dialog_box(frame)
+    if box is None:
+        return None, None
+    for b in _button_boxes(frame, box):
+        text, conf = vision.text_reader.read_line(frame, b)
+        words = re.sub(r"[^a-z]", "", text.lower())
+        for button, key in SYSTEM_TEXT:
+            if conf > 0.6 and words == button.replace(" ", ""):
+                return key, b
+    return None, None
+
+
+_last_reload_log = {}
+
+
+def press_reload(bot, frame, key=None, box=None):
+    """Tap the game's Try Again / Reload button. Offline: wait for the internet first, so the bot
+    keeps trying instead of restarting the game again and again. Returns True if tapped."""
+    m = None
+    if key is None or box is None:
+        for k in ([key] if key else RELOAD_KEYS):
+            m = vision.templates.has(k) and vision.find(frame, k)
+            if m:
+                key = k
+                break
+    if key is None or (m is None and box is None):
+        return False
+    now = time.monotonic()
+    if now - _last_reload_log.get(key, 0) > 60:
+        _last_reload_log[key] = now
+        log.warning(RELOAD_LOG[key])
+    if key == "popup/try_again":
+        net.wait_until_online(bot)
+    if m:
+        bot.tap_match(m)
+    else:
+        x, y, w, h = box
+        if not vision.templates.has(key):              # remember the button: next time it is found at once
+            pad = 6
+            vision.templates.save(key, frame, (max(0, x - pad), max(0, y - pad), w + 2 * pad, h + 2 * pad),
+                                  threshold=0.8, pad=120)
+            log.info("Saved the game's '%s' button as template %s", key.split("/")[-1].replace("_", " "), key)
+        bot.tap(x + w // 2, y + h // 2, jitter=2)
+    bot.reloaded = True
+    return True
+
+
+def after_reload(bot):
+    """After a reload the game shows the account it had; make sure it is still the one the bot
+    was working on (it usually is), else open that one again."""
+    bot.reloaded = False
+    acc = getattr(bot, "current_acc", None)
+    if not acc or getattr(bot, "_reopening", False):
+        return
+    from .actions import account
+    if account.on_account(bot, acc):
+        log.info("Back on %s after the reload", acc["name"])
+        return
+    log.warning("After the reload the game shows another account: opening %s again", acc["name"])
+    bot._reopening = True
+    try:
+        bot.current_account = None
+        account.switch_to(bot, acc, getattr(bot, "state", None))
+    finally:
+        bot._reopening = False
 
 
 def detect(frame):
     for name, keys in STATES:
+        if name == "reload" and dialog_box(frame) is not None:
+            return "reload"                      # the village behind those dialogs is not dimmed
         for k in keys:
             if vision.templates.has(k) and vision.find(frame, k):
                 return name
@@ -63,7 +188,10 @@ def _close_any_popup(bot, frame):
         if vision.templates.has(k):
             m = vision.find(frame, k, region=full)
             if m:
-                bot.tap_match(m)
+                if k in RELOAD_KEYS:
+                    press_reload(bot, frame, k)
+                else:
+                    bot.tap_match(m)
                 return
     for k in CLOSE_BUTTONS:
         if vision.templates.has(k):
@@ -92,6 +220,7 @@ def go_home(bot, timeout=60.0):
     unknown = 0
     chest_taps = 0
     last = None
+    last_ocr = 0.0
     while time.monotonic() < end:
         frame = bot.shot()
         state = detect(frame)
@@ -99,6 +228,8 @@ def go_home(bot, timeout=60.0):
             log.debug("screen: %s", state)
             last = state
         if state == "home":
+            if getattr(bot, "reloaded", False):
+                after_reload(bot)
             return True
         if state == "unknown":
             unknown += 1
@@ -185,11 +316,16 @@ def go_home(bot, timeout=60.0):
             control.sleep(0.4)
             continue
         elif state == "reload":
-            for k in ("popup/reload", "popup/try_again"):
-                m = vision.templates.has(k) and vision.find(frame, k)
-                if m:
-                    bot.tap_match(m)
-                    break
+            tapped = press_reload(bot, frame)
+            if not tapped and time.monotonic() - last_ocr > 2.5:
+                last_ocr = time.monotonic()
+                key, box = system_button(frame)                    # no template for this button yet
+                tapped = bool(key) and press_reload(bot, frame, key, box)
+                if not tapped:
+                    log.warning("A game dialog without Try Again / Reload is open; waiting")
+            if tapped:
+                end = max(end, time.monotonic() + 90)              # never give up while it reconnects
+                control.sleep(1.0)
         control.sleep(0.45)
     bot.save_error("not-home")
     return False

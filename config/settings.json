@@ -103,7 +103,7 @@
     "rounds": 0,
     "remove_cc_before_request": true,
     "request_text": "",
-    "loot_before_donate": true,
+    "loot_before_donate": false,
     "clan_tag": "#2RPLP89CY",
     "method": "fast",
     "special_template": "donate/super_wizard",
@@ -188,7 +188,8 @@
       "loot",
       "both",
       "feeder"
-    ]
+    ],
+    "collect_every": 60
   },
   "builder": {
     "after_main": false,

@@ -36,6 +36,10 @@ DEFAULT_LAYOUT = {
         "sid.close": [1866, 53],
         "sid.scroll_from": [1620, 1010],
         "sid.scroll_to": [1620, 610],
+        "sid.page_from": [1643, 1031],     # one drag 1031 -> 390 in 0.5 s = exactly 4 accounts down
+        "sid.page_to": [1643, 390],
+        "sid.page_up_from": [1643, 545],   # upwards the drag must start inside the list (about 3 accounts)
+        "sid.page_up_to": [1643, 1078],
         "chat.close": [655, 497],
         "chat.scroll_from": [300, 300],      # swipe down in the chat = older messages
         "chat.scroll_to": [300, 760],

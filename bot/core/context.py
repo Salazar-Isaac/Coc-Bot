@@ -33,6 +33,9 @@ class Bot:
         self.frame = None
         self.on_status = on_status or (lambda **kw: None)
         self.current_account = None
+        self.current_acc = None          # the account dict we switched to (to reopen it after a reload)
+        self.state = None                # the run's saved state (config/state.json)
+        self.reloaded = False            # the game's Reload / Try Again was tapped: check the account
         self.stats = {"attacks": 0, "searches": 0, "loot": {"gold": 0, "elixir": 0, "dark": 0}}
 
     # --- status --------------------------------------------------------------------------
@@ -108,6 +111,10 @@ class Bot:
     def swipe(self, a, b, ms=500):
         control.checkpoint()
         self.device.swipe(a[0], a[1], b[0], b[1], ms)
+
+    def drag(self, a, b, ms=500):
+        control.checkpoint()
+        self.device.drag(a[0], a[1], b[0], b[1], ms)
 
     def key(self, k):
         control.checkpoint()
