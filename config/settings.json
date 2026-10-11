@@ -8,7 +8,7 @@
     "scrcpy_dir": "C:\\scrcpy"
   },
   "profile": "pc-1920x1080",
-  "mode": "loot_donate",
+  "mode": "chores",
   "loot": {
     "watch": {
       "gold": false,
@@ -104,7 +104,7 @@
     "remove_cc_before_request": true,
     "request_text": "",
     "loot_before_donate": false,
-    "method": "fast",
+    "method": "careful",
     "special_template": "donate/super_wizard",
     "items": [
       {

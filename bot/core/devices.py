@@ -259,9 +259,22 @@ def find_adb(preferred=""):
     return None
 
 
+def adb_devices(adb):
+    """[(serial, state, model)] from `adb devices -l`; state is "device" when usable,
+    "unauthorized" when the phone has not allowed this PC yet, "offline" ..."""
+    out = subprocess.run([adb, "devices", "-l"], capture_output=True, text=True, timeout=10,
+                         creationflags=subprocess.CREATE_NO_WINDOW).stdout
+    found = []
+    for line in out.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 2:
+            model = next((p.split(":", 1)[1] for p in parts[2:] if p.startswith("model:")), "")
+            found.append((parts[0], parts[1], model.replace("_", " ")))
+    return found
+
+
 def list_adb_devices(adb):
-    out = subprocess.run([adb, "devices"], capture_output=True, text=True, timeout=10).stdout
-    return [line.split("\t")[0] for line in out.splitlines()[1:] if line.strip().endswith("\tdevice")]
+    return [serial for serial, state, _ in adb_devices(adb) if state == "device"]
 
 
 # Common emulator ADB addresses, for the "Detect" button in Settings.
@@ -278,26 +291,28 @@ ANDROID_KEYS = {"back": 4, "esc": 4, "home": 3, "enter": 66, "space": 62, "backs
 
 
 class AdbDevice(Device):
-    """Android over ADB. Touches use a persistent `adb shell`; zoom-out uses a
-    two-finger pinch through the scrcpy server when scrcpy is available."""
+    """Android over plain ADB: `screencap` for pictures, `input` for taps and swipes and a
+    two-finger pinch written to the touchscreen with `sendevent` for zooming out. Nothing is
+    mirrored or recorded, and the PC's mouse and keyboard stay free for you."""
 
     kind = "adb"
 
-    def __init__(self, serial, adb_path="", scrcpy_dir=r"C:\scrcpy", package=COC_PACKAGE):
+    def __init__(self, serial="", adb_path="", package=COC_PACKAGE):
         super().__init__()
         self.adb = find_adb(adb_path)
         if not self.adb:
             raise RuntimeError("adb.exe not found (set its path in Settings)")
-        self.serial = serial
+        self.serial = (serial or "").strip()
         self.package = package
-        self.scrcpy_dir = scrcpy_dir
         self._shell = None
         self._lock = threading.Lock()
-        self._touch = None          # ScrcpyTouch, created on first pinch
+        self._touchscreen = None    # (event device, max x, max y) for the pinch
+        self._zoom_failed = False
+        self.model = ""
         self.connect()
 
     def describe(self):
-        return f"ADB {self.serial}"
+        return f"Android {self.model or ''} ({self.serial})".replace("  ", " ")
 
     # --- plumbing ---------------------------------------------------------------------
     def _run(self, *args, timeout=15, binary=False):
@@ -307,11 +322,32 @@ class AdbDevice(Device):
         return r.stdout if binary else r.stdout.decode(errors="replace")
 
     def connect(self):
+        """Use the device from Settings; if it is empty or not connected and exactly one
+        phone/emulator is connected, use that one."""
         if ":" in self.serial:   # network device / emulator
             subprocess.run([self.adb, "connect", self.serial], capture_output=True, timeout=15,
                            creationflags=subprocess.CREATE_NO_WINDOW)
-        if self.serial not in list_adb_devices(self.adb):
-            raise RuntimeError(f"ADB device {self.serial} is not connected")
+        devices = adb_devices(self.adb)
+        ready = [(s, m) for s, st, m in devices if st == "device"]
+        match = [(s, m) for s, m in ready if s == self.serial]
+        if not match:
+            if self.serial:
+                log.info("ADB device %s is not connected; looking for another one", self.serial)
+            if len(ready) == 1:
+                match = ready
+            elif len(ready) > 1:
+                raise RuntimeError("Several Android devices are connected (" +
+                                   ", ".join(f"{m or '?'} {s}" for s, m in ready) +
+                                   "): choose one on the Device page")
+            elif any(st == "unauthorized" for _, st, _ in devices):
+                raise RuntimeError("The phone has not allowed this PC yet: unlock it and tap Allow on "
+                                   "'Allow USB debugging?' (tick 'Always allow')")
+            else:
+                raise RuntimeError("No Android device found: connect the phone by USB with USB debugging "
+                                   "on (Settings > Developer options), or start the emulator")
+        self.serial, self.model = match[0]
+        size = self._run("shell", "wm", "size").strip().splitlines()
+        log.info("Using %s, %s", self.describe(), size[-1] if size else "screen size unknown")
 
     def is_connected(self):
         try:
@@ -334,7 +370,7 @@ class AdbDevice(Device):
     def _capture_native(self):
         raw = self._run("exec-out", "screencap", binary=True, timeout=20)
         if len(raw) < 16:
-            raise RuntimeError("screencap returned no data")
+            raise RuntimeError("screencap returned no data (is the phone unlocked?)")
         w = int.from_bytes(raw[0:4], "little")
         h = int.from_bytes(raw[4:8], "little")
         header = len(raw) - w * h * 4          # 12 bytes on old Android, 16 on Android 10+
@@ -362,31 +398,94 @@ class AdbDevice(Device):
             self._sh(f"input text '{safe}'")
         return True
 
-    def zoom_out(self, steps=3):
-        from .scrcpy_touch import ScrcpyTouch
+    # --- zoom out: two fingers pinching in, written straight to the touchscreen ---------
+    def _find_touchscreen(self):
+        """The input device with multi-touch positions: (path, max_x, max_y)."""
+        out = self._run("shell", "getevent", "-pl", timeout=10)
+        dev, best = None, None
+        mx = my = None
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("add device"):
+                if dev and mx and my:
+                    best = best or (dev, mx, my)
+                dev, mx, my = line.split(":", 1)[1].strip(), None, None
+            elif "ABS_MT_POSITION_X" in line and "max" in line:
+                mx = int(line.split("max")[1].split(",")[0])
+            elif "ABS_MT_POSITION_Y" in line and "max" in line:
+                my = int(line.split("max")[1].split(",")[0])
+        if dev and mx and my:
+            best = best or (dev, mx, my)
+        return best
+
+    def zoom_out(self, steps=2):
+        """Pinch in with two fingers around the screen centre. The touchscreen has its own
+        (portrait) coordinates, but a pinch through the centre zooms the same way in any rotation."""
+        if self._zoom_failed:
+            return
         try:
-            if self._touch is None:
-                self._touch = ScrcpyTouch(self.adb, self.serial, self.scrcpy_dir)
-            w, h = self.native_size()
+            if self._touchscreen is None:
+                self._touchscreen = self._find_touchscreen()
+                if not self._touchscreen:
+                    raise RuntimeError("no multi-touch screen found")
+            dev, mx, my = self._touchscreen
+            cx, cy = mx // 2, my // 2
+            n = 10
             for _ in range(steps):
-                self._touch.pinch_in(w // 2, h // 2, start=int(h * 0.42), end=int(h * 0.05), native=(w, h))
-                time.sleep(0.2)
+                cmds = []
+                ev = lambda t, c, v: cmds.append(f"sendevent {dev} {t} {c} {v}")  # noqa: E731
+                for i in range(n + 1):
+                    f = 0.42 - 0.37 * i / n                   # finger distance from the centre
+                    pts = [(cx - int(mx * f * 0.7), cy - int(my * f * 0.7)),
+                           (cx + int(mx * f * 0.7), cy + int(my * f * 0.7))]
+                    for slot, (x, y) in enumerate(pts):
+                        ev(3, 47, slot)                         # ABS_MT_SLOT
+                        if i == 0:
+                            ev(3, 57, 900 + slot)               # ABS_MT_TRACKING_ID (finger down)
+                        ev(3, 53, x)                            # ABS_MT_POSITION_X
+                        ev(3, 54, y)                            # ABS_MT_POSITION_Y
+                    if i == 0:
+                        ev(1, 330, 1)                           # BTN_TOUCH down
+                    ev(0, 0, 0)                                 # SYN_REPORT
+                for slot in (0, 1):
+                    ev(3, 47, slot)
+                    ev(3, 57, -1)                               # finger up
+                ev(1, 330, 0)
+                ev(0, 0, 0)
+                out = self._run("shell", "(" + "; ".join(cmds) + ") 2>&1", timeout=20)
+                if "denied" in out.lower() or "could not" in out.lower():
+                    raise RuntimeError(out.strip().splitlines()[0])
+                time.sleep(0.3)
         except Exception as e:
-            log.warning("Zoom-out over ADB failed (%s). Zoom out manually once; the game keeps it.", e)
-            self._touch = None
+            self._zoom_failed = True
+            log.warning("Zoom-out over ADB is not possible on this device (%s). Zoom out once by hand; "
+                        "the game keeps it.", e)
+
+    def _awake(self):
+        """Switch the screen on if it went off (a locked phone has to be unlocked by you)."""
+        power = self._run("shell", "dumpsys power | grep -m 1 mWakefulness=")
+        if "Awake" not in power:
+            self._sh("input keyevent 224")                 # KEYCODE_WAKEUP
+            time.sleep(1.0)
+        if "mScreenLocked=true" in self._run("shell", "dumpsys deviceidle | grep -m 1 mScreenLocked"):
+            log.warning("The phone is locked: unlock it so the bot can play")
 
     def is_game_running(self):
-        return bool(self._run("shell", "pidof", self.package).strip())
+        """Running and on screen (in front of other apps)."""
+        if not self._run("shell", "pidof", self.package).strip():
+            return False
+        top = self._run("shell", "dumpsys activity activities | grep -m 1 -E 'topResumedActivity|mResumedActivity'")
+        return self.package in top
 
     def launch_game(self):
+        """Start the game, or bring it to the front if it is running behind another app."""
+        self._awake()
         self._run("shell", "monkey", "-p", self.package, "-c", "android.intent.category.LAUNCHER", "1")
 
     def close_game(self):
         self._run("shell", "am", "force-stop", self.package)
 
     def close(self):
-        if self._touch:
-            self._touch.close()
         if self._shell and self._shell.poll() is None:
             self._shell.kill()
 
@@ -395,5 +494,5 @@ def make_device(settings):
     """Create the device chosen in Settings."""
     d = settings["device"]
     if d["type"] == "adb":
-        return AdbDevice(d["adb_serial"], d.get("adb_path", ""), d.get("scrcpy_dir", r"C:\scrcpy"))
+        return AdbDevice(d.get("adb_serial", ""), d.get("adb_path", ""))
     return PcDevice(d.get("shortcut_path", ""), d.get("window_title", "Clash of Clans"))

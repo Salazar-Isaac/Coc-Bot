@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
 from bot import paths
-from bot.core.devices import EMULATOR_PORTS, find_adb, list_adb_devices
+from bot.core.devices import EMULATOR_PORTS, find_adb, adb_devices
 from bot.core.profile import Profile
 from gui import icons
 from gui import theme as T
@@ -65,12 +65,15 @@ class DeviceTab(QWidget):
         self.adb_path.setPlaceholderText("auto (C:\\platform-tools\\adb.exe, C:\\scrcpy\\adb.exe, PATH)")
         al.addWidget(field("adb.exe", self.adb_path))
         self.serial = Combo(editable=True)
+        self.serial.lineEdit().setPlaceholderText("auto: the phone / emulator that is connected")
         detect = Button("Detect", "search", "secondary")
         detect.clicked.connect(self._detect)
-        al.addWidget(field("Device", hbox(self.serial, detect, spacing=8)))
-        self.scrcpy_dir = QLineEdit()
-        al.addWidget(field("scrcpy folder (for zoom-out)", self.scrcpy_dir))
-        al.addWidget(Banner("Emulator tip: set the emulator to 1920×1080 so it can share the PC templates.", "info"))
+        al.addWidget(field("Device", hbox(self.serial, detect, spacing=8),
+                           "Empty = the one connected device is used."))
+        al.addWidget(Banner("Phone: turn on USB debugging (Settings → Developer options), connect it by USB and tap "
+                            "Allow. Only adb is used (screenshots + taps): the phone's screen is not mirrored or "
+                            "recorded and your PC's mouse stays free. The screen size is detected by itself.",
+                            "info"))
         dev.add(self.adb_box)
 
         dev.add(divider())
@@ -131,7 +134,7 @@ class DeviceTab(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll(content))
 
-        for w in (self.shortcut, self.window_title, self.adb_path, self.scrcpy_dir, *self.hotkeys.values()):
+        for w in (self.shortcut, self.window_title, self.adb_path, *self.hotkeys.values()):
             w.textChanged.connect(self.changed)
         self.serial.editTextChanged.connect(self.changed)
         self.profile.currentIndexChanged.connect(self.changed)
@@ -163,17 +166,26 @@ class DeviceTab(QWidget):
         if not adb:
             self.set_result("adb.exe not found", ok=False)
             return
-        found = list_adb_devices(adb)
+        devices = adb_devices(adb)
+        found = [s for s, st, _ in devices if st == "device"]
         current = self.serial.currentText()
         self.serial.clear()
-        self.serial.addItems(found)
+        for s, st, model in devices:
+            self.serial.addItem(s)
+            self.serial.setItemData(self.serial.count() - 1, f"{model or 'device'} ({st})", Qt.ToolTipRole)
         for name, addr in EMULATOR_PORTS.items():
             if addr not in found:
                 self.serial.addItem(addr)
                 self.serial.setItemData(self.serial.count() - 1, name, Qt.ToolTipRole)
-        self.serial.setCurrentText(found[0] if found else current)
-        self.set_result(f"Connected now: {', '.join(found) if found else 'none'}. "
-                        "Emulator addresses added to the list.", ok=bool(found))
+        self.serial.setCurrentText(found[0] if len(found) == 1 else current)
+        unauthorized = [s for s, st, _ in devices if st == "unauthorized"]
+        if found:
+            text = "Connected: " + ", ".join(f"{m or '?'} ({s})" for s, st, m in devices if st == "device")
+        elif unauthorized:
+            text = "The phone has not allowed this PC yet: unlock it and tap Allow on 'Allow USB debugging?'"
+        else:
+            text = "No phone or emulator connected (USB debugging on? cable a data cable?)"
+        self.set_result(text, ok=bool(found))
 
     def load(self, settings, accounts):
         d = settings["device"]
@@ -184,7 +196,6 @@ class DeviceTab(QWidget):
         self.window_title.setText(d.get("window_title", "Clash of Clans"))
         self.adb_path.setText(d.get("adb_path", ""))
         self.serial.setCurrentText(d.get("adb_serial", ""))
-        self.scrcpy_dir.setText(d.get("scrcpy_dir", ""))
         self.reload_profiles(settings.get("profile"))
         for k, e in self.hotkeys.items():
             e.setText(settings.get("hotkeys", {}).get(k, "").upper())
@@ -207,7 +218,6 @@ class DeviceTab(QWidget):
         d["window_title"] = self.window_title.text().strip() or "Clash of Clans"
         d["adb_path"] = self.adb_path.text().strip()
         d["adb_serial"] = self.serial.currentText().strip()
-        d["scrcpy_dir"] = self.scrcpy_dir.text().strip()
         settings["profile"] = self.profile.currentText() or settings.get("profile")
         settings["hotkeys"] = {k: e.text().strip().lower() for k, e in self.hotkeys.items()}
         settings["minimize_on_start"] = self.minimize.isChecked()

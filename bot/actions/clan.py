@@ -245,19 +245,19 @@ def _space_left(req):
 
 
 def plan(req, items):
-    """Order the items for this request: ones named in the message first, then your priority.
-    Items of a full category are left out. Returns (items, space left, asked_for_something)."""
+    """Order the items for this request: ones named in the message first, then your priority;
+    siege machines always last (reaching them slides the troop row away). Items of a full category
+    are left out; a free siege slot gets a siege machine even when only the siege slot is left.
+    Returns (items, space left, asked_for_something)."""
     left = _space_left(req)
     usable = [i for i in items if left.get(i["category"]) != 0]
     if left.get("troop") is not None and left["troop"] < 10:
-        usable = [i for i in usable if i.get("use", "all") != "big"]   # a big request needs 10+ troop space
-    if not any(i.get("use", "all") != "big" or left.get("troop") is None or left["troop"] >= 10
-               for i in usable if i["category"] != "siege"):
-        usable = []                                    # only a siege slot left: nothing worth opening
+        # a big request needs 10+ troop space (siege machines have their own slot)
+        usable = [i for i in usable if i.get("use", "all") != "big" or i["category"] == "siege"]
     asked = [i for i in usable if troops.wants(req.get("message"), i)]
-    if asked:
-        return asked + [i for i in usable if i not in asked], left, True
-    return usable, left, False
+    ordered = asked + [i for i in usable if i not in asked]
+    ordered = [i for i in ordered if i["category"] != "siege"] + [i for i in ordered if i["category"] == "siege"]
+    return ordered, left, bool(asked)
 
 
 ROWS = {"troop": (630, 375, 840, 320), "siege": (630, 375, 840, 320), "spell": (630, 720, 840, 180)}
@@ -335,20 +335,27 @@ def is_big_request(frame, dy, settings):
 
 
 def _find_fast(bot, frame, key, dy, cat):
-    """An item's icon; siege machines are at the far right of the troop rows, so if it is not
-    visible the row is dragged all the way left once (like XpIncrease) and searched again."""
+    """An item's icon. Siege machines are at the far right end of the troop rows: the row is
+    dragged left (like XpIncrease) until the machine shows up or the row stops moving."""
     region = _shifted(ROWS.get(cat, ROWS["troop"]), dy)
     m = _active(frame, key, region=region)
-    if m or cat == "spell":
+    if m or cat != "siege":
         return m, frame
-    if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
-        return None, frame                          # visible but grey: not available for this request
     x, y, w, h = region
     cy = y + h // 3
-    bot.swipe((x + w - 40, cy), (max(5, x - 600), cy), 450)
-    bot.sleep(0.6)
-    frame = bot.shot()
-    return _active(frame, key, region=region), frame
+    for _ in range(5):
+        if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
+            return None, frame                      # visible but grey: not available for this request
+        before = frame[y:y + h, x:x + w].astype(np.int16)
+        bot.swipe((x + w - 40, cy), (max(5, x - 600), cy), 450)
+        bot.sleep(0.6)
+        frame = bot.shot()
+        m = _active(frame, key, region=region)
+        if m:
+            return m, frame
+        if np.abs(frame[y:y + h, x:x + w].astype(np.int16) - before).mean() < 2:
+            break                                   # the row did not move: its end is reached
+    return None, frame
 
 
 def fill_fast(bot, items, dy, big):
@@ -359,7 +366,8 @@ def fill_fast(bot, items, dy, big):
     frame = bot.shot()
     for item in items:
         use = item.get("use", "all")
-        if (use == "big" and not big) or (use == "small" and big):
+        siege = item.get("category") == "siege"         # a free siege slot always gets its machine
+        if not siege and ((use == "big" and not big) or (use == "small" and big)):
             continue
         key = item["template"]
         if not vision.templates.has(key):

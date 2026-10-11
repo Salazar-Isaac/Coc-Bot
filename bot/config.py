@@ -37,7 +37,6 @@ DEFAULT_SETTINGS = {
         "window_title": "Clash of Clans",
         "adb_path": "",
         "adb_serial": "127.0.0.1:5555",
-        "scrcpy_dir": r"C:\scrcpy",
     },
     "profile": "pc-1920x1080",
     "mode": "loot_all",
