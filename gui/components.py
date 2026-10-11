@@ -1262,9 +1262,11 @@ class ChoiceDelegate(_RowDelegate):
         if index.row() == self.parent().hover_row and index.flags() & Qt.ItemIsEnabled:
             _hover_box(p, r)
         icons.paint(p, icon, color, QRectF(r.left() + 13, r.center().y() - 8, 16, 16))
-        p.setFont(T.font(10))
+        f = T.font(10)
+        p.setFont(f)
         p.setPen(QColor(T.TEXT))
-        p.drawText(QRectF(r.left() + 37, r.top(), r.width() - 66, r.height()), Qt.AlignVCenter | Qt.AlignLeft, text)
+        p.drawText(QRectF(r.left() + 37, r.top(), r.width() - 66, r.height()), Qt.AlignVCenter | Qt.AlignLeft,
+                   QFontMetrics(f).elidedText(text, Qt.ElideRight, max(0, r.width() - 66)))
         icons.paint(p, "chevron-down", T.TEXT_MUTED, QRectF(r.right() - 26, r.center().y() - 6, 12, 12))
         p.restore()
 

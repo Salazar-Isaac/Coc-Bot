@@ -9,16 +9,19 @@ from bot.actions import troops
 from bot.core import vision
 from bot.modes import MODES, load_all
 from gui import theme as T
-from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, IconButton, NumberDelegate, PillDelegate,
-                            PlaceholderDelegate, Segmented, SettingRow, Table, Toggle, ToggleDelegate, divider, field,
-                            hbox, scroll)
+from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, IconButton, NumberDelegate, Pill,
+                            PillDelegate, PlaceholderDelegate, Segmented, SettingRow, Table, Toggle, ToggleDelegate,
+                            divider, field, hbox, label, scroll)
 from gui.widgets import BigSpin, Spin
 
-COLS = ["On", "Name", "Type", "Space", "Max per request", "Keywords", "Template", "Icon"]
-ON, NAME, TYPE, SPACE, MAX, KEYS, TPL, ICON = range(len(COLS))
+COLS = ["On", "Name", "Type", "Space", "Taps / max", "Use for", "Keywords", "Template", "Icon"]
+ON, NAME, TYPE, SPACE, MAX, USE, KEYS, TPL, ICON = range(len(COLS))
 TIPS = {TYPE: "Which part of a request it fills: troops, spells or siege machines",
         SPACE: "Housing space of one unit (filled in from the name; change it if needed)",
-        MAX: "At most this many units of this item go into one request",
+        MAX: "Fast method: taps it this many times in one quick burst.\n"
+             "Careful method: at most this many units of this item go into one request.",
+        USE: "Which requests get this item: all, only big ones (the Super Wizard can still be donated) "
+             "or only small ones",
         KEYS: "Extra words that ask for this item in a request message, comma separated (its name always counts)",
         TPL: "Template key of its icon in the donate window, e.g. donate/balloon",
         ICON: "Whether that icon has been captured on the Templates page"}
@@ -26,7 +29,12 @@ TIPS = {TYPE: "Which part of a request it fills: troops, spells or siege machine
 CATEGORIES = [("troop", "Troop", "swords", T.GOLD, "Uses the request's troop space"),
               ("spell", "Spell", "flask", T.ELIXIR_HI, "Uses the request's spell space"),
               ("siege", "Siege", "castle", "#5cc8ff", "Uses the request's siege machine slot")]
+USES = [("all", "All requests", "layers", T.TEXT_MUTED, "Donated to every request"),
+        ("big", "Big requests", "arrow-up", T.GOLD, "Only when the Super Wizard (10 space) can still be donated"),
+        ("small", "Small requests", "arrow-down", "#5cc8ff", "Only when the request is not big")]
+SPECIAL_DEFAULT = "donate/super_wizard"
 OLD = Qt.UserRole + 1           # the Name cell remembers the previous name
+HAD_USE = Qt.UserRole + 2       # the Use for cell remembers whether the item had a "use" key
 EDITABLE = Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 FIXED = Qt.ItemIsEnabled | Qt.ItemIsSelectable
 
@@ -82,6 +90,20 @@ class DonateTab(QWidget):
         self.rounds = Spin(0, 999, special="Until elixir low")
         self.rounds.setFixedWidth(170)
         cycle.add(SettingRow("Request / donate rounds", "0 = until the Main's elixir runs low", self.rounds))
+        cycle.add(divider())
+        self.method = Segmented([("fast", "Fast (like XpIncrease)"), ("careful", "Careful")])
+        self.method.setToolTip("Fast: each item is tapped its count in one quick burst.\n"
+                               "Careful: the bot checks every single unit before the next tap.")
+        cycle.add(field("Donate method", self.method, "Fast taps each item its count in a quick burst (the game "
+                        "ignores what does not fit); Careful checks every single unit (slower)."))
+        cycle.add(divider())
+        self.special = QLineEdit()
+        self.special.setPlaceholderText("empty = every request counts as small")
+        self.special.setToolTip(f"Template key, default {SPECIAL_DEFAULT}")
+        self.special_state = Pill()
+        cycle.add(field("Big-request check (template)", hbox(self.special, self.special_state, spacing=10),
+                        "Advanced: the icon that is only donatable for big requests (the Super Wizard, "
+                        f"{SPECIAL_DEFAULT})."))
         cycle.layout().addStretch(1)
         row.addWidget(cycle, 1)
 
@@ -131,6 +153,7 @@ class DonateTab(QWidget):
                                   lambda parent: Spin(1, 50, parent=parent)),
             MAX: NumberDelegate(t, lambda v: (f"{v or 1} ×", False),
                                 lambda parent: Spin(1, 99, suffix=" ×", parent=parent)),
+            USE: ChoiceDelegate(t, USES),
             KEYS: PlaceholderDelegate(t, self._keyword_hint),
             ICON: PillDelegate(t),
         }
@@ -139,6 +162,12 @@ class DonateTab(QWidget):
         self.table.setMinimumHeight(300)
         self.table.itemChanged.connect(self._item_changed)
         items.add(self.table, 1)
+        big_hint = label("<b>Use for:</b> a request is <b>big</b> when the Super Wizard (10 space) can still be "
+                         "donated, exactly like XpIncrease: big requests get Balloons ×12 + Lightning ×3 + Stone "
+                         "Slammer ×3, small ones the small items (e.g. Archers, a few Balloons).", "rowDesc",
+                         wrap=True)
+        big_hint.setTextFormat(Qt.RichText)
+        items.add(big_hint)
         items.add(Banner("Each item needs its icon from the donate window: open <b>Templates</b>, take a screenshot "
                          "of the donate window and capture the keys listed under the screen “Donate” "
                          "(group <b>donate/</b>, e.g. <i>donate/balloon</i>).", "info"))
@@ -154,6 +183,9 @@ class DonateTab(QWidget):
         self.remove_cc.toggled.connect(self.changed)
         self.request_text.textChanged.connect(self.changed)
         self.donate_to.currentIndexChanged.connect(self.changed)
+        self.method.currentIndexChanged.connect(self.changed)
+        self.special.textChanged.connect(self._special_status)
+        self.special.textChanged.connect(self.changed)
         self.add_btn.clicked.connect(self._add_new)
         self.remove_btn.clicked.connect(self._remove)
         up.clicked.connect(lambda: self._move(-1))
@@ -174,9 +206,9 @@ class DonateTab(QWidget):
 
     def _fit_columns(self, width):
         """Fixed columns get a bit narrower in a small window; Name and Keywords share the rest."""
-        wide = width >= 980
-        sizes = ({ON: 66, TYPE: 118, SPACE: 80, MAX: 132, TPL: 190, ICON: 108} if wide else
-                 {ON: 62, TYPE: 108, SPACE: 70, MAX: 122, TPL: 150, ICON: 98})
+        wide = width >= 1100
+        sizes = ({ON: 66, TYPE: 118, SPACE: 80, MAX: 112, USE: 162, TPL: 180, ICON: 108} if wide else
+                 {ON: 56, TYPE: 100, SPACE: 54, MAX: 84, USE: 150, TPL: 124, ICON: 92})
         hdr = self.table.horizontalHeader()
         for c, w in sizes.items():
             if hdr.sectionSize(c) != w:
@@ -209,6 +241,9 @@ class DonateTab(QWidget):
         space = int(item.get("space") or (troops.space_of(name_text) if name_text else 0))
         t.setItem(r, SPACE, _cell(space, EDITABLE))
         t.setItem(r, MAX, _cell(int(item.get("clicks", 1) or 1), EDITABLE))
+        use = _cell(item.get("use", "all") or "all", EDITABLE)
+        use.setData(HAD_USE, "use" in item)
+        t.setItem(r, USE, use)
         kw = QTableWidgetItem(item.get("keywords", "") or "")
         kw.setToolTip(TIPS[KEYS])
         t.setItem(r, KEYS, kw)
@@ -234,6 +269,16 @@ class DonateTab(QWidget):
     def refresh_status(self):
         for r in range(self.table.rowCount()):
             self._status(r)
+        self._special_status()
+
+    def _special_status(self):
+        key = normalize_key(self.special.text())
+        text, color = (("Off", T.TEXT_DIM) if not key else ("Captured", T.GREEN) if vision.templates.has(key)
+                       else ("Missing", T.AMBER))
+        self.special_state.set(text, color)
+        self.special_state.setToolTip("No key: every request counts as small" if not key else
+                                      f"{key} is captured on the Templates page" if text == "Captured" else
+                                      f"Capture {key} on the Templates page, or big requests are never detected")
 
     def _set_quiet(self, r, c, value):
         cell = self.table.item(r, c)
@@ -274,13 +319,17 @@ class DonateTab(QWidget):
         kw = t.item(r, KEYS)
         cat = t.item(r, TYPE).data(ROLE) or (troops.category(name) if name else "troop")
         space = int(t.item(r, SPACE).data(ROLE) or (troops.space_of(name) if name else 1))
-        return {"name": name,
+        data = {"name": name,
                 "template": normalize_key(key.text() if key else ""),
                 "clicks": int(t.item(r, MAX).data(ROLE) or 1),
                 "enabled": bool(t.item(r, ON).data(ROLE)),
                 "category": cat,
                 "space": space,
                 "keywords": ", ".join(w.strip() for w in (kw.text() if kw else "").split(",") if w.strip())}
+        use = t.item(r, USE)
+        if use is not None and (use.data(ROLE) not in (None, "", "all") or use.data(HAD_USE)):
+            data["use"] = use.data(ROLE) or "all"       # "all" is the default: written only if it was there
+        return data
 
     def _remove(self):
         r = self.table.currentRow()
@@ -312,6 +361,9 @@ class DonateTab(QWidget):
         self.remove_cc.setChecked(d.get("remove_cc_before_request", True))
         self.request_text.setText(d.get("request_text", ""))
         self.donate_to.setCurrentIndex(max(0, self.donate_to.findData(d.get("donate_to", "all"))))
+        self.method.setCurrentIndex(max(0, self.method.findData(d.get("method", "fast"))))
+        self.special.setText(d.get("special_template", SPECIAL_DEFAULT) or "")
+        self._special_status()
         self.blockSignals(True)
         self.table.setRowCount(0)
         for it in d.get("items", []) or []:
@@ -328,6 +380,8 @@ class DonateTab(QWidget):
         d["remove_cc_before_request"] = self.remove_cc.isChecked()
         d["request_text"] = self.request_text.text()
         d["donate_to"] = self.donate_to.currentData() or "all"
+        d["method"] = self.method.currentData() or "fast"
+        d["special_template"] = normalize_key(self.special.text())
         d["items"] = [it for it in (self._row_data(r) for r in range(self.table.rowCount()))
                       if it["name"] or it["template"]]
 
