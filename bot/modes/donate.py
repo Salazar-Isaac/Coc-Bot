@@ -44,13 +44,22 @@ def request_round(bot, state):
     if not requesters:
         raise StopRun("No requesting accounts (roles 'Loot + request' or 'Feeder') in the Accounts tab.")
     sent = 0
+    start = state.get("request_next", 0)              # continue where a stopped run left off
+    if start:
+        log.info("Continuing the request round at account %d of %d", start + 1, len(requesters))
     for i, acc in enumerate(requesters, 1):
+        if i - 1 < start:
+            continue
+        state["request_next"] = i - 1
+        config.save_state(state)
         bot.status(account=acc["name"], progress=f"request {i}/{len(requesters)}", action="Requesting")
         if not _switch(bot, acc, state):
             continue
         chores(bot, acc, "arrive")
         if with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings)):
             sent += 1
+    state["request_next"] = 0
+    config.save_state(state)
     log.info("Requests sent: %d of %d accounts", sent, len(requesters))
     return sent
 
