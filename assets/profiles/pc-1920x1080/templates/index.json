@@ -1109,6 +1109,21 @@
     ],
     "threshold": 0.85
   },
+  "popup/continue_green": {
+    "box": [
+      875,
+      875,
+      170,
+      60
+    ],
+    "region": [
+      600,
+      700,
+      720,
+      330
+    ],
+    "threshold": 0.85
+  },
   "popup/daily_claim": {
     "box": [
       285,
@@ -1136,6 +1151,21 @@
       80,
       480,
       175
+    ],
+    "threshold": 0.85
+  },
+  "popup/hoggy_title": {
+    "box": [
+      705,
+      195,
+      515,
+      50
+    ],
+    "region": [
+      645,
+      135,
+      635,
+      170
     ],
     "threshold": 0.85
   },

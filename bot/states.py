@@ -22,6 +22,7 @@ STATES = [
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
     ("home", ["home/attack_button", "home/settings_button"]),
     ("daily", ["popup/daily_title"]),
+    ("reward_popup", ["popup/hoggy_title"]),        # Hoggy Bank rewards etc.: Continue
     ("shield_info", ["popup/shield_title"]),       # Magic Shield info: Continue only, NEVER "Remove"
     ("lab_window", ["lab/in_progress_title"]),     # laboratory after starting research (has a gems button!)
     ("upgrade_window", ["upgrade/confirm", "upgrade/close", "lab/close"]),   # any big window with a red X
@@ -42,7 +43,8 @@ STATES = [
 
 CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close"]
 # Buttons worth tapping wherever they appear when the screen is not recognised.
-ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "battle/confirm_okay",
+ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "popup/continue_green",
+                    "battle/confirm_okay",
                     "popup/reload", "popup/try_again", "popup/okay", "popup/daily_claim", "popup/close_x"]
 
 
@@ -158,6 +160,9 @@ def go_home(bot, timeout=60.0):
         elif state == "shop":
             m = vision.find(frame, "shop/close") if vision.templates.has("shop/close") else None
             bot.tap_match(m, jitter=1) if m else bot.tap_point("shop.close", jitter=0)
+        elif state == "reward_popup":
+            m = vision.templates.has("popup/continue_green") and vision.find(frame, "popup/continue_green")
+            bot.tap_match(m) if m else bot.tap_point("popup.shield_continue")
         elif state == "shield_info":
             m = vision.templates.has("popup/shield_continue") and vision.find(frame, "popup/shield_continue")
             bot.tap_match(m) if m else bot.tap_point("popup.shield_continue")
