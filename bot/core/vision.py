@@ -281,6 +281,13 @@ _learn_tried = {}
 _learn_seen = {}
 
 
+def window_pending(key):
+    """True if this window's size was seen once and waits for a second look."""
+    from .space import group_of
+    g = group_of(key)
+    return bool(g) and g in _learn_seen and g not in space.windows
+
+
 def learn_window(frame, key, threshold=None):
     """A centred window's size on a phone: find its template at several sizes around the screen
     centre; the best size becomes the scale of every template and point of that window."""
@@ -289,8 +296,8 @@ def learn_window(frame, key, threshold=None):
     if space.ui == 1 or not g or g in space.windows:
         return None
     now = time.monotonic()
-    if now - _learn_tried.get(key, 0) < 0.8:
-        return None
+    if g not in _learn_seen and now - _learn_tried.get(key, 0) < 0.8:
+        return None                                    # (a size waiting for confirmation: look again)
     _learn_tried[key] = now
     meta = templates.meta(key)
     thr = threshold if threshold is not None else meta.get("threshold", DEFAULT_THRESHOLD)

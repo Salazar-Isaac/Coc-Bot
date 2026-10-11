@@ -184,7 +184,7 @@ def after_reload(bot):
     if not acc or getattr(bot, "_reopening", False):
         return
     from .actions import account
-    if account.on_account(bot, acc):
+    if account.on_account(bot, acc, check_name=True):
         log.info("Back on %s after the reload", acc["name"])
         return
     log.warning("After the reload the game shows another account: opening %s again", acc["name"])

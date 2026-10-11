@@ -155,20 +155,20 @@ def read_player(bot, frame=None):
     return text.strip() if text and conf > 0.6 else ""
 
 
-def on_account(bot, account):
-    """True if the village on screen is this account: its in-game name matches the one learned on
-    an earlier visit; without a learned name, the account the bot last switched to."""
-    player = account.get("player")
-    unique = player and not any(a is not account and a.get("player") and same_name(a["player"], player)
-                                for a in bot.accounts)
-    if unique:
+def on_account(bot, account, check_name=False):
+    """True if the bot switched to this account in this run (and, with check_name - after the game
+    reloaded - its in-game name still matches). In-game names are not unique (several accounts can
+    be called the same), so they never identify an account on their own."""
+    if bot.current_account != account["name"]:
+        return False
+    if check_name and account.get("player"):
         seen = read_player(bot)
         if not seen:
             bot.sleep(0.6)                            # the name appears a moment after the village
             seen = read_player(bot)
         if seen:
-            return same_name(seen, player)
-    return bot.current_account == account["name"]
+            return same_name(seen, account["player"])
+    return True
 
 
 def switch_to(bot, account, state=None):

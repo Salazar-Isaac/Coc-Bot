@@ -69,6 +69,9 @@ class Bot:
             for k in keys:
                 m = vision.find(frame, k, learn=True)
                 if m:
+                    if vision.window_pending(k):      # a window's size seen once: confirm it settled
+                        control.sleep(0.4)
+                        m = vision.find(self.shot(), k, learn=True) or m
                     return k, m
             if time.monotonic() >= end:
                 return None, None
