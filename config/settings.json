@@ -105,25 +105,19 @@
     "request_text": "",
     "loot_before_donate": true,
     "clan_tag": "#2RPLP89CY",
+    "method": "fast",
+    "special_template": "donate/super_wizard",
     "auto_join": true,
     "items": [
       {
-        "name": "Archer",
-        "template": "donate/archer",
-        "clicks": 10,
-        "enabled": true,
-        "category": "troop",
-        "space": 1,
-        "keywords": ""
-      },
-      {
         "name": "Balloon",
         "template": "donate/balloon",
-        "clicks": 6,
+        "clicks": 12,
         "enabled": true,
         "category": "troop",
         "space": 5,
-        "keywords": "loon"
+        "keywords": "loon",
+        "use": "big"
       },
       {
         "name": "Lightning Spell",
@@ -132,10 +126,41 @@
         "enabled": true,
         "category": "spell",
         "space": 1,
-        "keywords": "zap, light"
+        "keywords": "zap, light",
+        "use": "all"
+      },
+      {
+        "name": "Stone Slammer",
+        "template": "donate/stone_slammer",
+        "clicks": 3,
+        "enabled": true,
+        "category": "siege",
+        "space": 1,
+        "keywords": "slammer, siege",
+        "use": "big"
+      },
+      {
+        "name": "Archer",
+        "template": "donate/archer",
+        "clicks": 10,
+        "enabled": true,
+        "category": "troop",
+        "space": 1,
+        "keywords": "",
+        "use": "small"
+      },
+      {
+        "name": "Balloon",
+        "template": "donate/balloon",
+        "clicks": 6,
+        "enabled": true,
+        "category": "troop",
+        "space": 5,
+        "keywords": "loon",
+        "use": "small"
       }
     ],
-    "donate_to": "mine"
+    "donate_to": "all"
   },
   "village": {
     "collect": true,

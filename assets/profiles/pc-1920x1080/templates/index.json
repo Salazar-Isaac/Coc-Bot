@@ -1049,6 +1049,36 @@
     ],
     "threshold": 0.8
   },
+  "donate/stone_slammer": {
+    "box": [
+      1008,
+      318,
+      82,
+      58
+    ],
+    "region": [
+      630,
+      140,
+      840,
+      720
+    ],
+    "threshold": 0.8
+  },
+  "donate/super_wizard": {
+    "box": [
+      1350,
+      553,
+      70,
+      55
+    ],
+    "region": [
+      630,
+      140,
+      840,
+      720
+    ],
+    "threshold": 0.8
+  },
   "donate/window_title": {
     "box": [
       662,

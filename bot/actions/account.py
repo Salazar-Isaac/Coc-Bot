@@ -168,6 +168,9 @@ def switch_to(bot, account, state=None):
     if not go_home(bot, timeout=90):
         raise BotError(f"'{name}' did not finish loading")
     bot.current_account = name
+    player, conf = vision.text_reader.read_line(bot.shot(), bot.layout.region("home.player_name"))
+    if player and conf > 0.6:
+        account["player"] = player.strip()             # in-game name, as shown in clan chat
     log.info("Now on %s (Town Hall %s)", name, account.get("th") or "?")
     return True
 

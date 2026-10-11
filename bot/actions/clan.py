@@ -259,6 +259,11 @@ def plan(req, items):
     Items of a full category are left out. Returns (items, space left, asked_for_something)."""
     left = _space_left(req)
     usable = [i for i in items if left.get(i["category"]) != 0]
+    if left.get("troop") is not None and left["troop"] < 10:
+        usable = [i for i in usable if i.get("use", "all") != "big"]   # a big request needs 10+ troop space
+    if not any(i.get("use", "all") != "big" or left.get("troop") is None or left["troop"] >= 10
+               for i in usable if i["category"] != "siege"):
+        usable = []                                    # only a siege slot left: nothing worth opening
     asked = [i for i in usable if troops.wants(req.get("message"), i)]
     if asked:
         return asked + [i for i in usable if i not in asked], left, True
@@ -328,9 +333,68 @@ def fill_request(bot, items, left=None):
     return donated
 
 
+# --- fast donating (the XpIncrease way) --------------------------------------------------------
+
+def is_big_request(frame, dy, settings):
+    """Like XpIncrease: the Super Wizard (10 housing space) is only in colour while the request
+    still has lots of room, so "Super Wizard donatable" = a big request -> the big items."""
+    key = settings["donate"].get("special_template", "donate/super_wizard")
+    if not key or not vision.templates.has(key):
+        return False
+    return _active(frame, key, region=_shifted(ROWS["troop"], dy)) is not None
+
+
+def _find_fast(bot, frame, key, dy, cat):
+    """An item's icon; siege machines are at the far right of the troop rows, so if it is not
+    visible the row is dragged all the way left once (like XpIncrease) and searched again."""
+    region = _shifted(ROWS.get(cat, ROWS["troop"]), dy)
+    m = _active(frame, key, region=region)
+    if m or cat == "spell":
+        return m, frame
+    if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
+        return None, frame                          # visible but grey: not available for this request
+    x, y, w, h = region
+    cy = y + h // 3
+    bot.swipe((x + w - 40, cy), (max(5, x - 600), cy), 450)
+    bot.sleep(0.6)
+    frame = bot.shot()
+    return _active(frame, key, region=region), frame
+
+
+def fill_fast(bot, items, dy, big):
+    """Donate window is open: tap each item its count times in a quick burst (no check after each
+    tap; the game ignores taps that do not fit). Items marked "big" are only used for big requests,
+    "small" only for the others. Returns the number of taps that went to available items."""
+    taps = 0
+    frame = bot.shot()
+    for item in items:
+        use = item.get("use", "all")
+        if (use == "big" and not big) or (use == "small" and big):
+            continue
+        key = item["template"]
+        if not vision.templates.has(key):
+            continue
+        if _window_dy(frame) is None:
+            break                                   # the request is full: the window closed itself
+        m, frame = _find_fast(bot, frame, key, dy, item.get("category", "troop"))
+        if not m:
+            continue
+        for _ in range(max(1, int(item.get("clicks", 1)))):
+            control.checkpoint()
+            bot.tap_match(m, jitter=2)
+            time.sleep(0.07)
+        taps += int(item.get("clicks", 1))
+        time.sleep(0.25)
+        frame = bot.shot()
+    return taps
+
+
 def _is_mine(bot, name):
+    """A request is from one of your accounts if the name matches an account's Supercell ID name
+    or its in-game player name (learned when the bot opens the account)."""
     from .account import same_name
-    return any(same_name(a["name"], name) for a in bot.accounts)
+    return any(same_name(a["name"], name) or (a.get("player") and same_name(a["player"], name))
+               for a in bot.accounts)
 
 
 def donate_all(bot, settings, max_requests=60):
@@ -398,7 +462,15 @@ def donate_all(bot, settings, max_requests=60):
                     tried.discard((page, b.y // 12))
                 continue
             done_names.add(ident)
-            n = fill_request(bot, order, left)
+            if settings["donate"].get("method", "fast") == "fast":
+                g = bot.shot()
+                dy = _window_dy(g) or 0
+                big = is_big_request(g, dy, settings)
+                n = fill_fast(bot, order, dy, big)
+                if big:
+                    log.info("%s: big request (Super Wizard available)", who)
+            else:
+                n = fill_request(bot, order, left)
             total += n
             bot.stats["donated"] = bot.stats.get("donated", 0) + n
             log.info("Donated %d unit(s) to %s", n, who)

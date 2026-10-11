@@ -74,6 +74,7 @@ DEFAULT_LAYOUT = {
         "bb.builders": [1075, 32, 70, 40],
         "bb.lab": [875, 32, 70, 40],
         "clan.search_box": [312, 320, 640, 62],
+        "home.player_name": [115, 14, 250, 32],      # in-game name next to the level badge
         "clan.details_tag": [415, 320, 200, 34],
         "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
