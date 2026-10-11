@@ -28,6 +28,7 @@ import numpy as np
 from .. import paths
 from ..core import vision
 from ..core.control import control
+from ..core.profile import profile
 from ..core.space import space
 from ..states import detect, surrender
 from . import deployzone
@@ -119,6 +120,82 @@ def detect_slots(frame, region=None):
         cards.append(x + (a + borders[pair]) // 2)
         i = pair + 1
     return cards
+
+
+KEY_ORDER = {"troop": "123456789", "siege": "ZXCV", "hero": "QWERT", "spell": "ASDFGHJKL"}
+OCR_FIX = {"艺": "Z", "乙": "Z", "2Z": "Z", "0": "Q", "O": "Q", "V": "W", "VV": "W", "5": "S", "$": "S",
+           "|": "1", "I": "1", "L": "1", "l": "1", "B": "8"}
+
+
+_HINTS = {}
+
+
+def _hint_templates():
+    """Key-hint letters (assets/profiles/<profile>/templates/hint/<key>.png)."""
+    folder = os.path.join(profile.templates, "hint")
+    if not _HINTS and os.path.isdir(folder):
+        for n in os.listdir(folder):
+            if n.endswith(".png"):
+                _HINTS[n[:-4]] = cv2.imdecode(np.fromfile(os.path.join(folder, n), dtype=np.uint8), cv2.IMREAD_COLOR)
+    return _HINTS
+
+
+def card_keys(frame, slots):
+    """Read the keyboard hint printed on each card ("1", "Z", "Q", "A"...). Returns {key: card x}.
+    OCR slips are fixed from the bar's fixed order: troops 1,2,3.. siege Z.. heroes Q,W,E,R.. spells A,S,D.."""
+    y = space.point(0, 1026)[1]
+    hints = _hint_templates()
+    raw = []
+    for cx in slots:
+        area = frame[y:y + 56, cx + 20:cx + 68]               # tall: a raised (selected) card moves up
+        best, best_s = "", 0.0
+        for k, tpl in hints.items():
+            if area.shape[0] >= tpl.shape[0] and area.shape[1] >= tpl.shape[1]:
+                sc = float(cv2.matchTemplate(area, tpl, cv2.TM_CCOEFF_NORMED).max())
+                if sc > best_s:
+                    best, best_s = k.upper(), sc
+        if best_s >= 0.8:
+            raw.append((best, best_s))
+            continue
+        text, conf = vision.text_reader.read_line(frame, (cx + 22, y + 10, 42, 40))   # unknown letter: OCR
+        text = text.strip()
+        if text in OCR_FIX:
+            raw.append((OCR_FIX[text], max(conf, 0.5)))       # a known look-alike: trust the mapping
+        else:
+            raw.append((text.upper()[:1], conf))
+    valid = set("".join(KEY_ORDER.values()))
+    keys = [t if conf >= 0.45 and t in valid else "" for t, conf in raw]
+    # a key can only appear once: keep the most confident reading
+    for k in set(keys) - {""}:
+        idx = [i for i, t in enumerate(keys) if t == k]
+        if len(idx) > 1:
+            best = max(idx, key=lambda i: raw[i][1])
+            for i in idx:
+                if i != best:
+                    keys[i] = ""
+    # fill gaps from the neighbours: next after the left one, or the one before the right one
+    for _ in range(2):
+        for i, k in enumerate(keys):
+            if k:
+                continue
+            left = keys[i - 1] if i > 0 else ""
+            right = keys[i + 1] if i + 1 < len(keys) else ""
+            guess = ""
+            for order in KEY_ORDER.values():
+                if left and left in order and order.index(left) + 1 < len(order):
+                    nxt = order[order.index(left) + 1]
+                    # between troops and heroes there may be a siege instead of another troop
+                    if not (right and right not in order and raw[i][0] in KEY_ORDER["siege"]):
+                        guess = nxt
+                    break
+                if right and right in order and order.index(right) > 0:
+                    guess = order[order.index(right) - 1]
+                    break
+            if raw[i][0] in valid and raw[i][0] not in keys:
+                guess = raw[i][0]                      # a weak but unique reading beats a guess
+            if guess and guess not in keys:
+                keys[i] = guess
+    return {k.lower(): cx for k, cx in zip(keys, slots) if k}
 
 
 def _card_y():
@@ -276,6 +353,17 @@ def deploy(bot, plan):
     offsets = plan.get("offsets") or [[0, 0]]
     frame = bot.shot()
     slots = detect_slots(frame)
+    by_key = card_keys(frame, slots) if (bot.device.supports_keys and verify and slots) else {}
+    if by_key:
+        log.debug("Troop bar keys: %s", " ".join(sorted(by_key, key=by_key.get)))
+
+    def card_of(step):
+        """X of the card a step uses: by its key hint on PC, else by its slot number."""
+        if by_key:
+            return by_key.get((step.get("key") or "").lower())
+        n = step.get("slot")
+        return slots[n - 1] if n and n <= len(slots) else None
+
     ring = deployzone.deploy_line(frame) if smart else []
     if smart and len(ring) < 8:
         log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
@@ -297,8 +385,10 @@ def deploy(bot, plan):
     for step in plan["steps"]:
         control.checkpoint()
         kind = step_type(step)
-        n = step.get("slot")
-        cx = slots[n - 1] if n and n <= len(slots) else None
+        cx = card_of(step)
+        if by_key and cx is None:
+            log.debug("Key %s is not on the troop bar: this army has no such unit", step.get("key"))
+            continue
         if cx is not None and slot_empty(bot.shot(), cx):
             continue                         # nothing of this unit left
         if not select(bot, step, slots):
@@ -323,12 +413,11 @@ def deploy(bot, plan):
     if verify and slots:
         frame = bot.shot()
         for step in plan["steps"]:
-            n = step.get("slot")
-            if step_type(step) != "troop" or not n or n > len(slots):
+            cx = card_of(step)
+            if step_type(step) != "troop" or cx is None:
                 continue
-            cx = slots[n - 1]
             if not slot_empty(frame, cx) and read_count(frame, cx) and select(bot, step, slots):
-                log.debug("Dropping leftovers of slot %d", n)
+                log.debug("Dropping leftovers of %s", step.get("key") or step.get("slot"))
                 _drop(bot, cx, ring or plan_points(step), centre, fixes=fixes,
                       reselect=lambda st=step: select(bot, st, slots))
                 frame = bot.shot()

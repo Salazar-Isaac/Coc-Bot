@@ -76,6 +76,7 @@ def go_home(bot, timeout=60.0):
     """Get back to the home village from wherever the game is. Returns True on success."""
     end = time.monotonic() + timeout
     unknown = 0
+    chest_taps = 0
     last = None
     while time.monotonic() < end:
         frame = bot.shot()
@@ -116,7 +117,12 @@ def go_home(bot, timeout=60.0):
             if m:
                 bot.tap_match(m)
             else:
-                bot.tap(*space.center(960, 600), jitter=20)   # each tap breaks one lock on the chest
+                # each tap breaks one lock; taps during the shake animation are ignored, so wait
+                # between taps and rotate between the chest, above it and the side of the room
+                spots = [(960, 600), (960, 420), (1830, 420), (960, 600), (700, 700)]
+                bot.tap(*space.center(*spots[chest_taps % len(spots)]), jitter=12)
+                chest_taps += 1
+                control.sleep(0.7)
         elif state == "donate":
             bot.tap_point("donate.close", jitter=3)
         elif state == "chat":
