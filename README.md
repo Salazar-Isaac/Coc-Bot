@@ -28,8 +28,26 @@ Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.
 | **Loot + Donate cycle** | Main and Loot-only accounts loot until full → every "Loot + request" and Feeder account empties its Clan Castle and requests → Main donates to all requests → repeat while Main has more elixir than "Main keeps at least" → loot again. |
 | **Donate only** | The request → donate part of the cycle. |
 | **Village chores only** | Visits the accounts without attacking: collects resources, starts building upgrades and research. |
+| **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |
+
+"Loot the Builder Base after the home village is full" (Builder Base page) makes every loot mode do the
+night village too, right after each account's home village.
 
 Account roles: **Main** (loots, donates) · **Loot only** · **Loot + request** (loots in "Loot all", requests in donation modes) · **Feeder** (only requests) · **Skip**.
+
+## When is an account full?
+
+The bot measures each account's real storage size from the resource bar (amount ÷ how full the bar is,
+within about 1 %), so "full" means *that account's* storages minus a margin (Loot page, default 5 lakh:
+a 3 crore storage is looted until 2.95 crore). Accounts whose storages are smaller than their Town Hall
+suggests are handled, and if storages stop growing for a few attacks the account counts as full anyway.
+The same applies to the Builder Base.
+
+## Army
+
+"Army recipe to use before looting" (Loot page) switches every account to a Saved Recipe by name
+(e.g. your E-Dragon + Clone recipe called "loot") before it attacks. The "E-Dragons + Clone" plan reads
+the key on each troop card, so it works with whatever the account has.
 
 ## Village chores (Village page)
 
