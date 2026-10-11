@@ -33,14 +33,14 @@ def open_army(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
     bot.tap_point("home.army")
-    if not bot.wait("army/my_army_title", 8):
+    if not bot.wait("army/my_army_title", 8, interval=0.25):
         raise BotError("Army screen did not open")
-    bot.sleep(0.6)
+    bot.sleep(0.35)
 
 
 def close_army(bot):
     bot.tap_point("army.close")
-    bot.sleep(0.5)
+    bot.sleep(0.3)
 
 
 def _active(frame, key, region=None):
@@ -67,11 +67,11 @@ def remove_cc_troops(bot):
         log.debug("Clan Castle already empty or locked")
         return False
     bot.tap_match(m)
-    if not bot.wait("army/remove_title", 4):
+    if not bot.wait("army/remove_title", 4, interval=0.2):
         msg = "Clan Castle troops are locked (a request is still open)"
         log.info(msg)
         return False
-    bot.tap_template("battle/confirm_okay", timeout=3, after=0.6)
+    bot.tap_template("battle/confirm_okay", timeout=3, after=0.4)
     log.info("Clan Castle emptied")
     return True
 
@@ -88,7 +88,7 @@ def request(bot, text=""):
         log.info("Request button not available (cooldown, request still open, or Clan Castle full)")
         return False
     bot.tap_match(m)
-    if not bot.wait("request/title", 5):
+    if not bot.wait("request/title", 5, interval=0.2):
         log.info("Request window did not open")
         return False
     if text:
@@ -101,7 +101,7 @@ def request(bot, text=""):
                 bot.key("backspace")
             bot.device.type_text(text)
             bot.sleep(0.2)
-    if not bot.tap_template("request/send", timeout=4, after=0.8):
+    if not bot.tap_template("request/send", timeout=4, after=0.5):
         return False
     log.info("Reinforcements requested")
     return True
@@ -137,7 +137,7 @@ def open_chat(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
     bot.tap_point("home.chat")
-    bot.sleep(1.2)
+    bot.sleep(0.7)
     if bot.exists("chat/rules_understand"):         # first time on this account
         bot.tap_template("chat/rules_understand", timeout=2, after=0.8)
     if not bot.wait_any(["chat/close", "chat/challenge"], 6)[0]:
@@ -145,7 +145,7 @@ def open_chat(bot):
     m = bot.find("chat/jump_latest")                # chat remembers its scroll: go to the newest
     if m:
         bot.tap_match(m)
-        bot.sleep(1.0)
+        bot.sleep(0.7)
 
 
 def close_chat(bot):

@@ -10,9 +10,14 @@ from .core.space import space
 
 log = logging.getLogger("bot")
 
-# Order matters: popups and overlays first, the village (behind them) last.
+# Order matters: overlays that leave the village buttons visible (chat, "Anyone there?") come
+# first, then the village itself (the most common screen: checked early to save time; every
+# other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
+    ("donate", ["donate/window_title"]),
+    ("chat", ["chat/close"]),                     # clan chat open over the village
+    ("home", ["home/attack_button", "home/settings_button"]),
     ("daily", ["popup/daily_title"]),
     ("lab_window", ["lab/in_progress_title"]),     # laboratory after starting research (has a gems button!)
     ("upgrade_window", ["upgrade/confirm", "upgrade/close", "lab/close"]),   # any big window with a red X
@@ -28,9 +33,6 @@ STATES = [
     ("confirm", ["battle/confirm_okay"]),
     ("scout", ["scout/next"]),              # "Available Loot" stays visible in battle, Next does not
     ("battle", ["battle/surrender"]),
-    ("donate", ["donate/window_title"]),
-    ("chat", ["chat/close"]),                     # clan chat open over the village
-    ("home", ["home/attack_button", "home/settings_button"]),
     ("loading", ["load/loading"]),
 ]
 
@@ -122,7 +124,7 @@ def go_home(bot, timeout=60.0):
                 spots = [(960, 600), (960, 420), (1830, 420), (960, 600), (700, 700)]
                 bot.tap(*space.center(*spots[chest_taps % len(spots)]), jitter=12)
                 chest_taps += 1
-                control.sleep(0.7)
+                control.sleep(0.6)
         elif state == "donate":
             bot.tap_point("donate.close", jitter=3)
         elif state == "chat":
@@ -158,7 +160,7 @@ def go_home(bot, timeout=60.0):
                 if m:
                     bot.tap_match(m)
                     break
-        control.sleep(1.0)
+        control.sleep(0.45)
     bot.save_error("not-home")
     return False
 

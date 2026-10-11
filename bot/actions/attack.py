@@ -430,7 +430,7 @@ def finish_battle(bot, seconds):
     while time.monotonic() < end:
         if detect(bot.shot()) == "results":
             return True
-        control.sleep(1.0)
+        control.sleep(0.6)
     surrender(bot)
     for _ in range(20):
         if detect(bot.shot()) == "results":

@@ -55,7 +55,7 @@ class Bot:
     def exists(self, key, fresh=True, **kw):
         return self.find(key, fresh=fresh, **kw) is not None
 
-    def wait_any(self, keys, timeout=15.0, interval=0.4):
+    def wait_any(self, keys, timeout=15.0, interval=0.3):
         """Wait until one of the templates appears. Returns (key, match) or (None, None)."""
         keys = [k for k in ([keys] if isinstance(keys, str) else keys) if vision.templates.has(k)]
         end = time.monotonic() + timeout
@@ -69,7 +69,7 @@ class Bot:
                 return None, None
             control.sleep(interval)
 
-    def wait(self, key, timeout=15.0, interval=0.4):
+    def wait(self, key, timeout=15.0, interval=0.3):
         return self.wait_any([key], timeout, interval)[1]
 
     def wait_gone(self, key, timeout=15.0, interval=0.4):
@@ -96,7 +96,7 @@ class Bot:
     def tap_match(self, m, **kw):
         self.tap(m.x, m.y, **kw)
 
-    def tap_template(self, key, timeout=10.0, after=0.4):
+    def tap_template(self, key, timeout=10.0, after=0.3):
         """Wait for a template and tap it. Returns True if it was tapped."""
         m = self.wait(key, timeout)
         if not m:

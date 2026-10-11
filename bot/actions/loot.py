@@ -1,8 +1,10 @@
 """Looting: read storages, search for a base with enough loot, attack, come home."""
 
 import logging
+import time
 
 from .. import config
+from ..core import vision
 from ..core.context import BotError
 from ..core.control import control
 from ..states import go_home
@@ -62,6 +64,23 @@ def start_search(bot):
         raise BotError("Army 'Attack!' button not found (army not ready?)")
 
 
+def stable_loot(bot, max_wait=2.0):
+    """The scouted loot, read until two reads 0.25 s apart agree: the numbers count up for a
+    moment when a base appears, so a single early read could be too low."""
+    end = time.monotonic() + max_wait
+    prev = None
+    while True:
+        frame = bot.shot()
+        loot = {r: vision.digits.read(frame, bot.layout.region(f"scout.{r}")) for r in config.RESOURCES}
+        if prev is not None and loot == prev and loot.get("gold") is not None:
+            return loot
+        if time.monotonic() > end:
+            # still changing or unreadable: one last careful read
+            return {r: bot.read_number(f"scout.{r}") for r in config.RESOURCES}
+        prev = loot
+        control.sleep(0.25)
+
+
 def search(bot):
     """Press Next until a base meets the loot minimum. Returns the loot dict or None."""
     max_searches = bot.settings["loot"]["max_searches"]
@@ -69,9 +88,7 @@ def search(bot):
         if not bot.wait("scout/next", timeout=30):
             bot.save_error("no-scout")
             raise BotError("Scouting screen did not appear")
-        control.sleep(0.5)             # loot numbers count up briefly
-        frame = bot.shot()
-        loot = {r: bot.read_number(f"scout.{r}", frame=frame) for r in config.RESOURCES}
+        loot = stable_loot(bot)
         bot.stats["searches"] += 1
         bot.status(action=f"Searching #{n}", loot=loot)
         if loot_is_good(bot.settings, loot):
@@ -79,7 +96,7 @@ def search(bot):
             return loot
         log.debug("Search %d: %s -> next", n, _fmt(loot))
         bot.tap_point("scout.next")
-        control.sleep(0.8)
+        control.sleep(0.5)
     log.info("No base found in %d searches", max_searches)
     return None
 

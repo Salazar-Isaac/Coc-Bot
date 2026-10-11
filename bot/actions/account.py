@@ -83,18 +83,27 @@ def open_switcher(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
     bot.tap_point("home.settings")
-    if not bot.wait("settings/title", 8):
+    if not bot.wait("settings/title", 8, interval=0.25):
         raise BotError("Settings did not open")
     bot.tap_point("settings.switch_id")
-    if not bot.wait("sid/switch_id_label", 10):
+    if not bot.wait("sid/switch_id_label", 10, interval=0.25):
         raise BotError("Supercell ID panel did not open")
-    bot.sleep(1.0)  # the list slides in
+    # the list slides in: wait until the name column stops moving (max 1.2 s)
+    prev = None
+    for _ in range(8):
+        f = bot.shot()
+        x, y, w, h = bot.layout.region("sid.name_column")
+        cur = f[y:y + h, x:x + w].astype("int16")
+        if prev is not None and abs(cur - prev).mean() < 1.0:
+            break
+        prev = cur
+        bot.sleep(0.15)
 
 
 def _scroll(bot, down=True):
     a, b = bot.layout.point("sid.scroll_from"), bot.layout.point("sid.scroll_to")
-    bot.swipe(a, b, 900) if down else bot.swipe(b, a, 900)
-    bot.sleep(0.7)
+    bot.swipe(a, b, 700) if down else bot.swipe(b, a, 700)
+    bot.sleep(0.45)
 
 
 def switch_to(bot, account, state=None):
