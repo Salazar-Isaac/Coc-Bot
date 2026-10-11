@@ -207,7 +207,13 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
         return p
 
     frame = bot.shot()
+    wanted = list(spots)
     spots = [p for p in (fixed(p) for p in spots) if p is not None and deployzone.valid_spot(frame, *p)]
+    good = fixes.setdefault("__good__", [])          # spots where a unit was really deployed this attack
+    if not spots and good:
+        # every planned spot turned out unusable: use the closest spots that worked for others
+        ref = wanted[0] if wanted else centre
+        spots = sorted(set(good), key=lambda g: (g[0] - ref[0]) ** 2 + (g[1] - ref[1]) ** 2)[:max(1, len(wanted))]
     if not spots:
         log.warning("No usable deploy spots left")
         return
@@ -230,6 +236,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
             waited += pause
             frame = bot.shot()
             if slot_empty(frame, cx):
+                good.append((x, y))
                 return
             if by_count:
                 now = read_count(frame, cx)
@@ -240,7 +247,10 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
                     left, ok = left - 1, True              # number changed but not readable
                     break
             elif np.abs(_card(frame, cx) - card0).mean() > 12:
+                good.append((x, y))
                 return                                      # the single unit is on the field
+        if ok:
+            good.append((x, y))
         log.debug("tap %s: %s, %s left (%.2fs)", (x, y), "ok" if ok else "no effect", left, waited)
         if not ok:
             # illegal spot: inside the red zone -> move it out; beyond the map -> move it in.

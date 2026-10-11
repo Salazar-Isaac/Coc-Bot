@@ -85,7 +85,7 @@ def request(bot, text=""):
         return False
     m = _active(frame, "army/request_button")
     if not m or m.score < 0.9:
-        log.info("Request button not available (cooldown, request already open, or CC full)")
+        log.info("Request button not available (cooldown, request still open, or Clan Castle full)")
         return False
     bot.tap_match(m)
     if not bot.wait("request/title", 5):
