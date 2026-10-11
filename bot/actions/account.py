@@ -82,8 +82,13 @@ def read_town_hall(frame, name_box):
 def open_switcher(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
-    bot.tap_point("home.settings")
-    if not bot.wait("settings/title", 8, interval=0.25):
+    for attempt in range(2):                      # a tap during an animation can be lost: tap again
+        bot.tap_point("home.settings")
+        if bot.wait("settings/title", 4, interval=0.25):
+            break
+        if not go_home(bot, 10):
+            raise BotError("Not on the home village")
+    else:
         raise BotError("Settings did not open")
     bot.tap_point("settings.switch_id")
     if not bot.wait("sid/switch_id_label", 10, interval=0.25):

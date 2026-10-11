@@ -38,6 +38,7 @@ _STROKE = {
     "arrow-down": '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
     "arrow-right": '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
     "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+    "chevron-up": '<path d="m18 15-6-6-6 6"/>',
     "download": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
     "camera": '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/>'
               '<circle cx="12" cy="13" r="3.5"/>',
@@ -90,6 +91,10 @@ _STROKE = {
     "castle": '<path d="M2 21h20"/><path d="M4 21V9h4v2h3V9h2v2h3V9h4v12"/><path d="M4 9V4h3v2h2V4h6v2h2V4h3v5"/>'
               '<path d="M10 21v-4a2 2 0 0 1 4 0v4"/>',
     "ban": '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+    "boat": '<path d="M12 2.5V17"/><path d="M12 3.5 19.5 14H12"/><path d="M10 7 5 14h5"/>'
+            '<path d="M2.5 17h19l-2.1 3.1a2 2 0 0 1-1.66.9H6.26a2 2 0 0 1-1.66-.9z"/>',
+    "star": '<path d="m12 2.8 2.83 5.74 6.33.92-4.58 4.47 1.08 6.3L12 17.25l-5.66 2.98 1.08-6.3-4.58-4.47 '
+            '6.33-.92z"/>',
 }
 
 # filled icons (stroke="none")

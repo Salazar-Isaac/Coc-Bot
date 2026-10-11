@@ -4,7 +4,7 @@ import logging
 
 from .. import config
 from ..actions import account as account_actions
-from ..actions import loot
+from ..actions import builder_base, loot
 from . import register
 from .common import StopRun, active_accounts, chores, when_full, with_recovery
 
@@ -29,6 +29,7 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
             return                                   # gave up after retries
         log.info("%s: %s", acc["name"], {"full": "storages full", "stuck": "storages full (stopped growing)",
                                           "limit": "attack limit reached"}[result])
+        builder_after(bot, acc)
         if cycle and bot.settings.get("when_full") == "switch":
             chores(bot, acc, "leave")
             return
@@ -36,6 +37,35 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
             chores(bot, acc, "leave")               # spend before moving on (not when you spend yourself)
         if when_full(bot, acc) == "next":
             return
+
+
+def builder_after(bot, acc):
+    """'After the home village is full, loot the Builder Base too' (Builder Base page)."""
+    cfg = bot.settings.get("builder", {})
+    if cfg.get("after_main") and acc.get("role", "loot") in cfg.get("on_roles", ["main", "loot", "both", "feeder"]):
+        with_recovery(bot, f"Builder Base of {acc['name']}", lambda: builder_base.session(bot, acc), attempts=2)
+
+
+@register("builder_only", "Builder Base only",
+          "Visit the enabled accounts' Builder Base (night village): attack until the daily Star Bonus is "
+          "complete (or keep going, see the Builder Base page), collect, upgrade, then sail back.", order=6)
+def run_builder_only(bot, state):
+    roles = bot.settings.get("builder", {}).get("on_roles", ["main", "loot", "both", "feeder"])
+    accounts = active_accounts(bot, roles)
+    if not accounts:
+        raise StopRun("No enabled accounts with the roles ticked for the Builder Base.")
+    rounds = bot.settings.get("repeat_rounds", 1)
+    n = 0
+    while rounds == 0 or n < rounds:
+        n += 1
+        for i, acc in enumerate(accounts):
+            bot.status(account=acc["name"], progress=f"{i + 1}/{len(accounts)}")
+            ok = with_recovery(bot, f"switch to {acc['name']}",
+                               lambda a=acc: account_actions.switch_to(bot, a, state))
+            if not ok:
+                continue
+            config.save_accounts(bot.accounts)
+            with_recovery(bot, f"Builder Base of {acc['name']}", lambda a=acc: builder_base.session(bot, a), attempts=2)
 
 
 @register("loot_all", "Loot all accounts",

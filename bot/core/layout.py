@@ -18,7 +18,10 @@ DEFAULT_LAYOUT = {
         "home.settings": [1855, 830],
         "home.chat": [65, 490],
         "home.army": [65, 830],
-        "home.safe": [1830, 420],          # empty forest, safe to tap to close popups
+        "home.safe": [1830, 420],          # home village: forest edge (NOT 330: that is the gems counter -> Shop)
+        "bb.safe": [1450, 38],             # Builder Base: sky/cliff above the island (the boat can be at the right edge)
+        "popup.shield_continue": [960, 902],
+        "shop.close": [1857, 66],
         "attack_menu.find_match": [273, 745],
         "attack_menu.close": [1400, 540],  # tapping the village beside the menu closes it
         "army.attack": [1620, 918],
@@ -41,6 +44,7 @@ DEFAULT_LAYOUT = {
         "bb.boat": [1620, 120],              # boat back home (Builder Base, zoomed out; top right)
         "bb.attack": [105, 975],
         "bb.builders_menu": [1080, 50],
+        "bb.lab_menu": [880, 50],
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
         "request.cancel": [768, 722],        # Cancel of the request window
         "top.lab_menu": [760, 50],           # laboratory counter -> research list
@@ -62,6 +66,7 @@ DEFAULT_LAYOUT = {
         "bb.elixir": [1600, 112, 230, 46],
         "bb.stars": [75, 900, 100, 42],      # star bonus "4/8" on the Attack button
         "bb.builders": [1075, 32, 70, 40],
+        "bb.lab": [875, 32, 70, 40],
         "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },

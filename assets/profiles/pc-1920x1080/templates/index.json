@@ -449,6 +449,21 @@
     ],
     "threshold": 0.85
   },
+  "boat/icon": {
+    "box": [
+      447,
+      748,
+      37,
+      34
+    ],
+    "region": [
+      0,
+      90,
+      1920,
+      810
+    ],
+    "threshold": 0.82
+  },
   "building/upgrade_button": {
     "box": [
       1150,
@@ -884,6 +899,36 @@
     ],
     "threshold": 0.85
   },
+  "popup/shield_continue": {
+    "box": [
+      885,
+      880,
+      155,
+      45
+    ],
+    "region": [
+      825,
+      820,
+      275,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "popup/shield_title": {
+    "box": [
+      830,
+      295,
+      260,
+      50
+    ],
+    "region": [
+      770,
+      235,
+      380,
+      170
+    ],
+    "threshold": 0.85
+  },
   "popup/speech_corner": {
     "box": [
       441,
@@ -1061,6 +1106,36 @@
       40,
       306,
       164
+    ],
+    "threshold": 0.85
+  },
+  "shop/close": {
+    "box": [
+      1822,
+      32,
+      72,
+      72
+    ],
+    "region": [
+      1762,
+      0,
+      158,
+      164
+    ],
+    "threshold": 0.85
+  },
+  "shop/title": {
+    "box": [
+      815,
+      175,
+      290,
+      60
+    ],
+    "region": [
+      755,
+      115,
+      410,
+      180
     ],
     "threshold": 0.85
   },

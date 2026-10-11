@@ -497,6 +497,8 @@ class ChoiceCard(QAbstractButton):
         self.accent = QColor(accent)
         self.badge = badge
         self.lines = lines
+        self.dense = False                  # small tile: icon + short title only (tight layouts, e.g. a grid)
+        self.short_title = title
         self._sel = Tween(self, ms=240, on_change=self._anim)
         self._hover = Tween(self, ms=160)
         self._shadow = QGraphicsDropShadowEffect(self)
@@ -512,6 +514,15 @@ class ChoiceCard(QAbstractButton):
     def set_badge(self, text):
         self.badge = text
         self.update()
+
+    def set_dense(self, dense, short_title=None):
+        """Dense = smaller icon tile, short title, no description or radio (selection shows by the border)."""
+        if short_title:
+            self.short_title = short_title
+        if dense != self.dense:
+            self.dense = dense
+            self.updateGeometry()
+            self.update()
 
     def _anim(self):
         a = self._sel.value
@@ -537,7 +548,10 @@ class ChoiceCard(QAbstractButton):
         super().changeEvent(e)
 
     def sizeHint(self):
-        return QSize(260, self.height())
+        return QSize(140 if self.dense else 260, self.height())
+
+    def minimumSizeHint(self):
+        return QSize(100 if self.dense else 180, self.height())
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -562,14 +576,30 @@ class ChoiceCard(QAbstractButton):
         p.drawPath(path)
 
         # icon tile
-        ts = 38.0
-        tile = QRectF(r.left() + 13, r.center().y() - ts / 2, ts, ts)
+        ts = 28.0 if self.dense else 38.0
+        tile = QRectF(r.left() + (9 if self.dense else 13), r.center().y() - ts / 2, ts, ts)
         tint = QColor(self.accent)
         tint.setAlphaF(0.15 + 0.08 * s)
         p.setPen(Qt.NoPen)
         p.setBrush(tint)
-        p.drawRoundedRect(tile, 10, 10)
-        icons.paint(p, self.icon_name, self.accent, tile.adjusted(9, 9, -9, -9))
+        p.drawRoundedRect(tile, ts * 0.27, ts * 0.27)
+        m = ts * 0.24
+        icons.paint(p, self.icon_name, self.accent, tile.adjusted(m, m, -m, -m))
+
+        if self.dense:
+            tx = tile.right() + 9
+            tf = T.font(9.5, QFont.DemiBold)
+            tfm = QFontMetrics(tf)
+            tw = r.right() - 8 - tx
+            p.setFont(tf)
+            p.setPen(T.mix(T.TEXT, T.GOLD_HI, s * 0.35))
+            p.drawText(QRectF(tx, r.top(), tw, r.height()), Qt.AlignLeft | Qt.AlignVCenter,
+                       tfm.elidedText(self.short_title, Qt.ElideRight, int(tw)))
+            if self.hasFocus():
+                p.setPen(QPen(T.qc(T.GOLD, 0.6), 1.5))
+                p.setBrush(Qt.NoBrush)
+                p.drawRoundedRect(r.adjusted(2, 2, -2, -2), 10, 10)
+            return
 
         # right side: badge or radio check
         right = r.right() - 14

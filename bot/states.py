@@ -14,11 +14,14 @@ log = logging.getLogger("bot")
 # first, then the village itself (the most common screen: checked early to save time; every
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
+    ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
     ("chat", ["chat/close"]),                     # clan chat open over the village
+    ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
     ("home", ["home/attack_button", "home/settings_button"]),
     ("daily", ["popup/daily_title"]),
+    ("shield_info", ["popup/shield_title"]),       # Magic Shield info: Continue only, NEVER "Remove"
     ("lab_window", ["lab/in_progress_title"]),     # laboratory after starting research (has a gems button!)
     ("upgrade_window", ["upgrade/confirm", "upgrade/close", "lab/close"]),   # any big window with a red X
     ("dialog", ["popup/speech_corner"]),          # event/tutorial character talking
@@ -65,7 +68,13 @@ def _close_any_popup(bot, frame):
             if m:
                 bot.tap_match(m, jitter=2)
                 return
-    bot.tap_point("home.safe", jitter=5)
+    _tap_empty(bot, frame)
+
+
+def _tap_empty(bot, frame):
+    """Tap an empty spot of whichever village is behind the popup (each has its own)."""
+    bb = vision.templates.has("bb/trophy_hammer") and vision.find(frame, "bb/trophy_hammer", any_brightness=True)
+    bot.tap_point("bb.safe" if bb else "home.safe", jitter=5)
 
 
 def surrender(bot):
@@ -138,11 +147,24 @@ def go_home(bot, timeout=60.0):
             if m:
                 bot.tap_match(m, jitter=1)          # never the Finish Now (gems / magic item) buttons
             else:
-                bot.tap_point("home.safe", jitter=3)
+                _tap_empty(bot, frame)
         elif state == "remove_dialog":
             bot.tap_point("dialog.cancel")
         elif state == "request_window":
             bot.tap_point("request.cancel")
+        elif state == "shop":
+            m = vision.find(frame, "shop/close") if vision.templates.has("shop/close") else None
+            bot.tap_match(m, jitter=1) if m else bot.tap_point("shop.close", jitter=0)
+        elif state == "shield_info":
+            m = vision.templates.has("popup/shield_continue") and vision.find(frame, "popup/shield_continue")
+            bot.tap_match(m) if m else bot.tap_point("popup.shield_continue")
+        elif state == "bb_home":
+            # in the Builder Base but the home village is wanted: sail back
+            from .actions import builder_base
+            try:
+                builder_base.travel(bot, "main")
+            except Exception as e:  # noqa: BLE001
+                log.warning("Could not sail back from the Builder Base: %s", e)
         elif state == "daily":
             # the X only works after claiming today's reward
             m = vision.templates.has("popup/daily_claim") and vision.find(frame, "popup/daily_claim")

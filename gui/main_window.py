@@ -26,6 +26,7 @@ from bot.runner import Runner, missing_templates
 from gui import theme as T
 from gui.accounts_tab import AccountsTab
 from gui.bridge import Bridge, Hotkeys, setup_logging
+from gui.builder_tab import BuilderTab
 from gui.components import Pill, label
 from gui.device_tab import DeviceTab
 from gui.donate_tab import DonateTab
@@ -46,6 +47,8 @@ PAGES = [
     ("Loot", "swords", "Loot settings", "When an account is full, which bases to attack and how to attack."),
     ("Donate", "gift", "Donate", "Clan Castle requests and what your Main account donates."),
     ("Village", "home", "Village", "Chores on each visit: collect resources, upgrade buildings, start research."),
+    ("Builder Base", "boat", "Builder Base", "The night village: Star Bonus attacks, collecting, upgrades and Star "
+     "Laboratory research."),
     ("Device", "monitor", "Device & settings", "Where the game runs, screen profile, hotkeys and behaviour."),
     ("Templates", "scan", "Templates", "Images the bot recognises. Re-capture one when Supercell changes a button."),
     ("Logs", "terminal", "Logs", "Everything the bot reported in this session."),
@@ -126,11 +129,12 @@ class MainWindow(QMainWindow):
         self.loot_tab = LootTab()
         self.donate_tab = DonateTab()
         self.village_tab = VillageTab()
+        self.builder_tab = BuilderTab()
         self.device_tab = DeviceTab()
         self.templates_tab = TemplatesTab()
         self.logs_tab = LogsTab()
         self.pages = [self.run_tab, self.accounts_tab, self.loot_tab, self.donate_tab, self.village_tab,
-                      self.device_tab]
+                      self.builder_tab, self.device_tab]
         self.views = [*self.pages, self.templates_tab, self.logs_tab]
 
         # ---------------- layout: sidebar | header + animated pages ----------------
@@ -285,6 +289,7 @@ class MainWindow(QMainWindow):
             layout.reload()
             self.templates_tab.refresh()
         self.run_tab.set_accounts(self.accounts)
+        self.run_tab.set_builder_after(self.settings.get("builder", {}).get("after_main", False))
         self._start_hotkeys()
         self.templates_tab.set_extra_items(self.settings.get("donate", {}).get("items", []))
         self._update_badges()
@@ -336,6 +341,13 @@ class MainWindow(QMainWindow):
                 self.toasts.show("info", "No accounts for chores", "Add your accounts on the Accounts page and "
                                  "check the roles ticked under “Do chores on” on the Village page.", 7000)
                 self.go(self.accounts_tab)
+                return
+        if mode == "builder_only":
+            bb_roles = self.settings.get("builder", {}).get("on_roles", ["main", "loot", "both", "feeder"])
+            if not [a for a in self.accounts if a.get("enabled") and a.get("role") in bb_roles]:
+                self.toasts.show("info", "No accounts for the Builder Base", "Add your accounts on the Accounts page "
+                                 "and check the roles ticked under “Builder Base for” on the Builder Base page.", 7000)
+                self.go(self.builder_tab if self.accounts else self.accounts_tab)
                 return
         self._set_running(True)
         status = lambda **kw: self.bridge.status.emit(kw)  # noqa: E731

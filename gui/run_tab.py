@@ -1,11 +1,12 @@
 """Dashboard: choose a mode and options, start/pause/stop, watch live stats and the log."""
 
+import math
 import re
 import time
 
 from PySide6.QtCore import QEvent, QTimer, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from bot.modes import MODES, load_all
 from gui import icons
@@ -25,16 +26,24 @@ WHEN_DONE = [("nothing", "Do nothing", "Leave the game open"),
 
 MODE_LOOK = {"loot_all": ("swords", T.GOLD), "loot_current": ("user", "#5cc8ff"),
              "loot_donate": ("gift", T.ELIXIR_HI), "donate_only": ("heart", "#ff7f9f"),
-             "chores": ("hammer", "#4fd1c5")}
+             "chores": ("hammer", "#4fd1c5"), "builder_only": ("boat", "#8c9bff")}
+# titles for the small two-column mode tiles (other modes use their own title)
+MODE_SHORT = {"loot_all": "Loot all", "loot_current": "Loot current", "loot_donate": "Loot + Donate",
+              "donate_only": "Donate only", "chores": "Village chores", "builder_only": "Builder Base"}
+LOOT_MODES = ("loot_all", "loot_current", "loot_donate")    # can visit the Builder Base after looting
 
-# "This run" counters: key, label. A counter is listed when the selected mode does that work, or once it is > 0.
-STATS = [("attacks", "Attacks"), ("searches", "Searches"), ("donated", "Donated"), ("upgrades", "Upgrades"),
-         ("research", "Research")]
+# "This run" counters: key, label, short label (narrow window). A counter is listed when the selected mode
+# does that work, or once it is > 0.
+STATS = [("attacks", "Attacks", "Attacks"), ("searches", "Searches", "Searches"), ("donated", "Donated", "Donated"),
+         ("bb_attacks", "Builder Base attacks", "BB attacks"), ("upgrades", "Upgrades", "Upgrades"),
+         ("research", "Research", "Research")]
 MODE_STATS = {"loot_all": ("attacks", "searches"), "loot_current": ("attacks", "searches"),
               "loot_donate": ("attacks", "searches", "donated"), "donate_only": ("donated",),
-              "chores": ("upgrades", "research")}
+              "chores": ("upgrades", "research"), "builder_only": ("bb_attacks",)}
 
-MODE_H, MODE_H_COMPACT = 58, 50          # mode card height; compact when the setup column would need to scroll
+# mode list density: (card height, gap, columns). The first that fits without scrolling the setup column wins;
+# the last one (two columns of small tiles) is for small windows.
+MODE_DENSITY = [(58, 8, 1), (50, 6, 1), (42, 8, 2)]
 
 
 def _clean(desc):
@@ -111,6 +120,8 @@ class RunTab(QWidget):
         self._paused = False
         self._waiting = False
         self._mode_title = ""
+        self._bb_after = False               # loot modes also loot the Builder Base (Builder Base page)
+        self._density = 0
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(16)
@@ -211,37 +222,56 @@ class RunTab(QWidget):
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         self.mode_buttons = {}
-        self.mode_box = QVBoxLayout()
-        self.mode_box.setSpacing(8)
+        self.mode_box = QGridLayout()
         self.mode_box.setContentsMargins(0, 0, 0, 0)
+        self.mode_box.setHorizontalSpacing(8)
+        h = MODE_DENSITY[0][0]
         for key, mode in sorted(MODES.items(), key=lambda kv: (not kv[1].ready, kv[1].order)):
             icon, color = MODE_LOOK.get(key, ("bolt", T.GOLD))
             b = ChoiceCard(mode.title, _clean(mode.description), icon, color,
-                           badge="" if mode.ready else "Coming soon", height=MODE_H)
-            b.setToolTip(_clean(mode.description))
+                           badge="" if mode.ready else "Coming soon", height=h)
+            b.short_title = MODE_SHORT.get(key, mode.title)
             b.setProperty("mode_key", key)
             b.setEnabled(mode.ready)
             self.mode_group.addButton(b)
             self.mode_buttons[key] = b
-            self.mode_box.addWidget(b)
+        self._place_modes(0)
         card.add(self.mode_box)
         self.mode_group.buttonToggled.connect(self._mode_changed)
 
+    def _modes_height(self, density):
+        h, gap, cols = MODE_DENSITY[density]
+        rows = math.ceil(len(self.mode_buttons) / cols)
+        return rows * h + max(0, rows - 1) * gap
+
+    def _place_modes(self, density):
+        """Lay the mode cards out in one column (full or compact cards) or two columns of small tiles."""
+        self._density = density
+        h, gap, cols = MODE_DENSITY[density]
+        dense = cols > 1
+        for b in self.mode_buttons.values():
+            self.mode_box.removeWidget(b)
+        for i, (key, b) in enumerate(self.mode_buttons.items()):
+            mode = MODES[key]
+            b.setFixedHeight(h)
+            b.set_dense(dense)
+            tip = _clean(mode.description)
+            b.setToolTip(f"<b>{mode.title}</b>{'' if mode.ready else ' (coming soon)'}<br>{tip}" if dense else tip)
+            self.mode_box.addWidget(b, i // cols, i % cols)
+        self.mode_box.setVerticalSpacing(gap)
+        for c in range(2):
+            self.mode_box.setColumnStretch(c, 1 if c < cols else 0)
+
     def _fit_modes(self):
-        """Use shorter mode cards when the setup column would otherwise need to scroll."""
-        n = len(self.mode_buttons)
-        if not n:
+        """Pick the roomiest mode list that lets the whole setup column fit without scrolling."""
+        if not self.mode_buttons:
             return
-        cur_h = next(iter(self.mode_buttons.values())).height()
-        cur_gap = self.mode_box.spacing()
-        content = self.left_scroll.widget()
-        need = content.sizeHint().height() + (MODE_H - cur_h) * n + (8 - cur_gap) * (n - 1)
-        compact = need > self.left_scroll.viewport().height()
-        h, gap = (MODE_H_COMPACT, 6) if compact else (MODE_H, 8)
-        if h != cur_h or gap != cur_gap:
-            for b in self.mode_buttons.values():
-                b.setFixedHeight(h)
-            self.mode_box.setSpacing(gap)
+        other = self.left_scroll.widget().sizeHint().height() - self._modes_height(self._density)
+        avail = self.left_scroll.viewport().height()
+        best = next((d for d in range(len(MODE_DENSITY)) if other + self._modes_height(d) <= avail),
+                    len(MODE_DENSITY) - 1)
+        if best != self._density:
+            self._place_modes(best)
 
     def _build_options(self, card):
         self.when_full = Combo(WHEN_FULL)
@@ -289,10 +319,6 @@ class RunTab(QWidget):
         lay.addWidget(self.acc_action)
         return card
 
-    @staticmethod
-    def _metric_row(name, widget):
-        return hbox(label(name, "muted"), None, widget)
-
     def _build_session(self):
         card = _frame()
         lay = QVBoxLayout(card)
@@ -307,12 +333,16 @@ class RunTab(QWidget):
         lay.addLayout(hbox(label("THIS RUN", "caption"), None, clock, self.run_time, spacing=5))
         self.stat_values = {}
         self.stat_rows = {}
-        for key, title in STATS:
+        self.stat_titles = {}
+        for key, title, _short in STATS:
             v = CountLabel(role="metric")
+            name = label(title, "muted")
+            name.setToolTip(title)
             row = QWidget()
-            row.setLayout(self._metric_row(title, v))
+            row.setLayout(hbox(name, None, v))
             self.stat_values[key] = v
             self.stat_rows[key] = row
+            self.stat_titles[key] = name
             lay.addWidget(row)
         self.attacks = self.stat_values["attacks"]
         self.searches = self.stat_values["searches"]
@@ -322,7 +352,10 @@ class RunTab(QWidget):
 
     def _update_stat_rows(self):
         """List the counters the selected mode produces, plus any other that is above 0."""
-        relevant = MODE_STATS.get(self.mode_key() if hasattr(self, "mode_group") else "", ("attacks", "searches"))
+        mode = self.mode_key() if hasattr(self, "mode_group") else ""
+        relevant = MODE_STATS.get(mode, ("attacks", "searches"))
+        if self._bb_after and mode in LOOT_MODES:
+            relevant = (*relevant, "bb_attacks")
         for key, row in self.stat_rows.items():
             v = self.stat_values[key].value()
             row.setVisible(key in relevant or bool(v))
@@ -366,6 +399,7 @@ class RunTab(QWidget):
         self.set_accounts(accounts)
         self.current_account.setCurrentText(settings.get("current_account", ""))
         self.current_th.setValue(settings.get("current_th", 0) or 0)
+        self._bb_after = bool((settings.get("builder") or {}).get("after_main", False))
         self._mode_changed()
 
     def apply(self, settings, accounts):
@@ -383,6 +417,12 @@ class RunTab(QWidget):
         self.current_account.addItems([a["name"] for a in accounts])
         self.current_account.setCurrentText(text)
         self.current_account.blockSignals(False)
+
+    def set_builder_after(self, on):
+        """Loot modes also loot the Builder Base (Builder Base page): list its attacks under "This run"."""
+        if bool(on) != self._bb_after:
+            self._bb_after = bool(on)
+            self._update_stat_rows()
 
     def set_hotkeys(self, keys):
         self._keys = dict(keys)
@@ -538,6 +578,8 @@ class RunTab(QWidget):
                 self.rows[key].control.setFixedWidth(160 if narrow else 180)
             for v in [c.value for c in self.res_cards.values()] + list(self.scout.values()):
                 v.set_fmt(fmt_short if narrow else fmt_int)
+            for key, title, short in STATS:
+                self.stat_titles[key].setText(short if narrow else title)
             self.set_hotkeys(self._keys)
         super().resizeEvent(e)
 

@@ -24,21 +24,24 @@ from ..states import detect, go_home
 
 log = logging.getLogger("bot")
 
-# Builder-hall-first priority (part of the name is enough)
-GEAR_UP_ORDER = ["Builder Hall", "Cannon", "Archer Tower", "Double Cannon", "Mortar", "Multi Mortar",
+BB_MARK = "bb/trophy_hammer"     # the hammer by the trophy count: only shown in the Builder Base
+
+# Builder-Hall-first priority: the Builder Hall, then NEW buildings (unlocks), then the
+# Cannon / Archer Tower / Mortar line (needed for Gear Up), then the rest (part of a name is enough).
+GEAR_UP_ORDER = ["Builder Hall", "__new__", "Cannon", "Archer Tower", "Mortar", "Double Cannon", "Multi Mortar",
                  "Crusher", "Air Bombs", "Firecrackers", "Guard Post", "Roaster", "Giant Cannon",
                  "Mega Tesla", "Lava Launcher", "Hidden Tesla", "Builder Barracks", "Elixir Storage",
                  "Gold Storage", "Clock Tower", "Star Laboratory"]
 
 
 def is_builder_base(frame):
-    return vision.find(frame, "bb/attack_button") is not None
+    return vision.find(frame, BB_MARK) is not None
 
 
 def where(bot):
     """'main', 'builder' or None (unknown)."""
     f = bot.shot()
-    if vision.find(f, "bb/attack_button"):
+    if vision.find(f, BB_MARK):
         return "builder"
     if detect(f) == "home":
         return "main"
@@ -50,7 +53,7 @@ def go_home_bb(bot, timeout=60.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         f = bot.shot()
-        if vision.find(f, "bb/attack_button"):
+        if vision.find(f, BB_MARK):
             return True
         for key, tap in (("bb/star_bonus_okay", None), ("bb/return_home", None), ("bb/menu_close", None),
                          ("upgrade/close", None), ("lab/close", None)):
@@ -62,30 +65,28 @@ def go_home_bb(bot, timeout=60.0):
         else:
             if detect(f) == "home":
                 return False                         # we are in the main village
-            bot.tap_point("home.safe", jitter=5)
+            bot.tap_point("bb.safe", jitter=5)
         control.sleep(0.6)
     return False
 
 
 def _find_boat(bot, here):
-    """Find and return the boat of the current village. The camera can be anywhere, so zoom out
-    and look; if it is not on screen, pan in a fixed pattern (the boat is at an island edge)."""
-    keys = ["home/boat", "home/boat_bubble"] if here == "main" else ["bb/boat", "bb/boat_bubble"]
-    full = (0, 0, 1920, 1080)
+    """Find the boat of the current village. Its little ship icon (in a bubble above the boat)
+    is the same in every scenery and both villages, only its size changes with the zoom, so
+    it is searched at several sizes. If it is not on screen, pan in a fixed pattern."""
     pans = [None, ((1300, 300), (600, 800)), ((1300, 300), (600, 800)), ((600, 800), (1300, 300)),
             ((600, 800), (1300, 300)), ((600, 800), (1300, 300)), ((700, 300), (1300, 800)),
             ((1300, 800), (700, 300)), ((1300, 800), (700, 300))]
     for pan in pans:
         control.checkpoint()
+        if detect(bot.shot()) not in ("home", "bb_home"):
+            return None                              # not on a village (a popup opened): never swipe over it
         if pan:
             bot.swipe(space.center(*pan[0]), space.center(*pan[1]), 600)
             control.sleep(0.6)
-        f = bot.shot()
-        for k in keys:
-            if vision.templates.has(k):
-                m = vision.find(f, k, region=full)
-                if m:
-                    return m if k.endswith("boat") else type(m)(m.x, m.y + 70, m.score, m.box)   # bubble -> boat
+        m, sc = vision.find_scaled(bot.shot(), "boat/icon")
+        if m:
+            return type(m)(m.x, int(m.y + 80 * sc), m.score, m.box)    # the boat is under its icon
     return None
 
 
@@ -102,7 +103,7 @@ def travel(bot, to):
         here = where(bot)
         if here == to:
             return True
-    bot.tap_point("home.safe", jitter=5)            # deselect anything first
+    bot.tap_point("home.safe" if here == "main" else "bb.safe", jitter=5)    # deselect anything first
     bot.device.zoom_out()
     control.sleep(0.5)
     boat = _find_boat(bot, here)
@@ -343,7 +344,7 @@ def upgrade(bot, max_count=1):
         def rank(r):
             name = r["name"].lower().replace(" ", "")
             for i, p in enumerate(prio):
-                if p.lower().replace(" ", "") in name:
+                if (p == "__new__" and r.get("new")) or (p != "__new__" and p.lower().replace(" ", "") in name):
                     return i
             return len(prio) + (0 if r["section"] == "suggested" else 1)
 
@@ -358,18 +359,18 @@ def upgrade(bot, max_count=1):
             break
         if not pick:
             log.info("Builder Base: no affordable upgrade (%d listed)", len(rows))
-            village.close_menu(bot)
+            village.close_menu(bot, "bb.safe")
             break
         bot.tap(*pick["tap"], jitter=2)
         bot.sleep(1.2)
         up = bot.wait("building/upgrade_button", 4)
         if not up:
-            village.close_menu(bot)
+            village.close_menu(bot, "bb.safe")
             break
         bot.tap_match(up)
         bot.sleep(1.2)
         ok = village._confirm(bot, pick, "builders", home=go_home_bb)
-        village.close_menu(bot)
+        village.close_menu(bot, "bb.safe")
         if not ok:
             break
         started += 1
@@ -387,3 +388,90 @@ def collect(bot):
             if ms:
                 bot.tap_match(ms[0], jitter=2)
                 bot.sleep(0.6)
+
+
+def research(bot):
+    """Start one Star Laboratory research if it is free (Builder Base)."""
+    from . import village
+    if not go_home_bb(bot, 15):
+        return False
+    counter = vision.digits.read_fraction(bot.shot(), bot.layout.region("bb.lab"))
+    if not counter or counter[0] <= 0:
+        log.info("Builder Base: Star Laboratory busy")
+        return False
+    bot.tap_point("bb.lab_menu")
+    bot.sleep(1.0)
+    rows = village.parse_menu(bot.shot(), bot.layout.point("bb.lab_menu")[0])
+    st = status(bot)
+    skip = bot.settings.get("builder", {}).get("research_skip", [])
+    for r in rows:
+        have = st.get(r["res"])
+        if r["res"] in ("gold", "elixir") and not r["red"] and have and r["cost"] <= have \
+                and not village._skipped(r["name"], skip):
+            bot.tap(*r["tap"], jitter=2)
+            bot.sleep(1.5)
+            ok = village._confirm(bot, dict(r, have=have), "lab", home=go_home_bb)
+            go_home_bb(bot, 20)
+            if ok:
+                bot.stats["research"] = bot.stats.get("research", 0) + 1
+            return ok
+    log.info("Builder Base: no affordable research (%d listed)", len(rows))
+    village.close_menu(bot, "bb.safe")
+    return False
+
+
+def session(bot, account):
+    """A Builder Base visit for this account: sail there, collect, attack until the Star Bonus is
+    done (and optionally keep going), stop early if storages are full or stop growing, upgrade,
+    research, sail back. Returns False if the account has no Builder Base."""
+    cfg = bot.settings.get("builder", {})
+    name = account.get("name", "?")
+    try:
+        travel(bot, "builder")
+    except BotError as e:
+        log.info("%s: %s. Skipping the Builder Base.", name, e)
+        go_home(bot)
+        return False
+    bot.status(action="Builder Base")
+    if cfg.get("collect", True):
+        collect(bot)
+    attacks, stuck, prev = 0, 0, None
+    max_attacks = cfg.get("max_attacks", 20)
+    while True:
+        control.checkpoint()
+        st = status(bot)
+        bot.status(account=name, action="Builder Base",
+                   resources={"gold": st.get("gold"), "elixir": st.get("elixir"), "dark": None})
+        if full(bot, account, st):
+            log.info("%s Builder Base: storages full", name)
+            break
+        if bonus_done(bot, st) and not cfg.get("after_bonus", False):
+            log.info("%s Builder Base: Star Bonus complete (%s/%s)", name, *st["stars"])
+            break
+        if max_attacks and attacks >= max_attacks:
+            log.info("%s Builder Base: attack limit (%d) reached", name, max_attacks)
+            break
+        if prev is not None and bonus_done(bot, st):
+            grew = any((st.get(r) or 0) > (prev.get(r) or 0) for r in ("gold", "elixir"))
+            stuck = 0 if grew else stuck + 1
+            if stuck >= cfg.get("stuck_attacks", 3):
+                log.info("%s Builder Base: storages stopped growing: treating as full", name)
+                break
+        prev = st
+        try:
+            attack(bot)
+            attacks += 1
+        except BotError as e:
+            log.warning("%s Builder Base attack: %s", name, e)
+            bot.save_error("bb-attack")
+            if not go_home_bb(bot, 45):
+                break
+    if cfg.get("upgrade", False):
+        upgrade(bot, cfg.get("max_upgrades", 1))
+    if cfg.get("research", False):
+        research(bot)
+    try:
+        travel(bot, "main")
+    except BotError as e:
+        log.warning("%s: %s", name, e)
+    return True

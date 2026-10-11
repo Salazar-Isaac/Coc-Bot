@@ -217,6 +217,29 @@ def find(frame, key, threshold=None, region=None, any_brightness=False):
     return best
 
 
+def find_scaled(frame, key, scales=None, threshold=None, region=None):
+    """Like find(), but tries the template at several sizes (for things drawn at different
+    zoom levels, e.g. the boat icon). Returns (Match, scale) or (None, None)."""
+    tpl0 = templates.image(key)
+    meta = templates.meta(key)
+    if region is None and meta.get("region"):
+        region = space.region(*meta["region"])
+    area, ox, oy = _crop(frame, region)
+    thr = threshold if threshold is not None else meta.get("threshold", DEFAULT_THRESHOLD)
+    best = (None, None)
+    for sc in scales or [0.6 + 0.05 * i for i in range(17)]:
+        tpl = cv2.resize(tpl0, None, fx=sc, fy=sc, interpolation=cv2.INTER_AREA if sc < 1 else cv2.INTER_LINEAR)
+        if area.shape[0] < tpl.shape[0] or area.shape[1] < tpl.shape[1]:
+            continue
+        res = cv2.matchTemplate(area, tpl, cv2.TM_CCOEFF_NORMED)
+        _, s, _, loc = cv2.minMaxLoc(res)
+        if s >= thr and (best[0] is None or s > best[0].score):
+            h, w = tpl.shape[:2]
+            x, y = loc[0] + ox, loc[1] + oy
+            best = (Match(x + w // 2, y + h // 2, float(s), (x, y, w, h)), sc)
+    return best
+
+
 def score(frame, key, region=None):
     return max(float(_coarse_fine(frame, k, region)[0]) for k in (templates.variants(key) or [key]))
 

@@ -170,18 +170,20 @@ def parse_menu(frame, cx):
             continue                                 # no name, or the row is cut off at the bottom
         if min(c for _, _, c in parts) < 0.8:
             continue                                 # unsure what it is: never upgrade a guess
-        name = re.sub(r"^New\s*", "", " ".join(t for t, _, _ in parts)).strip()
+        raw_name = " ".join(t for t, _, _ in parts)
+        is_new = bool(re.match(r"^\s*New", raw_name))
+        name = re.sub(r"^New\s*", "", raw_name).strip()
         if not name:
             continue
         nbox = parts[0][1]
-        out.append({"name": name, "cost": r["cost"], "res": _icon_resource(frame, r["box"]),
+        out.append({"name": name, "new": is_new, "cost": r["cost"], "res": _icon_resource(frame, r["box"]),
                     "red": _is_red(frame, r["box"]), "section": r["section"],
                     "tap": (nbox[0] + min(nbox[2], 160) // 2, nbox[1] + nbox[3] // 2)})
     return out
 
 
-def close_menu(bot):
-    bot.tap_point("home.safe", jitter=5)
+def close_menu(bot, point="home.safe"):
+    bot.tap_point(point, jitter=5)
     bot.sleep(0.5)
 
 

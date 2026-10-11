@@ -84,6 +84,22 @@ DEFAULT_SETTINGS = {
         "reserve": {"gold": 0, "elixir": 0, "dark": 0},     # never spend below these
         "on_roles": ["main", "loot", "both", "feeder"],      # which accounts get chores
     },
+    "builder": {
+        "after_main": False,                # loot modes: after an account's home village is full, loot its Builder Base
+        "after_bonus": False,               # keep attacking after the daily Star Bonus is complete
+        "max_attacks": 20,                  # safety limit per visit (0 = none)
+        "stuck_attacks": 3,                 # storages not growing after this many attacks = full
+        "full_margin": 50000,               # Builder Base storages count as full this close to capacity
+        "collect": True,
+        "upgrade": False,                   # use free Builder Base builders
+        "gear_up": True,                    # Builder Hall first, then new buildings, Cannon/Archer Tower/Mortar
+        "max_upgrades": 1,
+        "research": False,                  # Star Laboratory
+        "upgrade_skip": [],
+        "research_skip": [],
+        "zoom_out": True,
+        "on_roles": ["main", "loot", "both", "feeder"],
+    },
     "hotkeys": {"continue": "f8", "pause": "f9", "stop": "f10"},
     "minimize_on_start": True,
     "save_error_screenshots": True,
