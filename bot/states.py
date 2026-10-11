@@ -54,7 +54,7 @@ ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/contin
 
 # The game's own dialogs (dark box, light-blue capital buttons): connection lost -> TRY AGAIN,
 # another device opened this account -> RELOAD, idle too long -> RELOAD GAME.
-RELOAD_KEYS = ["popup/try_again", "popup/reload_device", "popup/reload"]
+RELOAD_KEYS = ["popup/try_again", "popup/reload", "popup/reload_device"]   # RELOAD GAME before its prefix RELOAD
 SYSTEM_TEXT = [("try again", "popup/try_again"), ("reload game", "popup/reload"), ("reload", "popup/reload_device")]
 SYSTEM_REGION = (160, 120, 1600, 840)
 DIALOG_BGR = (30, 28, 25)          # the flat dark grey of those dialogs
