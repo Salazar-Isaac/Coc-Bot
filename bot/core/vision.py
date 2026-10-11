@@ -9,6 +9,7 @@ with confidence=, without re-taking a screenshot for every image).
 
 import json
 import os
+import re
 import threading
 from dataclasses import dataclass
 
@@ -227,17 +228,17 @@ class DigitReader:
         out = []
         if os.path.isdir(profile.digits):
             for name in sorted(os.listdir(profile.digits)):
-                if name.endswith(".png") and name[0].isdigit():
+                if name.endswith(".png") and (name[0].isdigit() or name.startswith("slash")):
                     img = cv2.imdecode(np.fromfile(os.path.join(profile.digits, name), dtype=np.uint8),
                                        cv2.IMREAD_GRAYSCALE)
-                    out.append((name[0], cv2.resize(img, self.SIZE)))
+                    out.append(("/" if name.startswith("slash") else name[0], cv2.resize(img, self.SIZE)))
         self._templates = out
 
     @property
     def ready(self):
         if self._templates is None:
             self._load()
-        return len({d for d, _ in self._templates}) == 10
+        return len({d for d, _ in self._templates if d.isdigit()}) == 10
 
     def _normalise(self, glyph):
         h, w = glyph.shape
@@ -284,9 +285,16 @@ class DigitReader:
             found.pop(0)
         while found and found[-1][1] < min_score:
             found.pop()
-        if not found or any(s < min_score for _, s in found):
+        if not found or any(s < min_score for _, s in found) or any(d == "/" for d, _ in found):
             return None
         return int("".join(d for d, _ in found))
+
+    def read_fraction(self, frame, region, min_score=0.6, min_level=None):
+        """'34/50' -> (34, 50), or None."""
+        found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level)]
+        text = "".join(d for d, s in found if s >= min_score)
+        m = re.fullmatch(r"(\d+)/(\d+)", text)
+        return (int(m.group(1)), int(m.group(2))) if m else None
 
 
 digits = DigitReader()

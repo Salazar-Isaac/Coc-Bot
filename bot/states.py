@@ -14,6 +14,8 @@ log = logging.getLogger("bot")
 STATES = [
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
     ("daily", ["popup/daily_title"]),
+    ("lab_window", ["lab/in_progress_title"]),     # laboratory after starting research (has a gems button!)
+    ("upgrade_window", ["upgrade/confirm"]),
     ("dialog", ["popup/speech_corner"]),          # event/tutorial character talking
     ("switcher", ["sid/switch_id_label"]),
     ("settings", ["settings/title"]),
@@ -117,6 +119,13 @@ def go_home(bot, timeout=60.0):
             bot.tap_point("donate.close", jitter=3)
         elif state == "chat":
             bot.tap_point("chat.close", jitter=2)
+        elif state in ("lab_window", "upgrade_window"):
+            key = "lab/close" if state == "lab_window" else "upgrade/close"
+            m = vision.templates.has(key) and vision.find(frame, key)
+            if m:
+                bot.tap_match(m, jitter=1)
+            else:
+                bot.tap_point("home.safe", jitter=3)
         elif state == "daily":
             # the X only works after claiming today's reward
             m = vision.templates.has("popup/daily_claim") and vision.find(frame, "popup/daily_claim")

@@ -66,6 +66,18 @@ DEFAULT_SETTINGS = {
         # what the main account donates, in priority order (icons captured as templates "donate/<name>")
         "items": [],
     },
+    "village": {
+        "collect": True,                    # collectors + loot cart when arriving on an account
+        "upgrade_buildings": False,         # spend resources on builder upgrades before leaving
+        "research": False,                  # start laboratory research before leaving
+        "max_upgrades": 2,                  # building upgrades started per visit
+        "include_other": True,              # also consider "Other upgrades", not only "Suggested"
+        "upgrade_skip": ["Wall", "Barbarian King", "Archer Queen", "Grand Warden", "Royal Champion",
+                         "Minion Prince", "Dragon Duke"],   # heroes stay usable for attacks
+        "research_skip": [],
+        "reserve": {"gold": 0, "elixir": 0, "dark": 0},     # never spend below these
+        "on_roles": ["main", "loot", "both", "feeder"],      # which accounts get chores
+    },
     "hotkeys": {"continue": "f8", "pause": "f9", "stop": "f10"},
     "minimize_on_start": True,
     "save_error_screenshots": True,

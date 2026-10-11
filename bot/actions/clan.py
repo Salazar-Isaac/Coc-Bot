@@ -12,6 +12,7 @@ Screens (Google Play Games 1920x1080, all captured as templates):
 """
 
 import logging
+import re
 import time
 
 import cv2
@@ -22,6 +23,7 @@ from ..core.context import BotError
 from ..core.control import control
 from ..core.space import space
 from ..states import go_home
+from . import troops
 
 log = logging.getLogger("bot")
 
@@ -159,7 +161,15 @@ def donate_buttons(frame):
 
 
 def _donate_items(settings):
-    return [i for i in settings["donate"].get("items", []) if i.get("enabled", True) and i.get("template")]
+    out = []
+    for i in settings["donate"].get("items", []):
+        if not (i.get("enabled", True) and i.get("template")):
+            continue
+        i = dict(i)
+        i["category"] = i.get("category") or troops.category(i.get("name", ""))
+        i["space"] = int(i.get("space") or troops.space_of(i.get("name", "")))
+        out.append(i)
+    return out
 
 
 def _donated_strip(frame):
@@ -168,22 +178,68 @@ def _donated_strip(frame):
     return frame[y:y + h, x:x + w].astype(np.int16)
 
 
-def fill_request(bot, items):
-    """Donate window is open: tap items in priority order. Returns the number of units donated
-    (a tap counts only if the 'donated' row changed, e.g. not when the CC is full)."""
+def _fraction(frame, box):
+    f = vision.digits.read_fraction(frame, box)
+    if f:
+        return f
+    text, _ = vision.text_reader.read_line(frame, box)
+    m = re.search(r"(\d+)\s*/\s*(\d+)", text.replace(" ", ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def read_request(frame, button):
+    """What a request card says, from its Donate button's position:
+    {"name", "message", "troop": (have, max), "spell": (...), "siege": (...)}."""
+    bx, by = button.x, button.y
+    name, _ = vision.text_reader.read_line(frame, (max(0, bx - 420), by - 152, 380, 38))
+    msg, _ = vision.text_reader.read_line(frame, (max(0, bx - 432), by - 88, 470, 40))
+    return {
+        "name": name.strip(),
+        "message": msg.strip(),
+        "troop": _fraction(frame, (max(0, bx - 374), by - 16, 84, 32)),
+        "spell": _fraction(frame, (max(0, bx - 236), by - 16, 64, 32)),
+        "siege": _fraction(frame, (max(0, bx - 140), by - 16, 56, 32)),
+    }
+
+
+def _space_left(req):
+    left = {}
+    for cat in ("troop", "spell", "siege"):
+        f = req.get(cat)
+        left[cat] = max(0, f[1] - f[0]) if f else None      # None = unknown: let the game decide
+    return left
+
+
+def plan(req, items):
+    """Order the items for this request: ones named in the message first, then your priority.
+    Items of a full category are left out. Returns (items, space left, asked_for_something)."""
+    left = _space_left(req)
+    usable = [i for i in items if left.get(i["category"]) != 0]
+    asked = [i for i in usable if troops.wants(req.get("message"), i)]
+    if asked:
+        return asked + [i for i in usable if i not in asked], left, True
+    return usable, left, False
+
+
+def fill_request(bot, items, left=None):
+    """Donate window is open: donate items in order until each category's space is used.
+    Returns the number of units donated. A tap counts only if the 'donated' row changed."""
+    left = dict(left or {})
     donated = 0
     for item in items:
-        key = item["template"]
+        key, cat, size = item["template"], item.get("category", "troop"), item.get("space", 1)
         if not vision.templates.has(key):
             continue
         for _ in range(max(1, int(item.get("clicks", 1)))):
             control.checkpoint()
+            if left.get(cat) is not None and left[cat] < size:
+                break                               # this unit no longer fits
             frame = bot.shot()
             if not vision.find(frame, "donate/window_title"):
                 return donated                      # window closed itself: request filled
             m = _active(frame, key)
             if not m:
-                break                               # not available / not wanted by this request
+                break                               # not trained / not available
             before = _donated_strip(frame)
             bot.tap_match(m, jitter=2)
             time.sleep(0.3)
@@ -191,17 +247,25 @@ def fill_request(bot, items):
             if not vision.find(after, "donate/window_title"):
                 return donated + 1                  # that tap filled the request and closed the window
             if np.abs(_donated_strip(after) - before).mean() < 2:
-                break                               # no room for this item in the request
+                break                               # the game refused (no room for this unit)
             donated += 1
+            if left.get(cat) is not None:
+                left[cat] -= size
     return donated
+
+
+def _is_mine(bot, name):
+    from .account import same_name
+    return any(same_name(a["name"], name) for a in bot.accounts)
 
 
 def donate_all(bot, settings, max_requests=60):
     """Main account: donate to every open request in the chat, scrolling up through older
-    messages until no new Donate buttons appear. Returns the number of donations."""
+    messages until no new Donate buttons appear. Returns the number of units donated."""
     items = _donate_items(settings)
     if not items:
         raise BotError("Nothing to donate: add items in the Donate tab")
+    only_mine = settings["donate"].get("donate_to", "all") == "mine"
     open_chat(bot)
     total, handled = 0, 0
     page, empty_pages = 0, 0
@@ -220,12 +284,28 @@ def donate_all(bot, settings, max_requests=60):
             b = buttons[0]
             tried.add((page, b.y // 12))
             handled += 1
+            req = read_request(frame, b)
+            who = req["name"] or "?"
+            if only_mine and req["name"] and not _is_mine(bot, req["name"]):
+                log.info("Skipping %s's request (not one of your accounts)", who)
+                continue
+            order, left, asked = plan(req, items)
+            log.info("Request from %s%s - space left: troops %s, spells %s, siege %s", who,
+                     f' ("{req["message"]}")' if req["message"] else "",
+                     *(("?" if left[c] is None else left[c]) for c in ("troop", "spell", "siege")))
+            if not order:
+                log.info("Nothing to give %s: request full or nothing fits", who)
+                continue
+            if asked:
+                log.info("%s asks for: %s", who,
+                         ", ".join(i["name"] for i in order if troops.wants(req["message"], i)))
             bot.tap_match(b)
             if not bot.wait("donate/window_title", 4):
                 continue
-            n = fill_request(bot, items)
+            n = fill_request(bot, order, left)
             total += n
-            log.info("Donated %d unit(s) to a request", n)
+            bot.stats["donated"] = bot.stats.get("donated", 0) + n
+            log.info("Donated %d unit(s) to %s", n, who)
             if bot.exists("donate/window_title"):
                 bot.tap_point("donate.close")          # tap beside the window to close it
                 bot.sleep(0.6)

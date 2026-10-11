@@ -15,6 +15,7 @@ import time
 
 import cv2
 import numpy as np
+import win32api
 
 from .space import space
 from .window import GameWindow
@@ -146,6 +147,8 @@ class PcDevice(Device):
 
         left, right = edge(col, w // 4), edge(col, w // 4, rev=True)
         top, bottom = edge(row, h // 4), edge(row, h // 4, rev=True)
+        left, right = (left if left >= 30 else 0), (right if right >= 30 else 0)    # sidebar is ~80 px
+        top, bottom = (top if top >= 20 else 0), (bottom if bottom >= 20 else 0)    # title bar ~45 px
         vw, vh = w - left - right, h - top - bottom
         if vw < w * 0.5 or vh < h * 0.5 or not (1.2 <= vw / vh <= 2.4):
             return 0, 0, w, h
@@ -166,7 +169,9 @@ class PcDevice(Device):
         # (re)measure the game area when the window size changes; skip dark frames
         # (loading / black screens) so a black picture is not mistaken for chrome
         if self._viewport_for != (w, h) and img.mean() > 40:
-            self._viewport = self.find_viewport(img)
+            sw, sh = win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+            # fullscreen has no Google Play Games chrome; only windowed mode does
+            self._viewport = (0, 0, w, h) if (w, h) == (sw, sh) else self.find_viewport(img)
             self._viewport_for = (w, h)
             if self._viewport != (0, 0, w, h):
                 log.info("Game area inside the window: %s (window %dx%d)", self._viewport, w, h)

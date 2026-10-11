@@ -164,6 +164,21 @@
     ],
     "threshold": 0.85
   },
+  "building/upgrade_button": {
+    "box": [
+      1150,
+      852,
+      110,
+      72
+    ],
+    "region": [
+      300,
+      790,
+      1320,
+      160
+    ],
+    "threshold": 0.85
+  },
   "chat/challenge": {
     "box": [
       318,
@@ -371,6 +386,36 @@
       380,
       172,
       226
+    ],
+    "threshold": 0.85
+  },
+  "lab/close": {
+    "box": [
+      1555,
+      38,
+      80,
+      75
+    ],
+    "region": [
+      1495,
+      0,
+      200,
+      173
+    ],
+    "threshold": 0.85
+  },
+  "lab/in_progress_title": {
+    "box": [
+      720,
+      52,
+      475,
+      46
+    ],
+    "region": [
+      660,
+      0,
+      595,
+      158
     ],
     "threshold": 0.85
   },
@@ -656,6 +701,111 @@
       325,
       240,
       205
+    ],
+    "threshold": 0.85
+  },
+  "upgrade/close": {
+    "box": [
+      1668,
+      38,
+      80,
+      75
+    ],
+    "region": [
+      1608,
+      0,
+      200,
+      173
+    ],
+    "threshold": 0.85
+  },
+  "upgrade/confirm": {
+    "box": [
+      1285,
+      882,
+      140,
+      34
+    ],
+    "region": [
+      900,
+      820,
+      900,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "village/bubble_dark": {
+    "box": [
+      1300,
+      511,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "village/bubble_elixir": {
+    "box": [
+      806,
+      76,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "village/bubble_gold": {
+    "box": [
+      931,
+      216,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "village/collect_button": {
+    "box": [
+      905,
+      890,
+      112,
+      32
+    ],
+    "region": [
+      500,
+      780,
+      920,
+      200
+    ],
+    "threshold": 0.85
+  },
+  "village/loot_cart_label": {
+    "box": [
+      190,
+      307,
+      70,
+      26
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
     ],
     "threshold": 0.85
   }

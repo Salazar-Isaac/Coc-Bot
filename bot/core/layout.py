@@ -35,6 +35,8 @@ DEFAULT_LAYOUT = {
         "chat.scroll_to": [300, 760],
         "donate.close": [300, 240],          # a spot in the chat beside the donate window
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
+        "top.builders_menu": [960, 50],      # builder counter -> upgrades list
+        "top.lab_menu": [760, 50],           # laboratory counter -> research list
     },
     "regions": {
         "home.gold": [1600, 28, 230, 44],
@@ -47,6 +49,8 @@ DEFAULT_LAYOUT = {
         "sid.list": [1345, 520, 560, 560],
         "sid.name_column": [1460, 520, 320, 560],
         "battle.troop_bar": [260, 915, 1660, 160],
+        "top.builders": [950, 32, 66, 40],   # "1/5" free builders
+        "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },
 }
 
