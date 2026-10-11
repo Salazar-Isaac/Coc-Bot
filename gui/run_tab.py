@@ -3,11 +3,12 @@
 import re
 import time
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QEvent, QTimer, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from bot.modes import MODES, load_all
+from gui import icons
 from gui import theme as T
 from gui.components import (AnimatedBar, Avatar, Banner, Button, Card, ChoiceCard, CountLabel, ElidedLabel, IconButton,
                             Pill, ResourceIcon, SettingRow, Toggle, divider, fmt_int, fmt_short, hbox, label, scroll)
@@ -23,7 +24,17 @@ WHEN_DONE = [("nothing", "Do nothing", "Leave the game open"),
              ("sleep", "Put the PC to sleep", "Sleep when the run ends")]
 
 MODE_LOOK = {"loot_all": ("swords", T.GOLD), "loot_current": ("user", "#5cc8ff"),
-             "loot_donate": ("gift", T.ELIXIR_HI), "donate_only": ("heart", "#ff7f9f")}
+             "loot_donate": ("gift", T.ELIXIR_HI), "donate_only": ("heart", "#ff7f9f"),
+             "chores": ("hammer", "#4fd1c5")}
+
+# "This run" counters: key, label. A counter is listed when the selected mode does that work, or once it is > 0.
+STATS = [("attacks", "Attacks"), ("searches", "Searches"), ("donated", "Donated"), ("upgrades", "Upgrades"),
+         ("research", "Research")]
+MODE_STATS = {"loot_all": ("attacks", "searches"), "loot_current": ("attacks", "searches"),
+              "loot_donate": ("attacks", "searches", "donated"), "donate_only": ("donated",),
+              "chores": ("upgrades", "research")}
+
+MODE_H, MODE_H_COMPACT = 58, 50          # mode card height; compact when the setup column would need to scroll
 
 
 def _clean(desc):
@@ -131,6 +142,7 @@ class RunTab(QWidget):
         ll.addWidget(setup, 1)
         self.left_scroll = scroll(left, margins=(0, 0, 10, 0))
         self.left_scroll.setFixedWidth(404)
+        self.left_scroll.viewport().installEventFilter(self)
         body.addWidget(self.left_scroll)
 
         # ---------------- right: stats + log ----------------
@@ -199,17 +211,37 @@ class RunTab(QWidget):
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         self.mode_buttons = {}
+        self.mode_box = QVBoxLayout()
+        self.mode_box.setSpacing(8)
+        self.mode_box.setContentsMargins(0, 0, 0, 0)
         for key, mode in sorted(MODES.items(), key=lambda kv: (not kv[1].ready, kv[1].order)):
             icon, color = MODE_LOOK.get(key, ("bolt", T.GOLD))
             b = ChoiceCard(mode.title, _clean(mode.description), icon, color,
-                           badge="" if mode.ready else "Coming soon", height=58)
+                           badge="" if mode.ready else "Coming soon", height=MODE_H)
             b.setToolTip(_clean(mode.description))
             b.setProperty("mode_key", key)
             b.setEnabled(mode.ready)
             self.mode_group.addButton(b)
             self.mode_buttons[key] = b
-            card.add(b)
+            self.mode_box.addWidget(b)
+        card.add(self.mode_box)
         self.mode_group.buttonToggled.connect(self._mode_changed)
+
+    def _fit_modes(self):
+        """Use shorter mode cards when the setup column would otherwise need to scroll."""
+        n = len(self.mode_buttons)
+        if not n:
+            return
+        cur_h = next(iter(self.mode_buttons.values())).height()
+        cur_gap = self.mode_box.spacing()
+        content = self.left_scroll.widget()
+        need = content.sizeHint().height() + (MODE_H - cur_h) * n + (8 - cur_gap) * (n - 1)
+        compact = need > self.left_scroll.viewport().height()
+        h, gap = (MODE_H_COMPACT, 6) if compact else (MODE_H, 8)
+        if h != cur_h or gap != cur_gap:
+            for b in self.mode_buttons.values():
+                b.setFixedHeight(h)
+            self.mode_box.setSpacing(gap)
 
     def _build_options(self, card):
         self.when_full = Combo(WHEN_FULL)
@@ -266,16 +298,34 @@ class RunTab(QWidget):
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 14, 16, 14)
         lay.setSpacing(7)
-        lay.addWidget(label("THIS RUN", "caption"))
-        self.attacks = CountLabel(role="metric")
-        self.searches = CountLabel(role="metric")
-        self.run_time = label("—", "metric")
-        self.run_time.setFont(T.font(11, QFont.DemiBold, mono=True))
-        lay.addLayout(self._metric_row("Attacks", self.attacks))
-        lay.addLayout(self._metric_row("Searches", self.searches))
-        lay.addLayout(self._metric_row("Run time", self.run_time))
+        self.run_time = label("—", "caption")
+        self.run_time.setFont(T.font(8.5, QFont.DemiBold, mono=True))
+        self.run_time.setToolTip("Run time")
+        clock = QLabel()
+        clock.setPixmap(icons.pixmap("clock", T.TEXT_MUTED, 13))
+        clock.setToolTip("Run time")
+        lay.addLayout(hbox(label("THIS RUN", "caption"), None, clock, self.run_time, spacing=5))
+        self.stat_values = {}
+        self.stat_rows = {}
+        for key, title in STATS:
+            v = CountLabel(role="metric")
+            row = QWidget()
+            row.setLayout(self._metric_row(title, v))
+            self.stat_values[key] = v
+            self.stat_rows[key] = row
+            lay.addWidget(row)
+        self.attacks = self.stat_values["attacks"]
+        self.searches = self.stat_values["searches"]
         lay.addStretch(1)
+        self._update_stat_rows()
         return card
+
+    def _update_stat_rows(self):
+        """List the counters the selected mode produces, plus any other that is above 0."""
+        relevant = MODE_STATS.get(self.mode_key() if hasattr(self, "mode_group") else "", ("attacks", "searches"))
+        for key, row in self.stat_rows.items():
+            v = self.stat_values[key].value()
+            row.setVisible(key in relevant or bool(v))
 
     def _build_scout(self):
         card = _frame()
@@ -353,6 +403,8 @@ class RunTab(QWidget):
         self.rows["resume"].setVisible(key == "loot_all")
         if not self._running:
             self._hero_idle()
+        self._update_stat_rows()
+        QTimer.singleShot(0, self._fit_modes)            # option rows shown/hidden change the needed height
         self.changed.emit()
 
     # ------------------------------------------------------------------ hero line
@@ -392,8 +444,9 @@ class RunTab(QWidget):
                 c.reset()
             for v in self.scout.values():
                 v.set_value(None)
-            self.attacks.set_value(0)
-            self.searches.set_value(0)
+            for v in self.stat_values.values():
+                v.set_value(0)
+            self._update_stat_rows()
             self.acc_action.setText("Starting…")
             self.acc_bar.set_value(0)
             self.run_time.setText("0:00:00")
@@ -451,8 +504,10 @@ class RunTab(QWidget):
                     self.scout[r].set_value(v)
         if "stats" in st:
             s = st["stats"] or {}
-            self.attacks.set_value(s.get("attacks", 0))
-            self.searches.set_value(s.get("searches", 0))
+            for key, v in self.stat_values.items():
+                if key in s:
+                    v.set_value(s.get(key) or 0)
+            self._update_stat_rows()
         if st.get("waiting"):
             self._waiting = True
             self.continue_btn.setEnabled(True)
@@ -469,11 +524,18 @@ class RunTab(QWidget):
         if st.get("shutdown_pending"):
             self.shutdown_banner.show()
 
+    def eventFilter(self, obj, e):
+        if obj is self.left_scroll.viewport() and e.type() == QEvent.Resize:
+            self._fit_modes()
+        return super().eventFilter(obj, e)
+
     def resizeEvent(self, e):
         narrow = self.width() < 940          # small window: tighter setup column, compact numbers, no key hints
         if narrow != self._narrow:
             self._narrow = narrow
             self.left_scroll.setFixedWidth(372 if narrow else 404)
+            for key in ("full", "done", "current"):
+                self.rows[key].control.setFixedWidth(160 if narrow else 180)
             for v in [c.value for c in self.res_cards.values()] + list(self.scout.values()):
                 v.set_fmt(fmt_short if narrow else fmt_int)
             self.set_hotkeys(self._keys)

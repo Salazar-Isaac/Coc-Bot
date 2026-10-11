@@ -37,7 +37,8 @@ class Bot:
 
     # --- status --------------------------------------------------------------------------
     def status(self, **fields):
-        self.on_status(stats={"attacks": self.stats["attacks"], "searches": self.stats["searches"]}, **fields)
+        counters = {k: v for k, v in self.stats.items() if isinstance(v, int)}
+        self.on_status(stats=counters, **fields)
 
     # --- screen ----------------------------------------------------------------------------
     def shot(self):

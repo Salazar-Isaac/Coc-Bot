@@ -268,7 +268,8 @@ def deploy(bot, plan):
     slots = detect_slots(frame)
     ring = deployzone.deploy_line(frame) if smart else []
     if smart and len(ring) < 8:
-        log.info("Deploy zone not found; using the plan's points")
+        log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
+        bot.save_error("no-deploy-zone")
         ring = []
     if ring:
         centre = (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))

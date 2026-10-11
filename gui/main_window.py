@@ -35,6 +35,7 @@ from gui.nav import AnimatedStack, Sidebar
 from gui.run_tab import RunTab
 from gui.templates_tab import TemplatesTab
 from gui.toast import ToastManager
+from gui.village_tab import VillageTab
 
 log = logging.getLogger("bot")
 
@@ -44,6 +45,7 @@ PAGES = [
     ("Accounts", "users", "Accounts", "Your Supercell ID accounts in switching order, with role and limits."),
     ("Loot", "swords", "Loot settings", "When an account is full, which bases to attack and how to attack."),
     ("Donate", "gift", "Donate", "Clan Castle requests and what your Main account donates."),
+    ("Village", "home", "Village", "Chores on each visit: collect resources, upgrade buildings, start research."),
     ("Device", "monitor", "Device & settings", "Where the game runs, screen profile, hotkeys and behaviour."),
     ("Templates", "scan", "Templates", "Images the bot recognises. Re-capture one when Supercell changes a button."),
     ("Logs", "terminal", "Logs", "Everything the bot reported in this session."),
@@ -123,10 +125,12 @@ class MainWindow(QMainWindow):
         self.accounts_tab = AccountsTab()
         self.loot_tab = LootTab()
         self.donate_tab = DonateTab()
+        self.village_tab = VillageTab()
         self.device_tab = DeviceTab()
         self.templates_tab = TemplatesTab()
         self.logs_tab = LogsTab()
-        self.pages = [self.run_tab, self.accounts_tab, self.loot_tab, self.donate_tab, self.device_tab]
+        self.pages = [self.run_tab, self.accounts_tab, self.loot_tab, self.donate_tab, self.village_tab,
+                      self.device_tab]
         self.views = [*self.pages, self.templates_tab, self.logs_tab]
 
         # ---------------- layout: sidebar | header + animated pages ----------------
@@ -236,21 +240,21 @@ class MainWindow(QMainWindow):
 
     def _update_badges(self):
         missing = len(missing_templates())
-        self.sidebar.nav.set_badge(5, str(missing) if missing else "", T.RED)
+        self.sidebar.nav.set_badge(self.views.index(self.templates_tab), str(missing) if missing else "", T.RED)
         n = self.accounts_tab.count()
-        self.sidebar.nav.set_badge(1, str(n) if n else "", T.TEXT_MUTED)
+        self.sidebar.nav.set_badge(self.views.index(self.accounts_tab), str(n) if n else "", T.TEXT_MUTED)
 
     def _count_log(self, _msg, level):
         if level >= logging.WARNING and self.stack.currentWidget() is not self.logs_tab:
             self._unseen += 1
             self._unseen_level = max(self._unseen_level, level)
-            self.sidebar.nav.set_badge(6, str(min(self._unseen, 99)),
+            self.sidebar.nav.set_badge(self.views.index(self.logs_tab), str(min(self._unseen, 99)),
                                        T.RED if self._unseen_level >= logging.ERROR else T.AMBER)
 
     def _logs_seen(self):
         self._unseen = 0
         self._unseen_level = 0
-        self.sidebar.nav.set_badge(6, "")
+        self.sidebar.nav.set_badge(self.views.index(self.logs_tab), "")
 
     # ----------------------------------------------------------------- settings
     def _schedule_save(self):
@@ -320,6 +324,19 @@ class MainWindow(QMainWindow):
                              "names from the game”) and check the roles ticked in Loot settings.", 7000)
             self.go(self.accounts_tab)
             return
+        if mode == "chores":
+            v = self.settings.get("village", {})
+            if not (v.get("collect", True) or v.get("upgrade_buildings") or v.get("research")):
+                self.toasts.show("info", "No chores switched on", "Switch on collecting, building upgrades or "
+                                 "research on the Village page.", 7000)
+                self.go(self.village_tab)
+                return
+            chore_roles = v.get("on_roles", ["main", "loot", "both", "feeder"])
+            if not [a for a in self.accounts if a.get("enabled") and a.get("role") in chore_roles]:
+                self.toasts.show("info", "No accounts for chores", "Add your accounts on the Accounts page and "
+                                 "check the roles ticked under “Do chores on” on the Village page.", 7000)
+                self.go(self.accounts_tab)
+                return
         self._set_running(True)
         status = lambda **kw: self.bridge.status.emit(kw)  # noqa: E731
         self.runner = Runner(mode, self.settings, self.accounts, status,

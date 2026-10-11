@@ -1,13 +1,14 @@
 """Animated building blocks: buttons, toggle switches, choice cards, segmented controls, bars, pills, cards."""
 
 import shiboken6
-from PySide6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation,
-                            Signal)
+from PySide6.QtCore import (QEasingCurve, QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer,
+                            QVariantAnimation, Signal)
 from PySide6.QtGui import (QBrush, QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen,
                            QTextLayout)
-from PySide6.QtWidgets import (QAbstractButton, QAbstractItemView, QAbstractSpinBox, QFrame, QGraphicsDropShadowEffect,
-                               QHBoxLayout, QHeaderView, QLabel, QPushButton, QScrollArea, QSizePolicy, QStyle,
-                               QStyledItemDelegate, QTableWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QAbstractItemView, QAbstractSpinBox, QCompleter, QFrame,
+                               QGraphicsDropShadowEffect, QHBoxLayout, QHeaderView, QLabel, QLayout, QLineEdit,
+                               QPushButton, QScrollArea, QSizePolicy, QStyle, QStyledItemDelegate, QTableWidget,
+                               QVBoxLayout, QWidget)
 
 from gui import icons
 from gui import theme as T
@@ -1330,6 +1331,31 @@ class TwoLineDelegate(_RowDelegate):
         p.restore()
 
 
+class PlaceholderDelegate(_RowDelegate):
+    """Plain editable text; an empty cell shows a dim hint from placeholder(index) instead."""
+
+    def __init__(self, table, placeholder):
+        super().__init__(table)
+        self.placeholder = placeholder      # index -> str
+
+    def paint(self, p, option, index):
+        super().paint(p, option, index)
+        if (index.data(Qt.DisplayRole) or "").strip():
+            return
+        hint = self.placeholder(index) or ""
+        if not hint:
+            return
+        r = option.rect
+        f = T.font(9.25)
+        f.setItalic(True)
+        p.save()
+        p.setFont(f)
+        p.setPen(QColor(T.TEXT_DIM))
+        p.drawText(QRectF(r.left() + 11, r.top(), r.width() - 20, r.height()), Qt.AlignVCenter | Qt.AlignLeft,
+                   QFontMetrics(f).elidedText(hint, Qt.ElideRight, r.width() - 20))
+        p.restore()
+
+
 class PillDelegate(_RowDelegate):
     """UserRole = (text, colour): a small status tag."""
 
@@ -1470,3 +1496,285 @@ class ElidedLabel(QWidget):
         for ln in wrap_text(self._text, self._font, self.width(), self.lines):
             p.drawText(QRectF(0, y, self.width(), fm.lineSpacing()), Qt.AlignLeft | Qt.AlignVCenter, ln)
             y += fm.lineSpacing()
+
+
+# ----------------------------------------------------------------------------- tag list editor
+class FlowLayout(QLayout):
+    """Lays widgets out left to right and wraps onto new lines (chips, tags). Height follows the width."""
+
+    def __init__(self, parent=None, hspacing=6, vspacing=6):
+        super().__init__(parent)
+        self._items = []
+        self._h, self._v = hspacing, vspacing
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, i):
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i):
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, w):
+        return self._arrange(QRect(0, 0, w, 0), move=False)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._arrange(rect, move=True)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        s = QSize(0, 0)
+        for it in self._items:
+            if not it.isEmpty():
+                s = s.expandedTo(it.minimumSize())
+        m = self.contentsMargins()
+        return s + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def _arrange(self, rect, move):
+        m = self.contentsMargins()
+        r = rect.adjusted(m.left(), m.top(), -m.right(), -m.bottom())
+        x, y, line_h = r.x(), r.y(), 0
+        for it in self._items:
+            if it.isEmpty():
+                continue
+            sz = it.sizeHint()
+            if line_h and x + sz.width() > r.x() + r.width():
+                x, y, line_h = r.x(), y + line_h + self._v, 0
+            if move:
+                it.setGeometry(QRect(QPoint(x, y), sz))
+            x += sz.width() + self._h
+            line_h = max(line_h, sz.height())
+        return y + line_h - rect.y() + m.bottom()
+
+
+class TagChip(QWidget):
+    """Rounded tag with a small remove (×) button on the right."""
+
+    removed = Signal(str)
+    H = 30
+
+    def __init__(self, text, icon=None, color=T.TEXT_DIM, parent=None):
+        super().__init__(parent)
+        self.text = text
+        self.icon_name = icon
+        self.color = QColor(color)
+        self._hover = Tween(self, ms=150)
+        self._x_hover = Tween(self, ms=120)
+        self._on_x = False
+        self.setMouseTracking(True)
+        self.setFixedHeight(self.H)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+    def _font(self):
+        return T.font(9.25, QFont.Medium)
+
+    def _text_x(self):
+        return 30 if self.icon_name else 13
+
+    def sizeHint(self):
+        return QSize(self._text_x() + QFontMetrics(self._font()).horizontalAdvance(self.text) + 34, self.H)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def _x_rect(self):
+        return QRectF(self.width() - 26, (self.H - 20) / 2, 20, 20)
+
+    def _set_on_x(self, on):
+        on = on and self.isEnabled()
+        if on != self._on_x:
+            self._on_x = on
+            self._x_hover.to(1.0 if on else 0.0)
+            self.setCursor(Qt.PointingHandCursor if on else Qt.ArrowCursor)
+            self.setToolTip(f"Remove “{self.text}”" if on else "")
+
+    def enterEvent(self, e):
+        self._hover.to(1.0)
+        super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hover.to(0.0)
+        self._set_on_x(False)
+        super().leaveEvent(e)
+
+    def mouseMoveEvent(self, e):
+        self._set_on_x(self._x_rect().adjusted(-4, -4, 4, 4).contains(e.position()))
+        super().mouseMoveEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if (e.button() == Qt.LeftButton and self.isEnabled()
+                and self._x_rect().adjusted(-4, -4, 4, 4).contains(e.position())):
+            self.removed.emit(self.text)
+            return
+        super().mouseReleaseEvent(e)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.TextAntialiasing)
+        if not self.isEnabled():
+            p.setOpacity(0.45)
+        h, xh = self._hover.value, self._x_hover.value
+        r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        rad = r.height() / 2
+        p.setPen(QPen(T.mix(T.BORDER_STRONG, "#46507f", h), 1))
+        p.setBrush(T.mix(T.INPUT, "#1a1f38", h))
+        p.drawRoundedRect(r, rad, rad)
+        if self.icon_name:
+            icons.paint(p, self.icon_name, self.color, QRectF(r.left() + 11, r.center().y() - 7, 14, 14))
+        p.setFont(self._font())
+        p.setPen(QColor(T.TEXT))
+        tx = self._text_x()
+        p.drawText(QRectF(tx, r.top(), r.width() - tx - 30, r.height()), Qt.AlignVCenter | Qt.AlignLeft, self.text)
+        xr = self._x_rect()
+        if xh > 0:
+            p.setPen(Qt.NoPen)
+            p.setBrush(T.qc(T.RED, 0.18 * xh))
+            p.drawEllipse(xr)
+        icons.paint(p, "x", T.mix(T.mix(T.TEXT_DIM, T.TEXT_MUTED, h), T.RED, xh), xr.adjusted(5, 5, -5, -5))
+
+
+def _popup_style():
+    return (f"QListView {{ background: {T.SURFACE_2}; color: {T.TEXT}; border: 1px solid {T.BORDER_STRONG}; "
+            f"border-radius: 8px; padding: 4px; outline: 0; }}"
+            f"QListView::item {{ min-height: 28px; padding: 0 10px; border-radius: 6px; }}"
+            f"QListView::item:hover {{ background: {T.SURFACE_3}; }}"
+            f"QListView::item:selected {{ background: {T.rgba(T.GOLD, 0.14)}; color: {T.GOLD_HI}; }}")
+
+
+class TagEditor(QWidget):
+    """Editable list of short names shown as removable chips, with a box to add more
+    (Enter or Add; commas add several at once). Optional suggestions and a reset-to-defaults button."""
+
+    changed = Signal()
+
+    def __init__(self, placeholder="Add a name…", suggestions=(), empty_text="Nothing in the list.", defaults=None,
+                 icon=None, icon_color=T.TEXT_DIM, parent=None):
+        super().__init__(parent)
+        self._values = []
+        self._chips = {}
+        self.icon = icon
+        self.icon_color = icon_color
+        self.defaults = list(defaults) if defaults is not None else None
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 2, 0, 2)
+        lay.setSpacing(10)
+        self.chip_box = QWidget()
+        self.flow = FlowLayout(self.chip_box, 6, 6)
+        lay.addWidget(self.chip_box)
+        self.empty = label(empty_text, "small", wrap=True)
+        self.empty.setStyleSheet(f"color: {T.TEXT_DIM};")
+        lay.addWidget(self.empty)
+        self.edit = QLineEdit()
+        self.edit.setPlaceholderText(placeholder)
+        self.edit.setMaxLength(80)
+        self.add_btn = Button("Add", "plus", "secondary")
+        self.add_btn.setEnabled(False)
+        row = hbox(self.edit, self.add_btn, spacing=8)
+        self.reset_btn = None
+        if self.defaults is not None:
+            self.reset_btn = IconButton("refresh", "Back to the default list", size="md", variant="secondary")
+            row.addWidget(self.reset_btn)
+            self.reset_btn.clicked.connect(self.reset)
+        lay.addLayout(row)
+        if suggestions:
+            comp = QCompleter(sorted(set(suggestions), key=str.lower), self)
+            comp.setCaseSensitivity(Qt.CaseInsensitive)
+            comp.setFilterMode(Qt.MatchContains)
+            comp.setMaxVisibleItems(8)
+            comp.popup().setStyleSheet(_popup_style())
+            comp.popup().setFont(T.font(9.5))
+            self.edit.setCompleter(comp)
+            comp.activated[str].connect(self._completed)
+        self.edit.returnPressed.connect(self._add_typed)
+        self.add_btn.clicked.connect(self._add_typed)
+        self.edit.textChanged.connect(lambda t: self.add_btn.setEnabled(bool(t.strip())))
+        self._sync()
+
+    # --- api
+    def values(self):
+        return list(self._values)
+
+    def set_values(self, values):
+        for chip in self._chips.values():
+            self.flow.removeWidget(chip)
+            chip.hide()
+            chip.deleteLater()
+        self._chips = {}
+        self._values = []
+        self._add_many(values or [], emit=False)
+
+    def add(self, text):
+        return self._add_many(self._split(text))
+
+    def remove(self, text):
+        if text in self._values:
+            self._values.remove(text)
+            chip = self._chips.pop(text, None)
+            if chip is not None:
+                self.flow.removeWidget(chip)
+                chip.hide()
+                chip.deleteLater()
+            self._sync()
+            self.changed.emit()
+
+    def reset(self):
+        if self.defaults is not None and self._values != self.defaults:
+            self.set_values(self.defaults)
+            self.changed.emit()
+
+    # --- internals
+    @staticmethod
+    def _split(text):
+        return [t.strip() for t in str(text or "").replace(";", ",").replace("\n", ",").split(",")]
+
+    def _add_many(self, items, emit=True):
+        added = False
+        have = {v.casefold() for v in self._values}
+        for t in items:
+            t = str(t).strip()
+            if not t or t.casefold() in have:
+                continue
+            have.add(t.casefold())
+            self._values.append(t)
+            chip = TagChip(t, self.icon, self.icon_color)
+            chip.removed.connect(self.remove)
+            self._chips[t] = chip
+            self.flow.addWidget(chip)
+            added = True
+        self._sync()
+        if added and emit:
+            self.changed.emit()
+        return added
+
+    def _add_typed(self):
+        if self.edit.text().strip():
+            self.add(self.edit.text())
+            self.edit.clear()
+
+    def _completed(self, text):
+        self.add(text)
+        QTimer.singleShot(0, self.edit.clear)
+
+    def _sync(self):
+        has = bool(self._values)
+        self.chip_box.setVisible(has)
+        self.empty.setVisible(not has)
+        if self.reset_btn is not None:
+            self.reset_btn.setEnabled(self._values != self.defaults)
+        self.flow.invalidate()
+        self.updateGeometry()

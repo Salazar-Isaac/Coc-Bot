@@ -299,6 +299,21 @@
     ],
     "threshold": 0.8
   },
+  "chest/tap_text": {
+    "box": [
+      895,
+      250,
+      105,
+      50
+    ],
+    "region": [
+      700,
+      150,
+      520,
+      260
+    ],
+    "threshold": 0.85
+  },
   "donate/archer": {
     "box": [
       772,
