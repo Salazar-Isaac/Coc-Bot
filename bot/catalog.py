@@ -22,6 +22,7 @@ CATALOG = [
     ("results/claim_reward", "Results", "The green 'Claim Reward' button after a battle", True),
     ("results/return_home", "Results", "The 'Return Home' button after a battle (when there is no reward)", True),
     ("chest/pedestal", "Chest", "The stone pedestal with the hammer row under a reward chest", False),
+    ("chest/room", "Chest", "The wooden pillar on the right of the reward-chest room", False),
     ("chest/tap_text", "Chest", "The word 'Tap!' above a reward chest", False),
     ("chest/continue", "Chest", "The green 'Continue' after opening a chest", False),
     ("settings/title", "Settings", "The 'Settings' title", True),

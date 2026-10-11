@@ -24,7 +24,7 @@ STATES = [
     ("remove_dialog", ["army/remove_title"]),      # "Remove troops?" -> Cancel when lost
     ("request_window", ["request/title"]),         # request window -> Cancel when lost
     ("results", ["results/claim_reward", "results/return_home"]),
-    ("chest", ["chest/continue", "chest/pedestal", "chest/tap_text"]),
+    ("chest", ["chest/continue", "chest/room", "chest/pedestal", "chest/tap_text"]),
     ("confirm", ["battle/confirm_okay"]),
     ("scout", ["scout/next"]),              # "Available Loot" stays visible in battle, Next does not
     ("battle", ["battle/surrender"]),

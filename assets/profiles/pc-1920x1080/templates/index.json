@@ -299,6 +299,21 @@
     ],
     "threshold": 0.8
   },
+  "chest/room": {
+    "box": [
+      1390,
+      0,
+      70,
+      600
+    ],
+    "region": [
+      1330,
+      0,
+      190,
+      660
+    ],
+    "threshold": 0.8
+  },
   "chest/tap_text": {
     "box": [
       895,

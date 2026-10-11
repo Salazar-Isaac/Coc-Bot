@@ -24,7 +24,7 @@ def with_recovery(bot, label, fn, attempts=3):
             raise
         except Exception as e:  # noqa: BLE001 - any failure: recover and retry
             if is_user_abort(e):
-                raise BotStopped() from e
+                raise BotStopped("the mouse touched a screen corner (emergency stop)") from e
             if isinstance(e, BotError):
                 log.warning("%s: %s (attempt %d/%d)", label, e, attempt, attempts)
             else:

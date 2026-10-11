@@ -60,9 +60,9 @@ class Runner(threading.Thread):
             ensure_game(self.bot)
             mode.run(self.bot, state)
             when_done(self.bot)
-        except BotStopped:
+        except BotStopped as e:
             reason = "stopped"
-            log.info("Stopped by you")
+            log.info("Stopped: %s", e.args[0] if e.args else "Stop pressed")
         except StopRun as e:
             if e.args:                       # could not run (missing setup etc.)
                 reason = "stopped"
