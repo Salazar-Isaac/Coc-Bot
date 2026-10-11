@@ -1,27 +1,85 @@
-"""Run tab: choose a mode and options, start/pause/stop, watch status and the log."""
+"""Dashboard: choose a mode and options, start/pause/stop, watch live stats and the log."""
 
-import logging
+import re
 import time
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QTextCharFormat
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFormLayout, QGridLayout, QGroupBox,
-                               QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QSpinBox,
-                               QVBoxLayout, QWidget)
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QButtonGroup, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from bot.modes import MODES, load_all
+from gui import theme as T
+from gui.components import (AnimatedBar, Avatar, Banner, Button, Card, ChoiceCard, CountLabel, ElidedLabel, IconButton,
+                            Pill, ResourceIcon, SettingRow, Toggle, divider, fmt_int, fmt_short, hbox, label, scroll)
+from gui.logs_tab import LogView
+from gui.widgets import Combo, Spin
 
-WHEN_FULL = [("switch", "Switch to the next account"), ("wait", "Wait for me (I spend, then Continue)"),
-             ("stop", "Stop the run")]
-WHEN_DONE = [("nothing", "Do nothing"), ("close_game", "Close the game"), ("shutdown", "Shut down the PC"),
-             ("sleep", "Put the PC to sleep")]
+WHEN_FULL = [("switch", "Switch account", "Go on with the next account in the list"),
+             ("wait", "Wait for me", "Stay on the full account: spend the resources yourself, then press Continue"),
+             ("stop", "Stop the run", "End the run as soon as an account is full")]
+WHEN_DONE = [("nothing", "Do nothing", "Leave the game open"),
+             ("close_game", "Close the game", "Close Clash of Clans when the run ends"),
+             ("shutdown", "Shut down the PC", "Shut down 60 seconds after the run (can be cancelled)"),
+             ("sleep", "Put the PC to sleep", "Sleep when the run ends")]
 
-LEVEL_COLORS = {logging.WARNING: QColor(200, 120, 0), logging.ERROR: QColor(210, 40, 40),
-                logging.CRITICAL: QColor(210, 40, 40)}
+MODE_LOOK = {"loot_all": ("swords", T.GOLD), "loot_current": ("user", "#5cc8ff"),
+             "loot_donate": ("gift", T.ELIXIR_HI), "donate_only": ("heart", "#ff7f9f")}
 
 
-def _fmt(v):
-    return f"{v:,}" if isinstance(v, int) else "-"
+def _clean(desc):
+    return re.sub(r"\s*\((coming next|coming soon)\)\.?\s*$", "", desc or "", flags=re.I).strip()
+
+
+def _frame():
+    f = QFrame()
+    f.setObjectName("Card")
+    return f
+
+
+class ResourceCard(QFrame):
+    """Gold / Elixir / Dark: current value, animated bar towards "full at"."""
+
+    def __init__(self, res, parent=None):
+        super().__init__(parent)
+        self.setObjectName("Card")
+        self.res = res
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(6)
+        self.full_pill = Pill("FULL", T.GREEN, strong=True)
+        self.full_pill.hide()
+        lay.addLayout(hbox(ResourceIcon(res, 22), label(T.RESOURCE_NAME[res].upper(), "caption"), None,
+                           self.full_pill, spacing=8))
+        self.value = CountLabel()
+        lay.addWidget(self.value)
+        self.bar = AnimatedBar(T.RESOURCE_BAR[res], 7)
+        lay.addWidget(self.bar)
+        self.sub = label("Not read yet", "small")
+        lay.addWidget(self.sub)
+
+    def reset(self):
+        self.value.set_value(None)
+        self.bar.set_value(0)
+        self.full_pill.hide()
+        self.sub.setText("Not read yet")
+
+    def set_plain(self, v, watched=False):
+        self.value.set_value(v)
+        if not watched:
+            self.bar.set_value(0)
+            self.full_pill.hide()
+            self.sub.setText("Not watched")
+
+    def set_fullness(self, v, cap, full):
+        self.value.set_value(v)
+        if cap:
+            frac = (v or 0) / cap
+            self.bar.set_value(frac, full)
+            self.sub.setText(f"of {cap:,}  ·  {min(999, int(frac * 100))}%")
+        else:
+            self.bar.set_value(0)
+            self.sub.setText("No limit set for this Town Hall")
+        self.full_pill.setVisible(bool(full))
 
 
 class RunTab(QWidget):
@@ -30,123 +88,68 @@ class RunTab(QWidget):
     continue_clicked = Signal()
     stop_clicked = Signal()
     cancel_shutdown_clicked = Signal()
+    show_log_clicked = Signal()
     changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         load_all()
-        root = QHBoxLayout(self)
+        self._keys = {"continue": "f8", "pause": "f9", "stop": "f10"}
+        self._narrow = False
+        self._running = False
+        self._paused = False
+        self._waiting = False
+        self._mode_title = ""
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(16)
 
-        # ---------------- left: controls ----------------
-        left = QVBoxLayout()
-        root.addLayout(left, 0)
-
-        mode_box = QGroupBox("What should the bot do?")
-        ml = QVBoxLayout(mode_box)
-        self.mode_group = QButtonGroup(self)
-        self.mode_buttons = {}
-        for key, mode in sorted(MODES.items(), key=lambda kv: (not kv[1].ready, kv[1].order)):
-            rb = QRadioButton(mode.title + ("" if mode.ready else "  (coming next)"))
-            rb.setEnabled(mode.ready)
-            rb.setProperty("mode_key", key)
-            self.mode_group.addButton(rb)
-            self.mode_buttons[key] = rb
-            ml.addWidget(rb)
-        self.mode_desc = QLabel()
-        self.mode_desc.setWordWrap(True)
-        self.mode_desc.setStyleSheet("padding:4px 2px; font-style:italic;")
-        ml.addWidget(self.mode_desc)
-        self.mode_group.buttonToggled.connect(self._mode_changed)
-        left.addWidget(mode_box)
-
-        opt_box = QGroupBox("Options")
-        form = QFormLayout(opt_box)
-        self.when_full = QComboBox()
-        for k, t in WHEN_FULL:
-            self.when_full.addItem(t, k)
-        form.addRow("When an account is full:", self.when_full)
-        self.when_done = QComboBox()
-        for k, t in WHEN_DONE:
-            self.when_done.addItem(t, k)
-        form.addRow("When the run ends:", self.when_done)
-        self.rounds = QSpinBox()
-        self.rounds.setRange(0, 999)
-        self.rounds.setSpecialValueText("Forever")
-        form.addRow("Rounds over all accounts:", self.rounds)
-        self.current_account = QComboBox()
-        self.current_account.setEditable(True)
-        self.current_th = QSpinBox()
-        self.current_th.setRange(0, 25)
-        self.current_th.setSpecialValueText("unknown")
-        self.current_label = QLabel("Account open now:")
-        self.current_th_label = QLabel("Its Town Hall:")
-        form.addRow(self.current_label, self.current_account)
-        form.addRow(self.current_th_label, self.current_th)
-        self.resume = QCheckBox("Continue from the account where the last run stopped")
-        self.resume.setChecked(True)
-        form.addRow(self.resume)
-        left.addWidget(opt_box)
-        for w in (self.when_full, self.when_done, self.current_account):
-            w.currentIndexChanged.connect(self.changed)
-        self.current_account.editTextChanged.connect(self.changed)
-        self.rounds.valueChanged.connect(self.changed)
-        self.current_th.valueChanged.connect(self.changed)
-
-        btns = QGridLayout()
-        self.start_btn = QPushButton("▶  Start")
-        self.pause_btn = QPushButton("Pause  (F9)")
-        self.continue_btn = QPushButton("Continue  (F8)")
-        self.stop_btn = QPushButton("■  Stop  (F10)")
-        self.cancel_shutdown_btn = QPushButton("Cancel shutdown")
-        self.start_btn.setObjectName("start")
-        self.stop_btn.setObjectName("stop")
-        for b in (self.start_btn, self.pause_btn, self.continue_btn, self.stop_btn, self.cancel_shutdown_btn):
-            b.setMinimumHeight(38)
-        btns.addWidget(self.start_btn, 0, 0)
-        btns.addWidget(self.stop_btn, 0, 1)
-        btns.addWidget(self.pause_btn, 1, 0)
-        btns.addWidget(self.continue_btn, 1, 1)
-        btns.addWidget(self.cancel_shutdown_btn, 2, 0, 1, 2)
-        left.addLayout(btns)
-        left.addStretch(1)
-        self.start_btn.clicked.connect(self.start_clicked)
-        self.pause_btn.clicked.connect(self.pause_clicked)
-        self.continue_btn.clicked.connect(self.continue_clicked)
-        self.stop_btn.clicked.connect(self.stop_clicked)
+        root.addWidget(self._build_controls())
+        self.shutdown_banner = Banner("<b>The PC shuts down in 60 seconds.</b>  The run has ended and "
+                                      "“Shut down the PC” was selected.", "warning")
+        self.cancel_shutdown_btn = self.shutdown_banner.add_button(
+            Button("Cancel shutdown", "x-circle", "danger", "sm"))
         self.cancel_shutdown_btn.clicked.connect(self.cancel_shutdown_clicked)
-        self.cancel_shutdown_btn.hide()
+        self.shutdown_banner.hide()
+        root.addWidget(self.shutdown_banner)
 
-        # ---------------- right: status + log ----------------
+        body = QHBoxLayout()
+        body.setSpacing(16)
+        root.addLayout(body, 1)
+
+        # ---------------- left: mode + options ----------------
+        left = QWidget()
+        ll = QVBoxLayout(left)
+        ll.setSpacing(16)
+        setup = Card("Run setup", "Choose what the bot does and what happens next.", icon="bolt", spacing=8)
+        self._build_modes(setup)
+        setup.layout().addSpacing(4)
+        setup.add(divider())
+        setup.layout().addSpacing(2)
+        self._build_options(setup)
+        setup.layout().addStretch(1)
+        ll.addWidget(setup, 1)
+        self.left_scroll = scroll(left, margins=(0, 0, 10, 0))
+        self.left_scroll.setFixedWidth(404)
+        body.addWidget(self.left_scroll)
+
+        # ---------------- right: stats + log ----------------
         right = QVBoxLayout()
-        root.addLayout(right, 1)
-        st_box = QGroupBox("Status")
-        grid = QGridLayout(st_box)
-        self.status_labels = {}
-        rows = [("state", "State"), ("device", "Device"), ("account", "Account"), ("action", "Doing"),
-                ("gold", "Gold"), ("elixir", "Elixir"), ("dark", "Dark elixir"), ("loot", "Last scouted"),
-                ("attacks", "Attacks / searches"), ("time", "Run time")]
-        for i, (k, title) in enumerate(rows):
-            t = QLabel(title + ":")
-            v = QLabel("-")
-            v.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            f = v.font()
-            f.setBold(True)
-            v.setFont(f)
-            grid.addWidget(t, i // 2, (i % 2) * 2)
-            grid.addWidget(v, i // 2, (i % 2) * 2 + 1)
-            self.status_labels[k] = v
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
-        right.addWidget(st_box)
-
-        log_box = QGroupBox("Log")
-        ll = QVBoxLayout(log_box)
-        self.log_view = QPlainTextEdit()
-        self.log_view.setReadOnly(True)
-        self.log_view.setMaximumBlockCount(3000)
-        self.log_view.setFont(QFont("Consolas", 9))
-        ll.addWidget(self.log_view)
-        right.addWidget(log_box, 1)
+        right.setSpacing(16)
+        body.addLayout(right, 1)
+        res_row = QHBoxLayout()
+        res_row.setSpacing(16)
+        self.res_cards = {r: ResourceCard(r) for r in T.RESOURCES}
+        for c in self.res_cards.values():
+            res_row.addWidget(c)
+        right.addLayout(res_row)
+        info = QHBoxLayout()
+        info.setSpacing(16)
+        info.addWidget(self._build_account(), 5)
+        info.addWidget(self._build_session(), 4)
+        info.addWidget(self._build_scout(), 4)
+        right.addLayout(info)
+        right.addWidget(self._build_log(), 1)
 
         self._started = None
         self._timer = QTimer(self)
@@ -154,17 +157,165 @@ class RunTab(QWidget):
         self._timer.start(1000)
         self.set_running(False)
 
+    # ------------------------------------------------------------------ building
+    def _build_controls(self):
+        card = self.hero_card = _frame()
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(16, 14, 20, 14)
+        lay.setSpacing(10)
+        self.start_btn = Button("Start", "play", "primary", "lg")
+        self.start_btn.setMinimumWidth(150)
+        self.start_btn.enable_glow(T.GOLD)
+        self.pause_btn = Button("Pause", "pause", "secondary", "lg", hint="F9")
+        self.continue_btn = Button("Continue", "next", "success", "lg", hint="F8")
+        self.stop_btn = Button("Stop", "stop", "danger", "lg", hint="F10")
+        for b in (self.start_btn, self.pause_btn, self.continue_btn, self.stop_btn):
+            lay.addWidget(b)
+        self.start_btn.clicked.connect(self.start_clicked)
+        self.pause_btn.clicked.connect(self.pause_clicked)
+        self.continue_btn.clicked.connect(self.continue_clicked)
+        self.stop_btn.clicked.connect(self.stop_clicked)
+        self.start_btn.setToolTip("Save the settings and start the selected mode")
+
+        sep = QFrame()
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(f"background: {T.BORDER};")
+        lay.addSpacing(8)
+        lay.addWidget(sep)
+        lay.addSpacing(8)
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        self.hero_caption = Pill("READY", T.TEXT_MUTED)
+        self.hero_title = ElidedLabel("", lines=1, pt=11, color=T.TEXT, weight=QFont.DemiBold)
+        self.hero_text = ElidedLabel("", lines=2)
+        col.addStretch(1)
+        col.addLayout(hbox(self.hero_caption, self.hero_title, spacing=10))
+        col.addWidget(self.hero_text)
+        col.addStretch(1)
+        lay.addLayout(col, 1)
+        return card
+
+    def _build_modes(self, card):
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        self.mode_buttons = {}
+        for key, mode in sorted(MODES.items(), key=lambda kv: (not kv[1].ready, kv[1].order)):
+            icon, color = MODE_LOOK.get(key, ("bolt", T.GOLD))
+            b = ChoiceCard(mode.title, _clean(mode.description), icon, color,
+                           badge="" if mode.ready else "Coming soon", height=58)
+            b.setToolTip(_clean(mode.description))
+            b.setProperty("mode_key", key)
+            b.setEnabled(mode.ready)
+            self.mode_group.addButton(b)
+            self.mode_buttons[key] = b
+            card.add(b)
+        self.mode_group.buttonToggled.connect(self._mode_changed)
+
+    def _build_options(self, card):
+        self.when_full = Combo(WHEN_FULL)
+        self.when_done = Combo(WHEN_DONE)
+        self.rounds = Spin(0, 999, special="Forever")
+        self.current_account = Combo(editable=True)
+        self.current_th = Spin(0, 25, special="Unknown")
+        self.resume = Toggle(checked=True)
+        self.rows = {
+            "full": SettingRow("When an account is full", control=self.when_full, control_width=180),
+            "done": SettingRow("When the run ends", control=self.when_done, control_width=180),
+            "rounds": SettingRow("Rounds over all accounts", control=self.rounds, control_width=120),
+            "current": SettingRow("Account open now", control=self.current_account, control_width=180),
+            "th": SettingRow("Its Town Hall", control=self.current_th, control_width=120),
+            "resume": SettingRow("Continue where the last run stopped", control=self.resume),
+        }
+        for r in self.rows.values():
+            card.add(r)
+        self.current_account.lineEdit().setPlaceholderText("Name in the switch list")
+        for w in (self.when_full, self.when_done, self.current_account):
+            w.currentIndexChanged.connect(self.changed)
+        self.current_account.editTextChanged.connect(self.changed)
+        self.rounds.valueChanged.connect(self.changed)
+        self.current_th.valueChanged.connect(self.changed)
+
+    def _build_account(self):
+        card = _frame()
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(8)
+        self.acc_progress = label("", "caption")
+        lay.addLayout(hbox(label("ACCOUNT", "caption"), None, self.acc_progress))
+        self.avatar = Avatar(40)
+        self.acc_name = ElidedLabel("—", lines=1, pt=12, color=T.TEXT, weight=QFont.DemiBold)
+        self.acc_device = ElidedLabel("No run yet", lines=1, pt=8.5)
+        col = QVBoxLayout()
+        col.setSpacing(0)
+        col.addWidget(self.acc_name)
+        col.addWidget(self.acc_device)
+        lay.addLayout(hbox(self.avatar, col, spacing=12))
+        self.acc_bar = AnimatedBar((T.GOLD_HI, T.GOLD_LO), 5)
+        lay.addWidget(self.acc_bar)
+        self.acc_action = label("Idle", "rowDesc")
+        self.acc_action.setMinimumWidth(10)
+        lay.addWidget(self.acc_action)
+        return card
+
+    @staticmethod
+    def _metric_row(name, widget):
+        return hbox(label(name, "muted"), None, widget)
+
+    def _build_session(self):
+        card = _frame()
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(7)
+        lay.addWidget(label("THIS RUN", "caption"))
+        self.attacks = CountLabel(role="metric")
+        self.searches = CountLabel(role="metric")
+        self.run_time = label("—", "metric")
+        self.run_time.setFont(T.font(11, QFont.DemiBold, mono=True))
+        lay.addLayout(self._metric_row("Attacks", self.attacks))
+        lay.addLayout(self._metric_row("Searches", self.searches))
+        lay.addLayout(self._metric_row("Run time", self.run_time))
+        lay.addStretch(1)
+        return card
+
+    def _build_scout(self):
+        card = _frame()
+        lay = QVBoxLayout(card)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(7)
+        lay.addWidget(label("LAST SCOUTED BASE", "caption"))
+        self.scout = {}
+        for r in T.RESOURCES:
+            v = CountLabel(role="metric")
+            self.scout[r] = v
+            lay.addLayout(hbox(ResourceIcon(r, 16), label(T.RESOURCE_NAME[r], "muted"), None, v, spacing=8))
+        lay.addStretch(1)
+        return card
+
+    def _build_log(self):
+        card = Card("Activity", icon="terminal", padding=16, spacing=8)
+        clear = IconButton("trash", "Clear this view")
+        full = Button("Full log", "arrow-right", "ghost", "sm")
+        card.add_action(clear)
+        card.add_action(full)
+        self.log_view = LogView(3000)
+        card.add(self.log_view, 1)
+        clear.clicked.connect(self.log_view.clear)
+        full.clicked.connect(self.show_log_clicked)
+        return card
+
     # ------------------------------------------------------------------ settings
     def load(self, settings, accounts):
         key = settings.get("mode", "loot_all")
-        btn = self.mode_buttons.get(key) or self.mode_buttons.get("loot_all")
+        btn = self.mode_buttons.get(key)
+        if btn is None or not btn.isEnabled():
+            btn = self.mode_buttons.get("loot_all") or next(iter(self.mode_buttons.values()))
         btn.setChecked(True)
-        self._select(self.when_full, settings.get("when_full", "switch"))
-        self._select(self.when_done, settings.get("when_done", "nothing"))
+        self.when_full.select(settings.get("when_full", "switch"))
+        self.when_done.select(settings.get("when_done", "nothing"))
         self.rounds.setValue(settings.get("repeat_rounds", 1))
         self.set_accounts(accounts)
         self.current_account.setCurrentText(settings.get("current_account", ""))
-        self.current_th.setValue(settings.get("current_th", 0))
+        self.current_th.setValue(settings.get("current_th", 0) or 0)
         self._mode_changed()
 
     def apply(self, settings, accounts):
@@ -183,10 +334,11 @@ class RunTab(QWidget):
         self.current_account.setCurrentText(text)
         self.current_account.blockSignals(False)
 
-    @staticmethod
-    def _select(combo, data):
-        i = combo.findData(data)
-        combo.setCurrentIndex(max(0, i))
+    def set_hotkeys(self, keys):
+        self._keys = dict(keys)
+        for btn, k in ((self.pause_btn, "pause"), (self.continue_btn, "continue"), (self.stop_btn, "stop")):
+            btn.set_hint("" if self._narrow else (keys.get(k) or "").upper())
+            btn.setToolTip(f"Hotkey: {(keys.get(k) or '-').upper()}")
 
     def mode_key(self):
         b = self.mode_group.checkedButton()
@@ -194,76 +346,143 @@ class RunTab(QWidget):
 
     def _mode_changed(self, *_):
         key = self.mode_key()
-        mode = MODES.get(key)
-        self.mode_desc.setText(mode.description if mode else "")
         current = key == "loot_current"
-        for w in (self.current_account, self.current_th, self.current_label, self.current_th_label):
-            w.setVisible(current)
-        self.rounds.setEnabled(not current)
-        self.resume.setEnabled(key == "loot_all")
+        self.rows["current"].setVisible(current)
+        self.rows["th"].setVisible(current)
+        self.rows["rounds"].setVisible(not current)
+        self.rows["resume"].setVisible(key == "loot_all")
+        if not self._running:
+            self._hero_idle()
         self.changed.emit()
+
+    # ------------------------------------------------------------------ hero line
+    def _hero(self, caption, color, title, text):
+        waiting = caption.startswith("WAITING")
+        if waiting != bool(self.hero_card.styleSheet()):
+            self.hero_card.setStyleSheet(f"QFrame#Card {{ border: 1px solid {T.rgba(T.AMBER, 0.6)}; "
+                                         f"background: {T.mix(T.SURFACE, T.AMBER, 0.05).name()}; }}"
+                                         if waiting else "")
+        self.hero_caption.set(caption, color, strong=waiting)
+        self.hero_title.setText(title)
+        self.hero_text.setText(text)
+
+    def _hero_idle(self):
+        mode = MODES.get(self.mode_key())
+        self._hero("READY", T.TEXT_MUTED, mode.title if mode else "",
+                   _clean(mode.description) if mode else "")
 
     # ------------------------------------------------------------------ status
     def set_running(self, running):
+        self._running = running
+        self._paused = False
+        self._waiting = False
         self.start_btn.setEnabled(not running)
         self.stop_btn.setEnabled(running)
         self.pause_btn.setEnabled(running)
         self.continue_btn.setEnabled(False)
-        for b in self.mode_buttons.values():
-            b.setEnabled(not running and MODES[b.property("mode_key")].ready)
+        self.continue_btn.set_attention(False)
+        self.pause_btn.set_text("Pause")
+        self.pause_btn.set_icon("pause")
+        for key, b in self.mode_buttons.items():
+            b.setEnabled(not running and MODES[key].ready)
         if running:
             self._started = time.time()
-            self.status_labels["state"].setText("Running")
+            self._mode_title = MODES[self.mode_key()].title if self.mode_key() in MODES else ""
+            for c in self.res_cards.values():
+                c.reset()
+            for v in self.scout.values():
+                v.set_value(None)
+            self.attacks.set_value(0)
+            self.searches.set_value(0)
+            self.acc_action.setText("Starting…")
+            self.acc_bar.set_value(0)
+            self.run_time.setText("0:00:00")
+            self._hero("RUNNING", T.GREEN, self._mode_title, "Starting…")
         else:
             self._started = None
-            self.status_labels["state"].setText("Idle")
-            self.pause_btn.setText("Pause  (F9)")
+            self.acc_action.setText("Idle")
+            self._hero_idle()
 
     def set_paused(self, paused):
-        self.pause_btn.setText("Resume  (F9)" if paused else "Pause  (F9)")
-        self.status_labels["state"].setText("Paused" if paused else "Running")
+        self._paused = paused
+        self.pause_btn.set_text("Resume" if paused else "Pause")
+        self.pause_btn.set_icon("play" if paused else "pause")
+        if paused:
+            self._hero("PAUSED", T.AMBER, self._mode_title,
+                       f"You can use the game now. Press Resume ({self._keys.get('pause', '').upper()}) to go on.")
+        else:
+            self._hero("RUNNING", T.GREEN, self._mode_title, self.acc_action.text())
+
+    def hide_shutdown(self):
+        self.shutdown_banner.hide()
 
     def update_status(self, st):
-        L = self.status_labels
         if "device" in st:
-            L["device"].setText(st["device"])
+            self.acc_device.setText(f"on {st['device']}")
+        if "mode" in st and st["mode"]:
+            self._mode_title = st["mode"]
+            if self._running and not self._waiting and not self._paused:
+                self._hero("RUNNING", T.GREEN, self._mode_title, self.acc_action.text())
         if "account" in st:
-            L["account"].setText(str(st["account"]) + (f"  ({st['progress']})" if st.get("progress") else ""))
+            name = str(st["account"] or "—")
+            self.acc_name.setText(name)
+            self.avatar.set_name(name)
+        if st.get("progress"):
+            prog = str(st["progress"])
+            self.acc_progress.setText(prog.replace("/", " / "))
+            m = re.match(r"\s*(\d+)\s*/\s*(\d+)", prog)
+            if m and int(m.group(2)):
+                self.acc_bar.set_value(int(m.group(1)) / int(m.group(2)))
         if "action" in st:
-            L["action"].setText(st["action"])
-        if "fullness" in st:
-            for r, (v, cap, full) in st["fullness"].items():
-                L[r].setText(f"{_fmt(v)} / {_fmt(cap) if cap else 'no limit'}" + ("  FULL" if full else ""))
-        if "resources" in st:
-            for r, v in st["resources"].items():
-                if "fullness" not in st or r not in st["fullness"]:
-                    L[r].setText(_fmt(v))
-        if "loot" in st and st["loot"]:
-            lo = st["loot"]
-            L["loot"].setText(f"{_fmt(lo.get('gold'))} / {_fmt(lo.get('elixir'))} / {_fmt(lo.get('dark'))}")
+            self.acc_action.setText(str(st["action"]))
+            if self._running and not self._waiting and not self._paused:
+                self._hero("RUNNING", T.GREEN, self._mode_title, str(st["action"]))
+        full = st.get("fullness") or {}
+        for r, val in full.items():
+            if r in self.res_cards:
+                v, cap, is_full = val
+                self.res_cards[r].set_fullness(v, cap, is_full)
+        for r, v in (st.get("resources") or {}).items():
+            if r in self.res_cards and r not in full:
+                self.res_cards[r].set_plain(v, watched=False)
+        if st.get("loot"):
+            for r, v in st["loot"].items():
+                if r in self.scout:
+                    self.scout[r].set_value(v)
         if "stats" in st:
-            s = st["stats"]
-            L["attacks"].setText(f"{s.get('attacks', 0)} / {s.get('searches', 0)}")
+            s = st["stats"] or {}
+            self.attacks.set_value(s.get("attacks", 0))
+            self.searches.set_value(s.get("searches", 0))
         if st.get("waiting"):
+            self._waiting = True
             self.continue_btn.setEnabled(True)
-            L["state"].setText("Waiting for you - press Continue (F8)")
+            self.continue_btn.set_attention(True, T.GREEN)
+            key = self._keys.get("continue", "").upper()
+            self._hero("WAITING FOR YOU", T.AMBER, st.get("action") or "Waiting for you",
+                       f"Spend the resources in the game, then press Continue ({key}).")
         elif st.get("waiting") is False:
+            self._waiting = False
             self.continue_btn.setEnabled(False)
-            L["state"].setText("Running")
+            self.continue_btn.set_attention(False)
+            if self._running:
+                self._hero("RUNNING", T.GREEN, self._mode_title, self.acc_action.text())
         if st.get("shutdown_pending"):
-            self.cancel_shutdown_btn.show()
+            self.shutdown_banner.show()
+
+    def resizeEvent(self, e):
+        narrow = self.width() < 940          # small window: tighter setup column, compact numbers, no key hints
+        if narrow != self._narrow:
+            self._narrow = narrow
+            self.left_scroll.setFixedWidth(372 if narrow else 404)
+            for v in [c.value for c in self.res_cards.values()] + list(self.scout.values()):
+                v.set_fmt(fmt_short if narrow else fmt_int)
+            self.set_hotkeys(self._keys)
+        super().resizeEvent(e)
 
     def _tick(self):
         if self._started:
             s = int(time.time() - self._started)
-            self.status_labels["time"].setText(f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}")
+            self.run_time.setText(f"{s // 3600}:{s // 60 % 60:02d}:{s % 60:02d}")
 
     def append_log(self, msg, level):
-        fmt = QTextCharFormat()
-        if level in LEVEL_COLORS:
-            fmt.setForeground(LEVEL_COLORS[level])
-        cursor = self.log_view.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertText(msg + "\n", fmt)
-        self.log_view.setTextCursor(cursor)
-        self.log_view.ensureCursorVisible()
+        self.log_view.append(msg, level)

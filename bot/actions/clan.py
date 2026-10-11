@@ -105,8 +105,19 @@ def request(bot, text=""):
     return True
 
 
+def in_clan(bot):
+    """False when the village shows 'Social' instead of the clan chat button."""
+    if not go_home(bot):
+        raise BotError("Not on the home village")
+    return not bot.exists("home/social_button")
+
+
 def feeder_turn(bot, account, settings):
     """On a feeder account: empty the CC (optional) and request."""
+    if not in_clan(bot):
+        log.warning("%s is not in a clan: it cannot request. Join it to the Main's clan or set it to Skip.",
+                    account["name"])
+        return False
     open_army(bot)
     try:
         if settings["donate"].get("remove_cc_before_request", True):

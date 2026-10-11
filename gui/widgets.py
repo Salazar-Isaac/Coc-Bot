@@ -1,10 +1,13 @@
 """Reusable widgets: screenshot box-selection dialog, number spin boxes."""
 
 import numpy as np
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QLineEdit, QSpinBox,
+from PySide6.QtCore import QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QHBoxLayout, QLabel, QLineEdit, QSpinBox,
                                QVBoxLayout, QWidget)
+
+from gui import theme as T
+from gui.components import Button, label
 
 
 def to_pixmap(frame_bgr):
@@ -51,18 +54,38 @@ class ImageCanvas(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(20, 20, 24))
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        p.fillRect(self.rect(), QColor(T.SIDEBAR))
         s, ox, oy = self._geom()
-        p.drawPixmap(QRect(int(ox), int(oy), int(self.img_w * s), int(self.img_h * s)), self.pixmap)
-        for r, color, label in self.marks:
+        target = QRectF(ox, oy, self.img_w * s, self.img_h * s)
+        clip = QPainterPath()
+        clip.addRoundedRect(target, 8, 8)
+        p.save()
+        p.setClipPath(clip)
+        p.drawPixmap(target.toRect(), self.pixmap)
+        if self._rect is not None:
+            dim = QPainterPath()
+            dim.addRect(target)
+            hole = QPainterPath()
+            hole.addRect(QRectF(self._to_widget(self._rect)))
+            p.fillPath(dim.subtracted(hole), QColor(0, 0, 0, 110))
+        p.restore()
+        for r, color, text in self.marks:
             p.setPen(QPen(color, 2))
             wr = self._to_widget(r)
             p.drawRect(wr)
-            if label:
-                p.drawText(wr.topLeft() + QPoint(2, -4), label)
+            if text:
+                p.drawText(wr.topLeft() + QPoint(2, -4), text)
         if self._rect is not None:
-            p.setPen(QPen(QColor(0, 230, 120), 2, Qt.DashLine))
-            p.drawRect(self._to_widget(self._rect))
+            wr = self._to_widget(self._rect)
+            p.setPen(QPen(QColor(T.GOLD), 2, Qt.DashLine))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(wr)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(T.GOLD))
+            for c in (wr.topLeft(), wr.topRight(), wr.bottomLeft(), wr.bottomRight()):
+                p.drawEllipse(c, 4, 4)
 
     def mousePressEvent(self, e):
         self._start = self._to_img(e.position().toPoint())
@@ -100,36 +123,54 @@ class CropDialog(QDialog):
         if box:
             self.canvas.set_selection(box)
         lay = QVBoxLayout(self)
-        tip = QLabel(f"Drag a box around: <b>{hint}</b>")
-        tip.setWordWrap(True)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(12)
+        head = QLabel(title)
+        head.setFont(T.font(13, QFont.DemiBold, display=True))
+        lay.addWidget(head)
+        tip = label(f"Drag a box around: <b style='color:{T.GOLD_HI}'>{hint}</b>", "muted", wrap=True)
+        tip.setTextFormat(Qt.RichText)
         lay.addWidget(tip)
         lay.addWidget(self.canvas, 1)
         self.value = None
         if ask_value:
             row = QHBoxLayout()
-            row.addWidget(QLabel(ask_value))
+            row.addWidget(label(ask_value))
             self.value = QLineEdit()
             row.addWidget(self.value, 1)
             lay.addLayout(row)
-        self.info = QLabel("")
-        lay.addWidget(self.info)
+        bottom = QHBoxLayout()
+        self.info = label("", "muted")
+        self.info.setFont(T.font(9, mono=True))
+        bottom.addWidget(self.info, 1)
+        cancel = Button("Cancel", variant="secondary")
+        save = Button("Save", "check", variant="primary")
+        cancel.clicked.connect(self.reject)
+        save.clicked.connect(self._accept)
+        bottom.addWidget(cancel)
+        bottom.addWidget(save)
+        lay.addLayout(bottom)
         self.canvas.changed.connect(self._show_box)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self._accept)
-        buttons.rejected.connect(self.reject)
-        lay.addWidget(buttons)
-        self.resize(1320, 860)
+        self.resize(1320, 880)
+        self._show_box()
+
+    def showEvent(self, e):
+        T.style_window(self, T.SURFACE)
+        super().showEvent(e)
 
     def _show_box(self):
         b = self.canvas.selection()
-        self.info.setText(f"Box: x={b[0]} y={b[1]} w={b[2]} h={b[3]}" if b else "")
+        self.info.setText(f"x={b[0]}  y={b[1]}  w={b[2]}  h={b[3]}" if b else "No box yet")
+        self.info.setStyleSheet("")
 
     def _accept(self):
         if self.canvas.selection() is None:
             self.info.setText("Drag a box first.")
+            self.info.setStyleSheet(f"color: {T.AMBER};")
             return
         if self.value is not None and not self.value.text().strip():
             self.info.setText("Type the value too.")
+            self.info.setStyleSheet(f"color: {T.AMBER};")
             return
         self.accept()
 
@@ -140,12 +181,82 @@ class CropDialog(QDialog):
         return self.value.text().strip() if self.value is not None else None
 
 
-class BigSpin(QSpinBox):
+class Spin(QSpinBox):
+    """Spin box that only reacts to the mouse wheel when focused (scrolling a page never changes values).
+    While it shows its special text (e.g. "Any", "No limit", "TH table") the text is dimmed."""
+
+    def __init__(self, minimum=0, maximum=999, suffix="", special="", parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFixedHeight(34)
+        self.setRange(minimum, maximum)
+        if suffix:
+            self.setSuffix(suffix)
+        if special:
+            self.setSpecialValueText(special)
+        self.valueChanged.connect(self._dim)
+        self._dim()
+
+    def setSpecialValueText(self, text):
+        super().setSpecialValueText(text)
+        self._dim()
+
+    def _dim(self, *_):
+        dim = bool(self.specialValueText()) and self.value() == self.minimum()
+        if self.property("dim") != dim:
+            self.setProperty("dim", dim)
+            self.style().unpolish(self)
+            self.style().polish(self)
+
+    def wheelEvent(self, e):
+        if self.hasFocus():
+            super().wheelEvent(e)
+        else:
+            e.ignore()
+
+
+class DoubleSpin(QDoubleSpinBox):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFixedHeight(34)
+
+    def wheelEvent(self, e):
+        if self.hasFocus():
+            super().wheelEvent(e)
+        else:
+            e.ignore()
+
+
+class Combo(QComboBox):
+    """Combo box that ignores the wheel unless focused; items may carry a tooltip."""
+
+    def __init__(self, items=(), editable=False, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setEditable(editable)
+        for it in items:
+            data, text = it[0], it[1]
+            self.addItem(text, data)
+            if len(it) > 2:
+                self.setItemData(self.count() - 1, it[2], Qt.ToolTipRole)
+
+    def select(self, data):
+        self.setCurrentIndex(max(0, self.findData(data)))
+
+    def wheelEvent(self, e):
+        if self.hasFocus():
+            super().wheelEvent(e)
+        else:
+            e.ignore()
+
+
+class BigSpin(Spin):
     """Integer spin box for resource amounts, shown with thousands separators."""
 
     def __init__(self, maximum=200_000_000, step=100_000, parent=None):
-        super().__init__(parent)
-        self.setRange(0, maximum)
+        super().__init__(0, maximum, parent=parent)
         self.setSingleStep(step)
         self.setGroupSeparatorShown(True)
-        self.setMinimumWidth(130)
+        self.setMinimumWidth(140)
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

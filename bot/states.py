@@ -13,6 +13,8 @@ log = logging.getLogger("bot")
 # Order matters: popups and overlays first, the village (behind them) last.
 STATES = [
     ("reload", ["popup/reload", "popup/try_again", "popup/anyone_there"]),
+    ("daily", ["popup/daily_title"]),
+    ("dialog", ["popup/speech_corner"]),          # event/tutorial character talking
     ("switcher", ["sid/switch_id_label"]),
     ("settings", ["settings/title"]),
     ("army", ["army/my_army_title"]),
@@ -22,6 +24,8 @@ STATES = [
     ("confirm", ["battle/confirm_okay"]),
     ("scout", ["scout/next"]),              # "Available Loot" stays visible in battle, Next does not
     ("battle", ["battle/surrender"]),
+    ("donate", ["donate/window_title"]),
+    ("chat", ["chat/close"]),                     # clan chat open over the village
     ("home", ["home/attack_button", "home/settings_button"]),
     ("loading", ["load/loading"]),
 ]
@@ -29,7 +33,7 @@ STATES = [
 CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close"]
 # Buttons worth tapping wherever they appear when the screen is not recognised.
 ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "battle/confirm_okay",
-                    "popup/reload", "popup/try_again", "popup/okay"]
+                    "popup/reload", "popup/try_again", "popup/okay", "popup/daily_claim", "popup/close_x"]
 
 
 def detect(frame):
@@ -109,6 +113,21 @@ def go_home(bot, timeout=60.0):
                 bot.tap_match(m)
             else:
                 bot.tap(*space.center(960, 600), jitter=20)   # each tap breaks one lock on the chest
+        elif state == "donate":
+            bot.tap_point("donate.close", jitter=3)
+        elif state == "chat":
+            bot.tap_point("chat.close", jitter=2)
+        elif state == "daily":
+            # the X only works after claiming today's reward
+            m = vision.templates.has("popup/daily_claim") and vision.find(frame, "popup/daily_claim")
+            if m:
+                bot.tap_match(m)
+            else:
+                bot.tap_point("popup.close_x", jitter=2)
+        elif state == "dialog":
+            bot.tap(*space.center(1300, 300), jitter=10)     # next line of the conversation
+            control.sleep(0.4)
+            continue
         elif state == "reload":
             for k in ("popup/reload", "popup/try_again"):
                 m = vision.templates.has(k) and vision.find(frame, k)

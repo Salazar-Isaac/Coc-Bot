@@ -34,6 +34,7 @@ DEFAULT_LAYOUT = {
         "chat.scroll_from": [300, 300],      # swipe down in the chat = older messages
         "chat.scroll_to": [300, 760],
         "donate.close": [300, 240],          # a spot in the chat beside the donate window
+        "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
     },
     "regions": {
         "home.gold": [1600, 28, 230, 44],

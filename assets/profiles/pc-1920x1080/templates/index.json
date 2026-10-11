@@ -359,6 +359,21 @@
     ],
     "threshold": 0.85
   },
+  "home/social_button": {
+    "box": [
+      22,
+      440,
+      90,
+      106
+    ],
+    "region": [
+      0,
+      380,
+      172,
+      226
+    ],
+    "threshold": 0.85
+  },
   "popup/anyone_there": {
     "box": [
       584,
@@ -371,6 +386,51 @@
       388,
       320,
       156
+    ],
+    "threshold": 0.85
+  },
+  "popup/close_x": {
+    "box": [
+      1580,
+      120,
+      72,
+      72
+    ],
+    "region": [
+      1300,
+      60,
+      560,
+      260
+    ],
+    "threshold": 0.85
+  },
+  "popup/daily_claim": {
+    "box": [
+      285,
+      416,
+      234,
+      80
+    ],
+    "region": [
+      260,
+      380,
+      1320,
+      470
+    ],
+    "threshold": 0.85
+  },
+  "popup/daily_title": {
+    "box": [
+      755,
+      140,
+      360,
+      55
+    ],
+    "region": [
+      695,
+      80,
+      480,
+      175
     ],
     "threshold": 0.85
   },
@@ -388,6 +448,21 @@
       154
     ],
     "threshold": 0.85
+  },
+  "popup/speech_corner": {
+    "box": [
+      441,
+      690,
+      60,
+      40
+    ],
+    "region": [
+      0,
+      300,
+      1920,
+      780
+    ],
+    "threshold": 0.8
   },
   "request/send": {
     "box": [
