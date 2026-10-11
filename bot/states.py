@@ -224,6 +224,9 @@ def _close_any_popup(bot, frame):
             if m:
                 bot.tap_match(m, jitter=2)
                 return
+    if bot.device.kind == "adb":
+        bot.key("back")                  # Android: Back closes the window on top - safer than a blind tap
+        return
     _tap_empty(bot, frame)
 
 
@@ -354,7 +357,10 @@ def go_home(bot, timeout=60.0):
                 key, box = system_button(frame)                    # no template for this button yet
                 tapped = bool(key) and press_reload(bot, frame, key, box)
                 if not tapped:
-                    log.warning("A game dialog without Try Again / Reload is open; waiting")
+                    if bot.device.kind == "adb":
+                        bot.key("back")          # e.g. Android's "exit the game?": dismiss it
+                    else:
+                        log.warning("A game dialog without Try Again / Reload is open; waiting")
             if tapped:
                 end = max(end, time.monotonic() + 90)              # never give up while it reconnects
                 control.sleep(1.0)

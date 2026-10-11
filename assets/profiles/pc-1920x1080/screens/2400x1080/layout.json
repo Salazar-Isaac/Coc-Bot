@@ -27,6 +27,14 @@
     "sid.page_up_to": [
       1760,
       940
+    ],
+    "home.safe": [
+      680,
+      45
+    ],
+    "bb.safe": [
+      680,
+      45
     ]
   },
   "regions": {

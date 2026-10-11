@@ -72,14 +72,29 @@ def read_switcher(bot, frame=None):
 
 
 def read_town_hall(frame, name_box):
-    """'Town Hall: 17' is two lines below the name."""
+    """'Town Hall: 17' is a couple of lines below the name (how far depends on the screen):
+    read the lines under the name and take the one that says Town Hall."""
     x, y, w, h = name_box
-    off = space.s(56)
-    if y + off + h + 4 > frame.shape[0]:
+    top = y + h
+    bottom = min(frame.shape[0], y + h * 5)
+    if bottom - top < h:
         return 0                                   # card cut off at the bottom of the panel
-    text, _ = vision.text_reader.read_line(frame, (x, y + off, space.s(200), h + 4))
-    m = re.search(r"(\d{1,2})\s*$", text)
-    return int(m.group(1)) if m else 0
+    width = max(w, space.s(260))
+    gray = frame[top:bottom, x:x + width].min(axis=2)
+    ink = (gray < 200).sum(axis=1) >= 3               # rows with text (the card is light)
+    r = 0
+    while r < len(ink):                               # each text line below the name, top to bottom
+        if ink[r]:
+            start = r
+            while r < len(ink) and ink[r]:
+                r += 1
+            if r - start >= 8:
+                text, conf = vision.text_reader.read_line(frame, (x, top + start - 4, width, r - start + 8))
+                m = re.search(r"hall\W*(\d{1,2})\s*$", text.lower())
+                if m and conf > 0.5:
+                    return int(m.group(1))
+        r += 1
+    return 0
 
 
 def open_switcher(bot):

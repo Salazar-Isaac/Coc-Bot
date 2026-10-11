@@ -26,8 +26,8 @@ log = logging.getLogger("bot")
 
 # Windows drawn in the middle of the screen (Settings, army, popups ...). On a phone each one has
 # its own size (e.g. Settings 1.0x, army 1.15x the PC's), learned the first time it is waited for.
-WINDOW_GROUPS = {"settings", "army", "popup", "request", "shop", "results", "chest", "lab", "upgrade", "clan",
-                 "dialog", "attack_menu"}
+WINDOW_GROUPS = {"settings", "army", "popup", "request", "results", "chest", "lab", "upgrade", "clan",
+                 "dialog", "attack_menu"}             # (the Shop is a full-screen page: edge-pinned)
 KIND_OVERRIDE = {"battle/confirm_okay": "settings"}     # the Okay dialog: a small centred window
 
 
