@@ -127,19 +127,9 @@ def in_clan(bot):
 def feeder_turn(bot, account, settings):
     """On a feeder account: empty the CC (optional) and request."""
     if in_clan(bot) is False:
-        tag = settings["donate"].get("clan_tag", "")
-        if tag and settings["donate"].get("auto_join", True):
-            log.info("%s is not in a clan: joining %s", account["name"], tag)
-            if join_clan(bot, tag):
-                bot.sleep(1.0)
-            else:
-                account["_no_clan"] = True
-                return False
-        else:
-            log.warning("%s is not in a clan: it cannot request. Set the clan tag on the Donate page to join "
-                        "it automatically, or set it to Skip. (Skipped for the next hour.)", account["name"])
-            account["_no_clan"] = True
-            return False
+        log.warning("%s is not in a clan: it cannot request (skipped for the next hour).", account["name"])
+        account["_no_clan"] = True
+        return False
     open_army(bot)
     try:
         if settings["donate"].get("remove_cc_before_request", True):
@@ -544,66 +534,3 @@ def use_recipe(bot, name, check=()):
     finally:
         close_army(bot)
         go_home(bot)
-
-
-# --- joining a clan ---------------------------------------------------------------------------
-
-def _norm_tag(t):
-    return "#" + re.sub(r"[^0-9A-Z]", "", (t or "").upper().replace("O", "0")).lstrip("#")
-
-
-def join_clan(bot, tag):
-    """Join the clan with this tag (only for an account that has no clan). The clan's tag is
-    checked on its details page before Join is pressed. Returns True if the account is now in a clan."""
-    tag = (tag or "").strip()
-    if not tag:
-        return False
-    status = in_clan(bot)
-    if status is not False:
-        return bool(status)
-    bot.tap_point("home.profile")                    # level badge, top left -> profile / clans window
-    if not bot.wait("clan/join_tab", 5, interval=0.25):
-        log.warning("Clan window did not open")
-        go_home(bot)
-        return False
-    try:
-        bot.tap_template("clan/join_tab", timeout=3, after=0.8)
-        bot.tap_template("clan/search_clans_tab", timeout=4, after=0.8)
-        typed = ""
-        for attempt in range(3):                      # the text box needs a moment; check and retype
-            bot.tap_point("clan.search_box")
-            bot.sleep(1.0)
-            for _ in range(16):
-                bot.key("backspace")
-                bot.sleep(0.03)
-            bot.sleep(0.4)
-            bot.device.type_text(tag)
-            bot.sleep(0.6)
-            typed, _ = vision.text_reader.read_line(bot.shot(), bot.layout.region("clan.search_box"))
-            if _norm_tag(typed) == _norm_tag(tag):
-                break
-        else:
-            log.warning("Typing the clan tag failed (read '%s')", typed)
-            return False
-        bot.key("enter")
-        bot.sleep(0.3)
-        bot.tap_template("clan/search_button", timeout=3, after=2.0)
-        bot.tap_point("clan.first_result")
-        if not bot.wait("clan/join_button", 5, interval=0.25):
-            log.warning("No Join button for %s (clan full, closed, or invite only?)", tag)
-            return False
-        shown, _ = vision.text_reader.read_line(bot.shot(), bot.layout.region("clan.details_tag"))
-        if _norm_tag(shown) != _norm_tag(tag):
-            log.warning("Search found clan %s instead of %s: not joining", shown, tag)
-            return False
-        bot.tap_template("clan/join_button", timeout=2, after=2.0)
-    finally:
-        m = bot.find("clan/info_close")
-        if m:
-            bot.tap_match(m, jitter=1)
-            bot.sleep(0.5)
-        bot.tap_point("home.safe", jitter=5)          # deselect anything a stray tap selected
-        go_home(bot)
-    ok = in_clan(bot) is True
-    log.info("Joined clan %s" if ok else "Could not join clan %s", tag)
-    return ok

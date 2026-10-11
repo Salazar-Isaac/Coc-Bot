@@ -70,10 +70,8 @@ DEFAULT_SETTINGS = {
         "remove_cc_before_request": True,
         "request_text": "",
         "loot_before_donate": False,        # Loot + Donate: loot to full before the first round (XpIncrease: no)
-        "clan_tag": "",                     # the Main's clan; accounts without a clan join it (e.g. "#2RPLP89CY")
         "method": "fast",                   # "fast": XpIncrease-style bursts of taps; "careful": verify each unit
         "special_template": "donate/super_wizard",   # in colour = big request -> items marked "big"
-        "auto_join": True,
         # what the main account donates, in priority order (icons captured as templates "donate/<name>")
         "items": [],
     },

@@ -1,6 +1,6 @@
 {
   "device": {
-    "type": "pc",
+    "type": "adb",
     "shortcut_path": "C:\\Users\\Amigo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Google Play Games\\Clash of Clans.lnk",
     "window_title": "Clash of Clans",
     "adb_path": "",
@@ -104,10 +104,8 @@
     "remove_cc_before_request": true,
     "request_text": "",
     "loot_before_donate": false,
-    "clan_tag": "#2RPLP89CY",
     "method": "fast",
     "special_template": "donate/super_wizard",
-    "auto_join": true,
     "items": [
       {
         "name": "Balloon",
@@ -164,6 +162,7 @@
   },
   "village": {
     "collect": true,
+    "collect_every": 60,
     "upgrade_buildings": false,
     "research": false,
     "max_upgrades": 2,
@@ -188,8 +187,7 @@
       "loot",
       "both",
       "feeder"
-    ],
-    "collect_every": 60
+    ]
   },
   "builder": {
     "after_main": false,

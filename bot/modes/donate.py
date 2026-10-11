@@ -13,6 +13,7 @@ import logging
 import time
 
 from .. import config
+from ..core.context import BotError
 from ..actions import account as account_actions
 from ..actions import clan, loot
 from . import register
@@ -105,17 +106,23 @@ def round_need(bot, state):
     return bot.settings["donate"].get("min_elixir_keep", 0) + state.get("round_elixir", 0)
 
 
-def donation_cycle(bot, main, state, check_open=True):
-    """The XpIncrease way: on Main, first donate to requests that are still open; then, while Main
-    has enough elixir for a whole round, every requesting account requests and Main donates.
-    check_open=False right after looting (Main is full; the request round can start where we are).
-    Returns "low" (not enough elixir: time to loot), "rounds" (round limit) or "idle"."""
+def donation_cycle(bot, main, state):
+    """The XpIncrease way, always starting on Main (you may have spent its elixir meanwhile):
+      1. not enough elixir for a whole round -> "low" (time to loot);
+      2. donate to requests that are still open, then check the elixir again;
+      3. while it covers a whole round: every requesting account requests, Main donates.
+    Returns "low", "rounds" (round limit reached) or "idle" (nothing was donated)."""
     max_rounds = bot.settings["donate"].get("rounds", 0)
-    resume = state.get("request_next", 0) > 0          # a stopped run was in the middle of a request round
-    elixir = None
-    if check_open and not resume:
-        log.info("Main: donating to requests that are still open")
-        _, elixir = donate_round(bot, main, state, "donate open requests", learn=False)
+    if not _switch(bot, main, state):
+        raise BotError(f"Could not open {main['name']}")
+    elixir = main_elixir(bot)
+    need = round_need(bot, state)
+    if elixir is not None and elixir < need:
+        log.info("%s has %s elixir; a round needs %s: time to loot", main["name"], f"{elixir:,}", f"{need:,}")
+        return "low"
+    log.info("%s has %s elixir: donating to requests that are still open first", main["name"],
+             f"{elixir:,}" if elixir is not None else "?")
+    _, elixir = donate_round(bot, main, state, "donate open requests", learn=False)
     n = 0
     while True:
         need = round_need(bot, state)
@@ -124,7 +131,7 @@ def donation_cycle(bot, main, state, check_open=True):
             return "low"
         n += 1
         log.info("Donation round %d%s (Main's elixir %s; a round needs %s)", n,
-                 f" of {max_rounds}" if max_rounds else "", f"{elixir:,}" if elixir is not None else "full",
+                 f" of {max_rounds}" if max_rounds else "", f"{elixir:,}" if elixir is not None else "?",
                  f"{need:,}")
         request_round(bot, state)
         donated, elixir = donate_round(bot, main, state)
@@ -148,9 +155,9 @@ def run_loot_donate(bot, state):
     while rounds == 0 or n < rounds:
         n += 1
         log.info("Cycle %d%s", n, f" of {rounds}" if rounds else "")
-        if n == 1 and bot.settings["donate"].get("loot_before_donate", False) and not state.get("request_next"):
+        if n == 1 and bot.settings["donate"].get("loot_before_donate", False):
             _loot_all(bot, looters, state)              # "Always loot to full first"
-        donation_cycle(bot, main, state, check_open=(n == 1))
+        donation_cycle(bot, main, state)
         _loot_all(bot, looters, state)
 
 
@@ -172,29 +179,3 @@ def run_donate_only(bot, state):
         if donation_cycle(bot, main, state) == "low":
             log.info("Main's elixir is low: Donate only is done")
             return
-
-
-@register("join_clan", "Join clan",
-          "Visit every 'Loot + request' and Feeder account and join the clan from the Donate page "
-          "(clan tag) when the account has no clan. Accounts already in a clan are left alone.", order=7)
-def run_join_clan(bot, state):
-    tag = bot.settings["donate"].get("clan_tag", "")
-    if not tag:
-        raise StopRun("Set the clan tag on the Donate page first (e.g. #2RPLP89CY).")
-    accounts = active_accounts(bot, REQUEST_ROLES)
-    joined, already, failed = [], 0, []
-    for i, acc in enumerate(accounts, 1):
-        bot.status(account=acc["name"], progress=f"{i}/{len(accounts)}", action="Joining clan")
-        if not _switch(bot, acc, state):
-            failed.append(acc["name"])
-            continue
-        if clan.in_clan(bot) is True:
-            already += 1
-        elif with_recovery(bot, f"join clan on {acc['name']}", lambda: clan.join_clan(bot, tag), attempts=2):
-            joined.append(acc["name"])
-            state.setdefault("no_clan", {}).pop(acc["name"], None)
-            config.save_state(state)
-        else:
-            failed.append(acc["name"])
-    log.info("Join clan done: %d joined (%s), %d already in a clan, %d failed%s", len(joined), ", ".join(joined),
-             already, len(failed), f" ({', '.join(failed)})" if failed else "")
