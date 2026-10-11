@@ -36,6 +36,7 @@ class Bot:
         self.current_acc = None          # the account dict we switched to (to reopen it after a reload)
         self.state = None                # the run's saved state (config/state.json)
         self.reloaded = False            # the game's Reload / Try Again was tapped: check the account
+        self.reload_at = 0.0
         self.stats = {"attacks": 0, "searches": 0, "loot": {"gold": 0, "elixir": 0, "dark": 0}}
 
     # --- status --------------------------------------------------------------------------

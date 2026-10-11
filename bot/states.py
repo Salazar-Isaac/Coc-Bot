@@ -148,6 +148,7 @@ def press_reload(bot, frame, key=None, box=None):
             log.info("Saved the game's '%s' button as template %s", key.split("/")[-1].replace("_", " "), key)
         bot.tap(x + w // 2, y + h // 2, jitter=2)
     bot.reloaded = True
+    bot.reload_at = time.monotonic()
     return True
 
 
@@ -221,14 +222,21 @@ def go_home(bot, timeout=60.0):
     chest_taps = 0
     last = None
     last_ocr = 0.0
+    loaded_after = None         # the Reload / Try Again tap after which the game was seen loading
     while time.monotonic() < end:
         frame = bot.shot()
         state = detect(frame)
         if state != last:
             log.debug("screen: %s", state)
             last = state
+        if bot.reloaded and state not in ("home", "reload"):
+            loaded_after = bot.reload_at            # the game is loading again after that tap
         if state == "home":
-            if getattr(bot, "reloaded", False):
+            if bot.reloaded:
+                # right after the tap the old picture is still there: wait until it really reloaded
+                if loaded_after != bot.reload_at and time.monotonic() - bot.reload_at < 10:
+                    control.sleep(0.45)
+                    continue
                 after_reload(bot)
             return True
         if state == "unknown":

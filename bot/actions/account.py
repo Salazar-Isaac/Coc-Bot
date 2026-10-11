@@ -146,6 +146,9 @@ def on_account(bot, account):
                                 for a in bot.accounts)
     if unique:
         seen = read_player(bot)
+        if not seen:
+            bot.sleep(0.6)                            # the name appears a moment after the village
+            seen = read_player(bot)
         if seen:
             return same_name(seen, player)
     return bot.current_account == account["name"]
