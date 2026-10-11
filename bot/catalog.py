@@ -52,6 +52,8 @@ CATALOG = [
     ("army/cc_remove", "Army", "The Clan Castle trash button (CC section)", False),
     ("army/remove_title", "Army", "'Remove troops?' title of the remove confirmation", False),
     ("army/request_cooldown", "Army", "The request button while on cooldown (gem price + timer)", False),
+    ("army/use_recipe_title", "Army", "'Use Army Recipe?' title after picking a saved recipe", False),
+    ("army/recipes_arrow", "Army", "The Saved Recipes drop-down arrow", False),
     ("army/cc_title", "Army", "The Clan Castle troop count icon in the army screen", False),
     ("request/title", "Request", "'Request Reinforcements' title", False),
     ("request/text_box", "Request", "The message box in the request window", False),

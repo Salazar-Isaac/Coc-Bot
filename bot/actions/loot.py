@@ -8,7 +8,7 @@ from ..core import vision
 from ..core.context import BotError
 from ..core.control import control
 from ..states import go_home
-from . import attack
+from . import attack, clan, storage
 
 log = logging.getLogger("bot")
 
@@ -18,10 +18,14 @@ def watched(settings):
     return [r for r in config.RESOURCES if w.get(r)] or ["elixir"]
 
 
-def home_resources(bot):
-    """Current gold/elixir/dark on the home screen (None where unreadable)."""
+def home_resources(bot, account=None):
+    """Current gold/elixir/dark on the home screen (None where unreadable). With an account,
+    also refreshes its measured storage capacity from the resource bars."""
     frame = bot.shot()
-    return {r: bot.read_number(f"home.{r}", frame=frame) for r in config.RESOURCES}
+    res = {r: bot.read_number(f"home.{r}", frame=frame) for r in config.RESOURCES}
+    if account is not None:
+        storage.update_capacity(account, frame, res)
+    return res
 
 
 def fullness(bot, account, res):
@@ -123,6 +127,9 @@ def loot_until_full(bot, account):
     """Attack until the account's watched storages are full.
     Returns "full", "limit" (max attacks reached) or "stuck"."""
     s = bot.settings["loot"]
+    if s.get("army_recipe") and account.get("_recipe_set") != s["army_recipe"]:
+        if clan.use_recipe(bot, s["army_recipe"]):
+            account["_recipe_set"] = s["army_recipe"]      # once per visit
     attacks = 0
     stuck = 0
     before = None
@@ -130,7 +137,7 @@ def loot_until_full(bot, account):
         control.checkpoint()
         if not go_home(bot):
             raise BotError("Not on the home village")
-        res = home_resources(bot)
+        res = home_resources(bot, account)
         full, detail = is_full(bot, account, res)
         bot.status(account=account["name"], resources=res, fullness=detail)
         log.info("%s: %s", account["name"], _fmt_full(detail))

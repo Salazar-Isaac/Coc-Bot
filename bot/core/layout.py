@@ -36,6 +36,7 @@ DEFAULT_LAYOUT = {
         "donate.close": [1660, 640],         # village right of the donate window (it moves up and down)
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
         "top.builders_menu": [960, 50],      # builder counter -> upgrades list
+        "army.recipes_arrow": [1140, 155],   # Saved Recipes drop-down arrow in the army screen
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
         "request.cancel": [768, 722],        # Cancel of the request window
         "top.lab_menu": [760, 50],           # laboratory counter -> research list
@@ -52,6 +53,7 @@ DEFAULT_LAYOUT = {
         "sid.name_column": [1460, 520, 320, 560],
         "battle.troop_bar": [260, 915, 1660, 160],
         "top.builders": [950, 32, 66, 40],   # "1/5" free builders
+        "army.recipe_list": [865, 210, 550, 560],   # the Saved Recipes drop-down list
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },
 }

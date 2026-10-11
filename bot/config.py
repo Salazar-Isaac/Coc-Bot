@@ -26,6 +26,9 @@ DEFAULT_FULL_AT = {
     "11": {"gold": 8000000, "elixir": 8000000, "dark": 200000},
 }
 
+# "Full" = measured storage capacity minus this much room (5 lakh for gold/elixir).
+DEFAULT_MARGIN = {"gold": 500000, "elixir": 500000, "dark": 5000}
+
 DEFAULT_SETTINGS = {
     "device": {
         "type": "pc",                       # "pc" (Google Play Games) or "adb"
@@ -52,6 +55,9 @@ DEFAULT_SETTINGS = {
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
         "roles": {"main": True, "loot": True, "both": True, "feeder": False},   # who "Loot all accounts" loots
+        "full_mode": "capacity",            # "capacity": measured storage size - margin; "table": TH table
+        "army_recipe": "",                  # Saved Recipe to use before looting on every account (e.g. "loot")
+        "full_margin": {"gold": 500000, "elixir": 500000, "dark": 5000},
     },
     "full_at": DEFAULT_FULL_AT,
     "when_full": "switch",                  # "switch" / "wait" / "stop"
@@ -127,15 +133,24 @@ def load_accounts():
 
 
 def save_accounts(accounts):
+    clean = [{k: v for k, v in a.items() if not k.startswith("_")} for a in accounts]   # _x = this run only
     with _lock, open(ACCOUNTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(accounts, f, indent=2)
+        json.dump(clean, f, indent=2)
 
 
 def full_at(settings, account, resource):
-    """The amount at which `resource` counts as full for this account."""
+    """The amount at which `resource` counts as full for this account:
+    1. the account's own "full at" (Accounts page), else
+    2. its measured storage capacity minus the margin (Loot page, default 5 lakh), else
+    3. the Town Hall table."""
     own = (account.get("full_at") or {}).get(resource, 0)
     if own:
         return own
+    lo = settings.get("loot", {})
+    cap = (account.get("capacity") or {}).get(resource)
+    if cap and lo.get("full_mode", "capacity") == "capacity":
+        margin = (lo.get("full_margin") or {}).get(resource, DEFAULT_MARGIN[resource])
+        return max(1, cap - margin)
     table = settings.get("full_at", DEFAULT_FULL_AT)
     th = str(account.get("th") or "")
     if th in table:

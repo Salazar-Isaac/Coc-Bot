@@ -157,5 +157,168 @@
         "type": "siege"
       }
     ]
+  },
+  "edrag_clone": {
+    "description": "E-Dragons all round the base, siege + heroes, then Clone on the dragons",
+    "offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "points": {
+      "spells": [
+        [
+          240,
+          525
+        ],
+        [
+          913,
+          10
+        ],
+        [
+          1708,
+          520
+        ]
+      ],
+      "ring": [
+        [
+          683,
+          876
+        ],
+        [
+          491,
+          714
+        ],
+        [
+          240,
+          525
+        ],
+        [
+          515,
+          312
+        ],
+        [
+          751,
+          137
+        ],
+        [
+          913,
+          10
+        ],
+        [
+          1177,
+          125
+        ],
+        [
+          1438,
+          306
+        ],
+        [
+          1708,
+          520
+        ],
+        [
+          1539,
+          675
+        ],
+        [
+          1298,
+          848
+        ]
+      ],
+      "king": [
+        [
+          491,
+          714
+        ]
+      ],
+      "queen": [
+        [
+          751,
+          137
+        ]
+      ],
+      "warden": [
+        [
+          1438,
+          306
+        ]
+      ],
+      "champion": [
+        [
+          1298,
+          848
+        ]
+      ]
+    },
+    "steps": [
+      {
+        "key": "1",
+        "slot": 1,
+        "points": "ring",
+        "type": "troop"
+      },
+      {
+        "key": "2",
+        "slot": 2,
+        "points": "ring",
+        "type": "troop"
+      },
+      {
+        "key": "3",
+        "slot": 3,
+        "points": "ring",
+        "type": "troop"
+      },
+      {
+        "key": "z",
+        "slot": 4,
+        "points": "ring",
+        "type": "siege"
+      },
+      {
+        "key": "q",
+        "slot": 5,
+        "points": "king",
+        "type": "hero"
+      },
+      {
+        "key": "w",
+        "slot": 6,
+        "points": "queen",
+        "type": "hero"
+      },
+      {
+        "key": "e",
+        "slot": 7,
+        "points": "warden",
+        "type": "hero"
+      },
+      {
+        "key": "r",
+        "slot": 8,
+        "points": "champion",
+        "type": "hero"
+      },
+      {
+        "key": "a",
+        "slot": 9,
+        "points": "ring",
+        "type": "spell"
+      },
+      {
+        "key": "s",
+        "slot": 10,
+        "points": "ring",
+        "type": "spell"
+      },
+      {
+        "key": "d",
+        "slot": 11,
+        "points": "ring",
+        "type": "spell"
+      }
+    ]
   }
 }

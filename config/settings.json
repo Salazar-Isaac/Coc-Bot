@@ -27,7 +27,7 @@
     "battle_seconds": 60,
     "smart_deploy": true,
     "count_troops": true,
-    "attack_plan": "edrag_spread",
+    "attack_plan": "edrag_clone",
     "zoom_out": true,
     "stuck_attacks": 2,
     "roles": {
@@ -35,6 +35,13 @@
       "loot": true,
       "both": true,
       "feeder": false
+    },
+    "full_mode": "capacity",
+    "army_recipe": "loot",
+    "full_margin": {
+      "gold": 500000,
+      "elixir": 500000,
+      "dark": 5000
     }
   },
   "full_at": {

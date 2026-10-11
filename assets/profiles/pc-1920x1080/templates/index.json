@@ -74,6 +74,21 @@
     ],
     "threshold": 0.85
   },
+  "army/recipes_arrow": {
+    "box": [
+      1104,
+      132,
+      74,
+      48
+    ],
+    "region": [
+      1044,
+      72,
+      194,
+      168
+    ],
+    "threshold": 0.85
+  },
   "army/remove_title": {
     "box": [
       755,
@@ -116,6 +131,21 @@
       735,
       235,
       190
+    ],
+    "threshold": 0.85
+  },
+  "army/use_recipe_title": {
+    "box": [
+      740,
+      340,
+      445,
+      52
+    ],
+    "region": [
+      680,
+      280,
+      565,
+      172
     ],
     "threshold": 0.85
   },

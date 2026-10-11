@@ -110,6 +110,8 @@ def switch_to(bot, account, state=None):
     """Switch to `account` (dict with "name"). Learns its Town Hall level. Returns True."""
     name = account["name"]
     log.info("Switching to %s", name)
+    for k in [k for k in account if k.startswith("_")]:
+        account.pop(k)                                # per-visit flags (army recipe set, ...)
     bot.status(account=name, action="Switching account")
     open_switcher(bot)
     state = state if state is not None else {}

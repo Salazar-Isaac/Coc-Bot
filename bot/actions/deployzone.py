@@ -11,7 +11,7 @@ All coordinates are game space at full zoom-out; the village is centred, so the
 base-screen geometry below is shifted with space.center().
 """
 
-import math
+
 
 import cv2
 import numpy as np
@@ -22,6 +22,7 @@ from ..core.space import space
 # perspective). Bases can sit a little differently, so searches use it grown by MAP_GROW.
 DIAMOND = {"cx": 974, "cy": 525, "half_w": 734, "half_h_top": 515, "half_h_bottom": 580}
 MAP_GROW = 0.14
+GROUND_TOLERANCE = 16     # Lab colour distance: closer than this to a ground colour = ground
 
 # Screen areas covered by UI during a battle (base-screen coordinates).
 UI_BOXES = [
@@ -73,66 +74,80 @@ def _diamond_mask(h, w, inset=0.0):
 
 
 def building_mask(frame):
-    """Pixels of the scouted base: the walled base (largest blob) plus buildings close to it.
-    Grass, forest, and far-away scenery (cliffs, water, decorations) are left out."""
+    """Pixels of the scouted base, for ANY scenery: the ground's colours are learned from a strip
+    along the inside of the map edge (almost always empty ground: grass, stone, sand, purple...),
+    then everything that does not look like ground counts as buildings/walls. Only the main base
+    blob and buildings near it are kept; far scenery and decorations are dropped."""
     h, w = frame.shape[:2]
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    hue, sat = hsv[:, :, 0], hsv[:, :, 1]
-    grass = (hue >= 28) & (hue <= 85) & (sat >= 60)          # lawn, tiles and forest (any brightness)
-    mask = (~grass).astype(np.uint8) * 255
-    mask &= _diamond_mask(h, w, inset=-MAP_GROW)
-    mask &= cv2.bitwise_not(_ui_mask(h, w))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    n, labels, stats, cents = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    lab = cv2.cvtColor(cv2.GaussianBlur(frame, (5, 5), 0), cv2.COLOR_BGR2LAB).astype(np.float32)
+    ui = _ui_mask(h, w)
+    strip = (_diamond_mask(h, w, inset=0.0) > 0) & (_diamond_mask(h, w, inset=0.16) == 0) & (ui == 0)
+    samples = lab[strip][::5]
+    if len(samples) < 500:
+        return np.zeros((h, w), np.uint8)
+    k = 6
+    crit = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 1.0)
+    _, labels, centers = cv2.kmeans(samples, k, None, crit, 2, cv2.KMEANS_PP_CENTERS)
+    counts = np.bincount(labels.ravel(), minlength=k)
+    ground = centers[counts > 0.08 * len(samples)]           # big colour groups = ground shades
+    dist = np.min(np.stack([np.linalg.norm(lab - c, axis=2) for c in ground]), axis=0)
+    mask = ((dist > GROUND_TOLERANCE) * 255).astype(np.uint8)
+    mask &= _diamond_mask(h, w, inset=0.03)          # buildings stand inside the building grid
+    mask &= cv2.bitwise_not(ui)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    n, labels_, stats, cents = cv2.connectedComponentsWithStats(mask, connectivity=8)
     if n <= 1:
         return np.zeros_like(mask)
     main = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
-    # region around the main base: its bounding box grown by ~5 tiles
     mx, my, mw, mh = stats[main, :4]
-    grow = 170
-    keep = np.zeros_like(mask)
+    grow = 150
+    keep = labels_ == main
     for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] < 900:              # rocks, bushes, small decorations
-            continue
-        cx, cy = cents[i]
-        if i == main or (mx - grow <= cx <= mx + mw + grow and my - grow <= cy <= my + mh + grow):
-            keep[labels == i] = 255
-    return keep
+        if i != main and stats[i, cv2.CC_STAT_AREA] >= 900:
+            cx, cy = cents[i]
+            if mx - grow <= cx <= mx + mw + grow and my - grow <= cy <= my + mh + grow:
+                keep |= labels_ == i
+    return (keep * 255).astype(np.uint8)
 
 
 def deploy_line(frame, count=24, margin=70):
-    """`count` points around the base, evenly by angle, just outside the red zone.
-    Returns [] if no base was found."""
+    """`count` points spread evenly on a line around the whole base, `margin` px (about two
+    tiles) outside its outline, so they are just outside the no-deploy (red) area. Points that
+    would be off the map or under a button are pulled back toward the base, never closer than
+    most of the margin. Returns [] if no base was found."""
     mask = building_mask(frame)
-    ys, xs = np.nonzero(mask)
-    if len(xs) < 2000:
+    pts = cv2.findNonZero(mask)
+    if pts is None or len(pts) < 2000:
         return []
-    cx, cy = float(np.median(xs)), float(np.median(ys))
     h, w = mask.shape
+    hull = cv2.convexHull(pts)
+    filled = np.zeros_like(mask)
+    cv2.fillPoly(filled, [hull], 255)
+    kx, ky = margin, int(margin * 0.75)                  # isometric view: flatter vertically
+    grown = cv2.dilate(filled, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * kx + 1, 2 * ky + 1)))
+    contours, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return []
+    outline = max(contours, key=cv2.contourArea)[:, 0, :]
+    m = cv2.moments(hull)
+    cx, cy = (m["m10"] / m["m00"], m["m01"] / m["m00"]) if m["m00"] else (w / 2, h / 2)
+    keep_out = cv2.dilate(filled, cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (2 * int(kx * 0.7) + 1, 2 * int(ky * 0.7) + 1)))
     ui = _ui_mask(h, w)
-    max_r = int(math.hypot(w, h))
+    step = max(1, len(outline) // count)
     points = []
-    for i in range(count):
-        a = 2 * math.pi * i / count
-        dx, dy = math.cos(a), math.sin(a) * 0.75      # isometric view: flatter vertically
-        far = 0
-        for r in range(0, max_r, 4):
-            x, y = int(cx + dx * r), int(cy + dy * r)
-            if not (0 <= x < w and 0 <= y < h) or not in_diamond(x, y, inset=-MAP_GROW):
+    for i in range(0, len(outline), step):
+        x, y = int(outline[i][0]), int(outline[i][1])
+        # pull back toward the base until the point is on the map and off the buttons
+        for t in np.linspace(0, 0.6, 25):
+            px, py = int(x + (cx - x) * t), int(y + (cy - y) * t)
+            if not (0 <= px < w and 0 <= py < h) or keep_out[py, px]:
+                break                                     # would be inside the red area: give up
+            if in_diamond(px, py, inset=-MAP_GROW + 0.02) and not ui[py, px]:
+                points.append((px, py))
                 break
-            if mask[y, x]:
-                far = r
-        r = far + margin
-        # walk back toward the base if the point left the map or sits under a button,
-        # but never closer than most of the margin (that would be the red zone): then skip the ray
-        while r >= far + margin * 0.7:
-            x, y = int(cx + dx * r), int(cy + dy * r)
-            if 0 <= x < w and 0 <= y < h and in_diamond(x, y, inset=-MAP_GROW + 0.02) and not ui[y, x]:
-                points.append((x, y))
-                break
-            r -= 6
-    return points
+    return points[:count]
 
 
 def draw(frame, points):

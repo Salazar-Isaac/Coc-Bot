@@ -391,3 +391,38 @@ def donate_all(bot, settings, max_requests=60):
         go_home(bot)
     log.info("Donating done: %d unit(s) to %d request(s)", total, handled)
     return total
+
+
+# --- army recipes ------------------------------------------------------------------------
+
+def use_recipe(bot, name):
+    """Switch the army to the Saved Recipe called `name` (e.g. your E-Dragon + Clone "loot"
+    recipe). Returns True if it was applied, False if the account has no such recipe."""
+    from .account import same_name
+    if not name:
+        return False
+    open_army(bot)
+    try:
+        bot.tap_point("army.recipes_arrow")
+        bot.sleep(0.8)
+        frame = bot.shot()
+        rows = vision.text_reader.read(frame, bot.layout.region("army.recipe_list"))
+        target = None
+        for text, conf, (x, y, w, h) in rows:
+            if conf > 0.5 and (same_name(text, name) or text.strip().lower() == name.strip().lower()):
+                target = (x + w // 2, y + h // 2)
+                break
+        if not target:
+            log.info("No saved recipe named '%s' on this account (found: %s)", name,
+                     ", ".join(t for t, c, _ in rows if c > 0.5) or "none")
+            bot.tap_point("army.recipes_arrow")          # close the list
+            bot.sleep(0.4)
+            return False
+        bot.tap(*target, jitter=4)
+        if bot.wait("army/use_recipe_title", 3, interval=0.2):
+            bot.tap_template("battle/confirm_okay", timeout=3, after=0.6)
+        log.info("Army set to recipe '%s'", name)
+        return True
+    finally:
+        close_army(bot)
+        go_home(bot)

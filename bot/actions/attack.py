@@ -375,7 +375,7 @@ def deploy(bot, plan):
         centre = space.center(deployzone.DIAMOND["cx"], deployzone.DIAMOND["cy"])
 
     def plan_points(step):
-        pts = plan["points"][step["points"]] if isinstance(step["points"], str) else step["points"]
+        pts = plan["points"].get(step["points"], []) if isinstance(step["points"], str) else step["points"]
         return [space.center(x, y) for x, y in pts]
 
     def nearest_on_ring(pt):
@@ -393,8 +393,12 @@ def deploy(bot, plan):
             continue                         # nothing of this unit left
         if not select(bot, step, slots):
             continue
-        base_pts = plan_points(step)
-        if kind == "spell" or not ring:
+        base_pts = plan_points(step) if isinstance(step.get("points"), list) or step.get("points") in plan["points"] else []
+        if kind == "spell" and step.get("points") == "ring":
+            # e.g. Clone right after the dragons: just inside the ring, spread around the base
+            src = ring or base_pts
+            spots = [(int(x + (centre[0] - x) * 0.18), int(y + (centre[1] - y) * 0.18)) for x, y in src]
+        elif kind == "spell" or not ring:
             spots = base_pts
         elif step.get("points") == "ring" and kind != "hero":
             spots = ring
