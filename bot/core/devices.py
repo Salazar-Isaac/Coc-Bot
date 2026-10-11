@@ -202,7 +202,7 @@ class PcDevice(Device):
 
     def type_text(self, text):
         self.prepare()
-        self._kb.type(text)
+        self._pg.write(text, interval=0.1)       # the game drops characters typed faster
         return True
 
     def zoom_out(self, steps=10):

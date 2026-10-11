@@ -22,6 +22,9 @@ DEFAULT_LAYOUT = {
         "bb.safe": [1450, 38],             # Builder Base: sky/cliff above the island (the boat can be at the right edge)
         "popup.shield_continue": [960, 902],
         "shop.close": [1857, 66],
+        "home.profile": [58, 48],            # level badge -> profile / clan window
+        "clan.first_result": [720, 520],
+        "clan.search_box": [630, 350],
         "attack_menu.find_match": [273, 745],
         "attack_menu.close": [1400, 540],  # tapping the village beside the menu closes it
         "army.attack": [1620, 918],
@@ -70,6 +73,8 @@ DEFAULT_LAYOUT = {
         "bb.stars": [75, 900, 100, 42],      # star bonus "4/8" on the Attack button
         "bb.builders": [1075, 32, 70, 40],
         "bb.lab": [875, 32, 70, 40],
+        "clan.search_box": [312, 320, 640, 62],
+        "clan.details_tag": [415, 320, 200, 34],
         "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },

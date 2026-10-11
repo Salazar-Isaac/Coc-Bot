@@ -70,6 +70,8 @@ DEFAULT_SETTINGS = {
         "remove_cc_before_request": True,
         "request_text": "",
         "loot_before_donate": True,         # Loot + Donate: main and loot-only accounts loot until full first
+        "clan_tag": "",                     # the Main's clan; accounts without a clan join it (e.g. "#2RPLP89CY")
+        "auto_join": True,
         # what the main account donates, in priority order (icons captured as templates "donate/<name>")
         "items": [],
     },

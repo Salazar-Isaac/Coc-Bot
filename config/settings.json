@@ -104,6 +104,8 @@
     "remove_cc_before_request": true,
     "request_text": "",
     "loot_before_donate": true,
+    "clan_tag": "#2RPLP89CY",
+    "auto_join": true,
     "items": [
       {
         "name": "Archer",

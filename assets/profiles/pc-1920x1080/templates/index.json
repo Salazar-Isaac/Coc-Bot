@@ -884,6 +884,126 @@
     ],
     "threshold": 0.85
   },
+  "clan/info_close": {
+    "box": [
+      1645,
+      55,
+      70,
+      65
+    ],
+    "region": [
+      1585,
+      0,
+      190,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "clan/join_button": {
+    "box": [
+      1430,
+      700,
+      268,
+      68
+    ],
+    "region": [
+      1370,
+      640,
+      388,
+      188
+    ],
+    "threshold": 0.85
+  },
+  "clan/join_tab": {
+    "box": [
+      1060,
+      70,
+      155,
+      42
+    ],
+    "region": [
+      1000,
+      10,
+      275,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "clan/leave": {
+    "box": [
+      1430,
+      700,
+      268,
+      68
+    ],
+    "region": [
+      1370,
+      640,
+      388,
+      188
+    ],
+    "threshold": 0.85
+  },
+  "clan/omchi_tag": {
+    "box": [
+      418,
+      322,
+      145,
+      30
+    ],
+    "region": [
+      358,
+      262,
+      265,
+      150
+    ],
+    "threshold": 0.85
+  },
+  "clan/result_omchi": {
+    "box": [
+      370,
+      468,
+      135,
+      40
+    ],
+    "region": [
+      310,
+      408,
+      255,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "clan/search_button": {
+    "box": [
+      1000,
+      325,
+      165,
+      45
+    ],
+    "region": [
+      940,
+      265,
+      285,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "clan/search_clans_tab": {
+    "box": [
+      880,
+      185,
+      230,
+      40
+    ],
+    "region": [
+      820,
+      125,
+      350,
+      160
+    ],
+    "threshold": 0.85
+  },
   "donate/archer": {
     "box": [
       793,

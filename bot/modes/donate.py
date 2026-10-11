@@ -138,3 +138,29 @@ def run_donate_only(bot, state):
     while rounds == 0 or n < rounds:
         n += 1
         donation_cycle(bot, main, state)
+
+
+@register("join_clan", "Join clan",
+          "Visit every 'Loot + request' and Feeder account and join the clan from the Donate page "
+          "(clan tag) when the account has no clan. Accounts already in a clan are left alone.", order=7)
+def run_join_clan(bot, state):
+    tag = bot.settings["donate"].get("clan_tag", "")
+    if not tag:
+        raise StopRun("Set the clan tag on the Donate page first (e.g. #2RPLP89CY).")
+    accounts = active_accounts(bot, REQUEST_ROLES)
+    joined, already, failed = [], 0, []
+    for i, acc in enumerate(accounts, 1):
+        bot.status(account=acc["name"], progress=f"{i}/{len(accounts)}", action="Joining clan")
+        if not _switch(bot, acc, state):
+            failed.append(acc["name"])
+            continue
+        if clan.in_clan(bot) is True:
+            already += 1
+        elif with_recovery(bot, f"join clan on {acc['name']}", lambda: clan.join_clan(bot, tag), attempts=2):
+            joined.append(acc["name"])
+            state.setdefault("no_clan", {}).pop(acc["name"], None)
+            config.save_state(state)
+        else:
+            failed.append(acc["name"])
+    log.info("Join clan done: %d joined (%s), %d already in a clan, %d failed%s", len(joined), ", ".join(joined),
+             already, len(failed), f" ({', '.join(failed)})" if failed else "")
