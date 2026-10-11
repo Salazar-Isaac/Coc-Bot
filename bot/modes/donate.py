@@ -18,7 +18,7 @@ from ..core.context import BotError
 from ..actions import account as account_actions
 from ..actions import clan, loot
 from . import register
-from .common import StopRun, active_accounts, chores, with_recovery
+from .common import StopRun, active_accounts, with_recovery
 from .loot import _loot_account
 
 log = logging.getLogger("bot")
@@ -88,7 +88,6 @@ def request_round(bot, state):
         started = time.monotonic()
         if not _switch(bot, acc, state):
             continue
-        chores(bot, acc, "arrive")
         bot.request_cooldown = None
         result = with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings))
         if result:

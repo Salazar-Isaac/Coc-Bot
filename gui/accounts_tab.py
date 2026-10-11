@@ -22,7 +22,8 @@ ROLES = [("main", "Main (donates)", "crown", T.GOLD, "Loots and donates to the o
          ("feeder", "Feeder (requests)", "send", "#5cc8ff", "Only requests troops"),
          ("skip", "Skip", "x-circle", T.TEXT_DIM, "Ignored by every mode")]
 COLS = ["Use", "Name (as in the switch list)", "Role", "Town Hall", "Gold full at", "Elixir full at",
-        "Dark full at"]
+        "Dark full at", "Upgrade"]
+UPGRADE_COL = 7
 EDITABLE = Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
 
@@ -88,7 +89,7 @@ class AccountsTab(QWidget):
         t = self.table = Table(COLS, row_height=48)
         t.empty_text = "No accounts yet.\nAdd them one by one or let the bot read the names from the game."
         t.empty_icon = "users"
-        t.resize_modes(1, {0: 72, 2: 190, 3: 100, 4: 138, 5: 138, 6: 130})
+        t.resize_modes(1, {0: 72, 2: 190, 3: 100, 4: 138, 5: 138, 6: 130, 7: 96})
         t.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked
                           | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
         self._delegates = [ToggleDelegate(t), ChoiceDelegate(t, ROLES), NumberDelegate(t, _th_text, _th_editor)]
@@ -100,6 +101,11 @@ class AccountsTab(QWidget):
             self._delegates.append(d)
             t.setItemDelegateForColumn(4 + i, d)
             t.horizontalHeaderItem(4 + i).setIcon(resource_icon(res))
+        up = ToggleDelegate(t)
+        self._delegates.append(up)
+        t.setItemDelegateForColumn(UPGRADE_COL, up)
+        t.horizontalHeaderItem(UPGRADE_COL).setToolTip("Upgrade plan (Upgrades page): storages, army camp, "
+                                                       "barracks, ... Town Hall")
         t.itemChanged.connect(lambda *_: self.changed.emit())
         card.add(t, 1)
         lay.addWidget(card, 1)
@@ -139,6 +145,7 @@ class AccountsTab(QWidget):
         t.setItem(r, 3, self._cell(int(acc.get("th") or 0)))
         for i, res in enumerate(config.RESOURCES):
             t.setItem(r, 4 + i, self._cell(int((acc.get("full_at") or {}).get(res, 0) or 0)))
+        t.setItem(r, UPGRADE_COL, self._cell(bool(acc.get("upgrade", False)), Qt.ItemIsEnabled | Qt.ItemIsSelectable))
         self.changed.emit()
 
     def _row_data(self, r):
@@ -150,6 +157,7 @@ class AccountsTab(QWidget):
             "role": t.item(r, 2).data(ROLE),
             "th": t.item(r, 3).data(ROLE) or 0,
             "full_at": {res: t.item(r, 4 + i).data(ROLE) or 0 for i, res in enumerate(config.RESOURCES)},
+            "upgrade": bool(t.item(r, UPGRADE_COL).data(ROLE)) if t.item(r, UPGRADE_COL) else False,
         }
 
     def _remove(self):

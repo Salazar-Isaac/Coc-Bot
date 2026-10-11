@@ -36,7 +36,7 @@ from gui.nav import AnimatedStack, Sidebar
 from gui.run_tab import RunTab
 from gui.templates_tab import TemplatesTab
 from gui.toast import ToastManager
-from gui.village_tab import VillageTab
+from gui.upgrades_tab import UpgradesTab
 
 log = logging.getLogger("bot")
 
@@ -46,7 +46,7 @@ PAGES = [
     ("Accounts", "users", "Accounts", "Your Supercell ID accounts in switching order, with role and limits."),
     ("Loot", "swords", "Loot settings", "When an account is full, which bases to attack and how to attack."),
     ("Donate", "gift", "Donate", "Clan Castle requests and what your Main account donates."),
-    ("Village", "home", "Village", "Chores on each visit: collect resources, upgrade buildings, start research."),
+    ("Upgrades", "hammer", "Upgrades", "The upgrade plan for your other accounts: storages first, Town Hall last."),
     ("Builder Base", "boat", "Builder Base", "The night village: Star Bonus attacks, collecting, upgrades and Star "
      "Laboratory research."),
     ("Device", "monitor", "Device & settings", "Where the game runs, screen profile, hotkeys and behaviour."),
@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.accounts_tab = AccountsTab()
         self.loot_tab = LootTab()
         self.donate_tab = DonateTab()
-        self.village_tab = VillageTab()
+        self.village_tab = UpgradesTab()
         self.builder_tab = BuilderTab()
         self.device_tab = DeviceTab()
         self.templates_tab = TemplatesTab()
@@ -329,19 +329,6 @@ class MainWindow(QMainWindow):
                              "names from the game”) and check the roles ticked in Loot settings.", 7000)
             self.go(self.accounts_tab)
             return
-        if mode == "chores":
-            v = self.settings.get("village", {})
-            if not (v.get("collect", True) or v.get("upgrade_buildings") or v.get("research")):
-                self.toasts.show("info", "No chores switched on", "Switch on collecting, building upgrades or "
-                                 "research on the Village page.", 7000)
-                self.go(self.village_tab)
-                return
-            chore_roles = v.get("on_roles", ["main", "loot", "both", "feeder"])
-            if not [a for a in self.accounts if a.get("enabled") and a.get("role") in chore_roles]:
-                self.toasts.show("info", "No accounts for chores", "Add your accounts on the Accounts page and "
-                                 "check the roles ticked under “Do chores on” on the Village page.", 7000)
-                self.go(self.accounts_tab)
-                return
         if mode == "builder_only":
             bb_roles = self.settings.get("builder", {}).get("on_roles", ["main", "loot", "both", "feeder"])
             if not [a for a in self.accounts if a.get("enabled") and a.get("role") in bb_roles]:

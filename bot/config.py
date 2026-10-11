@@ -75,18 +75,9 @@ DEFAULT_SETTINGS = {
         # what the main account donates, in priority order (icons captured as templates "donate/<name>")
         "items": [],
     },
-    "village": {
-        "collect": True,                    # collectors + loot cart when arriving on an account
-        "collect_every": 60,                # minutes: an account is collected at most this often
-        "upgrade_buildings": False,         # spend resources on builder upgrades before leaving
-        "research": False,                  # start laboratory research before leaving
-        "max_upgrades": 2,                  # building upgrades started per visit
-        "include_other": True,              # also consider "Other upgrades", not only "Suggested"
-        "upgrade_skip": ["Wall", "Barbarian King", "Archer Queen", "Grand Warden", "Royal Champion",
-                         "Minion Prince", "Dragon Duke"],   # heroes stay usable for attacks
-        "research_skip": [],
-        "reserve": {"gold": 0, "elixir": 0, "dark": 0},     # never spend below these
-        "on_roles": ["main", "loot", "both", "feeder"],      # which accounts get chores
+    "upgrades": {
+        "enabled": True,                    # the upgrade plan on accounts ticked "Upgrade" (Accounts page)
+        "max_per_visit": 5,                 # upgrades started per visit (one per free builder)
     },
     "builder": {
         "after_main": False,                # loot modes: after an account's home village is full, loot its Builder Base
@@ -142,7 +133,7 @@ def save_settings(settings):
 
 
 def new_account(name, role="loot", th=0):
-    return {"name": name, "role": role, "enabled": True, "th": th,
+    return {"name": name, "role": role, "enabled": True, "th": th, "upgrade": False,
             "full_at": {"gold": 0, "elixir": 0, "dark": 0}}   # 0 = use the Town Hall table
 
 

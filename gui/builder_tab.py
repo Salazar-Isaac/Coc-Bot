@@ -11,7 +11,7 @@ from gui import icons
 from gui import theme as T
 from gui.components import (Banner, Card, ChipToggle, FlowLayout, Pill, SettingRow, TagEditor, Toggle, divider, label,
                             scroll)
-from gui.village_tab import ROLES
+from gui.upgrades_tab import ROLES
 from gui.widgets import BigSpin, Combo, Spin
 
 BB_ARMIES = [("auto", "Auto: P.E.K.K.A, else Sneaky Archer", "Best unlocked: P.E.K.K.A when the Builder Base has it, otherwise Sneaky Archers"),

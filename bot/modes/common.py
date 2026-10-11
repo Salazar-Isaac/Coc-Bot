@@ -90,21 +90,6 @@ def cancel_shutdown():
     subprocess.run(["shutdown", "/a"], creationflags=subprocess.CREATE_NO_WINDOW)
 
 
-def chores(bot, acc, phase):
-    """Village chores for an account, if its role is enabled for chores.
-    phase "arrive": collect resources; "leave": upgrades and research."""
-    from ..actions import village
-    v = bot.settings.get("village", {})
-    if acc.get("role", "loot") not in v.get("on_roles", ["main", "loot", "both", "feeder"]):
-        return
-    if phase == "arrive" and not v.get("collect", True):
-        return
-    if phase == "leave" and not (v.get("upgrade_buildings") or v.get("research")):
-        return
-    bot.status(action="Collecting" if phase == "arrive" else "Upgrading")
-    with_recovery(bot, f"chores on {acc.get('name', '?')}", lambda: village.chores(bot, acc, phase), attempts=2)
-
-
 def active_accounts(bot, roles=None):
     out = [a for a in bot.accounts if a.get("enabled", True) and a.get("role") != "skip"]
     if roles:

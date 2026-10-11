@@ -1,64 +1,19 @@
-"""Village chores: collect resources, upgrade buildings, start research.
-
-Upgrades use the game's own menus at the top of the village:
-  * the builder counter ("1/5") opens a list of upgrades in progress, suggested
-    upgrades and other upgrades, each with its cost;
-  * the laboratory counter ("1/1") opens the same kind of list for research.
-The bot reads that list with OCR, picks the first affordable item that is not
-on the skip list (and leaves the reserve you set untouched), taps it, presses
-Upgrade / Research and Confirm. It never taps anything that costs gems
-(Boost, Finish Now) and closes any "buy with gems" offer.
-"""
+"""Main village helpers for upgrades: the builder counter, the builder menu (names, prices,
+which resource, affordable or not) and confirming an upgrade without ever spending gems.
+The order of upgrades is in upgrades.py; the Builder Base uses the same helpers."""
 
 import logging
 import re
-import time
 
 import cv2
 import numpy as np
 
-from .. import config
 from ..core import vision
-from ..core.context import BotError
-from ..core.control import control
 from ..core.space import space
-from ..states import detect, go_home
+from ..states import go_home
 from . import loot
 
 log = logging.getLogger("bot")
-
-BUBBLES = {"gold": "village/bubble_gold", "elixir": "village/bubble_elixir", "dark": "village/bubble_dark"}
-
-
-# --- collecting ----------------------------------------------------------------------------
-
-def collect(bot):
-    """Tap one full-collector bubble per resource (one tap collects all of that kind) and the
-    loot cart. Bubbles do not move, so one picture finds them all. Returns what was tapped."""
-    if not go_home(bot):
-        raise BotError("Not on the home village")
-    frame = bot.shot()
-    full = (0, 0, *frame.shape[1::-1])
-    tapped = []
-    for res, key in BUBBLES.items():
-        if vision.templates.has(key):
-            m = vision.find(frame, key, region=full)
-            if m:
-                bot.tap_match(m, jitter=2)
-                tapped.append(res)
-                bot.sleep(0.35)
-    if vision.templates.has("village/loot_cart_label"):
-        m = vision.find(frame, "village/loot_cart_label", region=full)
-        if m:
-            bot.tap(m.x + space.s(10), m.y + space.s(45), jitter=3)   # the cart sits under its label
-            if bot.tap_template("village/collect_button", timeout=2.5, after=0.4):
-                tapped.append("loot cart")
-            bot.tap_point("home.safe", jitter=5)
-            bot.sleep(0.3)
-    if tapped:
-        log.info("Collected: %s", ", ".join(tapped))
-    return tapped
-
 
 # --- top counters and menus ------------------------------------------------------------------
 
@@ -192,31 +147,6 @@ def _skipped(name, skip):
     return any(_norm(s) and _norm(s) in n for s in skip)
 
 
-def _pick(bot, rows, which):
-    """First affordable item (suggested before other) that leaves the reserve."""
-    v = bot.settings.get("village", {})
-    skip = v.get("upgrade_skip" if which == "builders" else "research_skip", [])
-    reserve = v.get("reserve", {})
-    res_now = loot.home_resources(bot)
-    order = sorted(rows, key=lambda r: r["section"] != "suggested")   # keeps the game's own order
-    if not v.get("include_other", True):
-        order = [r for r in order if r["section"] == "suggested"]
-    for r in order:
-        if r["res"] not in ("gold", "elixir", "dark"):
-            continue                              # gem prices are never paid
-        have = res_now.get(r["res"])
-        if r["red"] or have is None:
-            continue
-        if _skipped(r["name"], skip):
-            log.debug("Skip %s (on the skip list)", r["name"])
-            continue
-        if have - r["cost"] < reserve.get(r["res"], 0):
-            log.debug("Skip %s: would go below the %s reserve", r["name"], r["res"])
-            continue
-        return dict(r, have=have)      # amount read before any window covers the resource bar
-    return None
-
-
 # --- confirming an upgrade / research ----------------------------------------------------------
 
 def _close_offer(bot):
@@ -278,87 +208,3 @@ def _confirm(bot, item, which, home=None):
     log.info("%s %s started for %s %s", "Research" if which == "lab" else "Upgrade", item["name"],
              f"{cost:,}", item["res"])
     return True
-
-
-def upgrade_buildings(bot, max_count=None):
-    """Use free builders on affordable upgrades. Returns the number started."""
-    v = bot.settings.get("village", {})
-    max_count = max_count if max_count is not None else v.get("max_upgrades", 2)
-    started = 0
-    for _ in range(max_count):
-        control.checkpoint()
-        if not go_home(bot):
-            break
-        counter = read_counter(bot, "builders")
-        if not counter or counter[0] <= 0:
-            log.info("No free builder%s", f" ({counter[0]}/{counter[1]})" if counter else "")
-            break
-        rows = read_menu(bot, "builders")
-        item = _pick(bot, rows, "builders")
-        if not item:
-            log.info("No affordable building upgrade (%d listed)", len(rows))
-            close_menu(bot)
-            break
-        bot.tap(*item["tap"], jitter=2)
-        bot.sleep(1.2)
-        up = bot.wait("building/upgrade_button", 4)
-        if not up:
-            log.info("%s: no Upgrade button", item["name"])
-            close_menu(bot)
-            break
-        bot.tap_match(up)
-        bot.sleep(1.2)
-        ok = _confirm(bot, item, "builders")
-        close_menu(bot)
-        if not ok:
-            break
-        started += 1
-    go_home(bot)
-    return started
-
-
-def research(bot):
-    """Start one research if the laboratory is free. Returns True if started."""
-    if not go_home(bot):
-        return False
-    counter = read_counter(bot, "lab")
-    if not counter or counter[0] <= 0:
-        log.info("Laboratory busy")
-        return False
-    rows = read_menu(bot, "lab")
-    item = _pick(bot, rows, "lab")
-    if not item:
-        log.info("No affordable research (%d listed)", len(rows))
-        close_menu(bot)
-        return False
-    bot.tap(*item["tap"], jitter=2)          # opens the research window directly
-    bot.sleep(1.5)
-    ok = _confirm(bot, item, "lab")
-    _close_offer(bot)
-    go_home(bot)
-    return ok
-
-
-def chores(bot, account, phase="arrive"):
-    """Run the village chores enabled in Settings. phase: 'arrive' (collect) or 'leave' (spend)."""
-    v = bot.settings.get("village", {})
-    if detect(bot.shot()) != "home" and not go_home(bot):
-        return
-    try:
-        every = v.get("collect_every", 60) * 60           # collectors fill slowly: not on every visit
-        if phase == "arrive" and v.get("collect", True) and time.time() - account.get("collected_at", 0) >= every:
-            collect(bot)
-            account["collected_at"] = int(time.time())
-        if phase == "leave":
-            if v.get("upgrade_buildings", False):
-                n = upgrade_buildings(bot)
-                if n:
-                    bot.stats.setdefault("upgrades", 0)
-                    bot.stats["upgrades"] += n
-            if v.get("research", False) and research(bot):
-                bot.stats.setdefault("research", 0)
-                bot.stats["research"] += 1
-    except BotError as e:
-        log.warning("Village chores on %s: %s", account.get("name", "?"), e)
-        go_home(bot)
-

@@ -4,9 +4,9 @@ import logging
 
 from .. import config
 from ..actions import account as account_actions
-from ..actions import builder_base, loot
+from ..actions import builder_base, loot, upgrades
 from . import register
-from .common import StopRun, active_accounts, chores, when_full, with_recovery
+from .common import StopRun, active_accounts, when_full, with_recovery
 
 log = logging.getLogger("bot")
 
@@ -22,7 +22,7 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
             log.error("Skipping %s: could not switch to it", acc["name"])
             return
         config.save_accounts(bot.accounts)          # remembers the Town Hall level we read
-    chores(bot, acc, "arrive")
+    upgrade(bot, acc, "before looting")             # resources there already: builders first
     while True:
         result = with_recovery(bot, f"loot {acc['name']}", lambda: loot.loot_until_full(bot, acc))
         if result is None:
@@ -31,12 +31,19 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
                                           "limit": "attack limit reached"}[result])
         builder_after(bot, acc)
         if cycle and bot.settings.get("when_full") == "switch":
-            chores(bot, acc, "leave")
+            upgrade(bot, acc, "after looting")
             return
         if bot.settings.get("when_full") != "wait":
-            chores(bot, acc, "leave")               # spend before moving on (not when you spend yourself)
+            upgrade(bot, acc, "after looting")      # spend before moving on (not when you spend yourself)
         if when_full(bot, acc) == "next":
             return
+
+
+def upgrade(bot, acc, when):
+    """Upgrade plan (actions/upgrades.py) on accounts ticked "Upgrade" on the Accounts page."""
+    if acc.get("upgrade") and bot.settings.get("upgrades", {}).get("enabled", True):
+        bot.status(action="Upgrading")
+        with_recovery(bot, f"upgrades on {acc['name']}", lambda: upgrades.run(bot, acc, when), attempts=2)
 
 
 def builder_after(bot, acc):
@@ -91,24 +98,6 @@ def run_loot_all(bot, state):
             _loot_account(bot, acc, state)
         state["loot_all_next"] = 0
         config.save_state(state)
-
-
-@register("chores", "Village chores only",
-          "Visit the enabled accounts without attacking: collect resources, start building upgrades "
-          "and research (switch them on in the Village page).", order=5)
-def run_chores(bot, state):
-    roles = bot.settings.get("village", {}).get("on_roles", ["main", "loot", "both", "feeder"])
-    accounts = active_accounts(bot, roles)
-    if not accounts:
-        raise StopRun("No enabled accounts with the roles ticked for village chores.")
-    for i, acc in enumerate(accounts):
-        bot.status(account=acc["name"], progress=f"{i + 1}/{len(accounts)}")
-        ok = with_recovery(bot, f"switch to {acc['name']}", lambda a=acc: account_actions.switch_to(bot, a, state))
-        if not ok:
-            continue
-        config.save_accounts(bot.accounts)
-        chores(bot, acc, "arrive")
-        chores(bot, acc, "leave")
 
 
 @register("loot_current", "Loot current account only",

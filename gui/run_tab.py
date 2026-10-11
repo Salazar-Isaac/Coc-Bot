@@ -26,10 +26,10 @@ WHEN_DONE = [("nothing", "Do nothing", "Leave the game open"),
 
 MODE_LOOK = {"loot_all": ("swords", T.GOLD), "loot_current": ("user", "#5cc8ff"),
              "loot_donate": ("gift", T.ELIXIR_HI), "donate_only": ("heart", "#ff7f9f"),
-             "chores": ("hammer", "#4fd1c5"), "builder_only": ("boat", "#8c9bff")}
+             "builder_only": ("boat", "#8c9bff")}
 # titles for the small two-column mode tiles (other modes use their own title)
 MODE_SHORT = {"loot_all": "Loot all", "loot_current": "Loot current", "loot_donate": "Loot + Donate",
-              "donate_only": "Donate only", "chores": "Village chores", "builder_only": "Builder Base"}
+              "donate_only": "Donate only", "builder_only": "Builder Base"}
 LOOT_MODES = ("loot_all", "loot_current", "loot_donate")    # can visit the Builder Base after looting
 
 # "This run" counters: key, label, short label (narrow window). A counter is listed when the selected mode
@@ -37,9 +37,9 @@ LOOT_MODES = ("loot_all", "loot_current", "loot_donate")    # can visit the Buil
 STATS = [("attacks", "Attacks", "Attacks"), ("searches", "Searches", "Searches"), ("donated", "Donated", "Donated"),
          ("bb_attacks", "Builder Base attacks", "BB attacks"), ("upgrades", "Upgrades", "Upgrades"),
          ("research", "Research", "Research")]
-MODE_STATS = {"loot_all": ("attacks", "searches"), "loot_current": ("attacks", "searches"),
+MODE_STATS = {"loot_all": ("attacks", "searches", "upgrades"), "loot_current": ("attacks", "searches"),
               "loot_donate": ("attacks", "searches", "donated"), "donate_only": ("donated",),
-              "chores": ("upgrades", "research"), "builder_only": ("bb_attacks",)}
+              "builder_only": ("bb_attacks",)}
 
 # mode list density: (card height, gap, columns). The first that fits without scrolling the setup column wins;
 # the last one (two columns of small tiles) is for small windows.

@@ -27,11 +27,21 @@ Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.
 | **Loot current account only** | Loots the open account. With "When full: Wait for me" you spend the resources, press Continue (F8) and it loots again. |
 | **Loot + Donate cycle** | Like XpIncrease, always starting on Main: not enough elixir for a whole round ("Main keeps at least" + what the last round cost) → Main and the Looter accounts loot until full. Enough → Main first donates to requests that are still open, then every Looter / "Loot + request" / Feeder account empties its Clan Castle and requests → Main donates → repeat while the elixir covers another round → loot again. |
 | **Donate only** | The same without looting: stops when Main's elixir is too low for a round. |
-| **Village chores only** | Visits the accounts without attacking: collects resources, starts building upgrades and research. |
 | **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |
 
 "Loot the Builder Base after the home village is full" (Builder Base page) makes every loot mode do the
 night village too, right after each account's home village.
+
+**Upgrade plan** (Upgrades page; tick "Upgrade" per account on the Accounts page - by default every account
+except the Main and Omishrisha): when such an account is looted, free builders are put to work first if it has
+the resources, and again after looting. Order: storages → army camp → barracks / dark barracks / spell factories
+(new troops and spells) → blacksmith → hero hall → laboratory, pet house → archer tower, cannon → Town Hall (only
+when nothing above can be upgraded any more; from Town Hall 16 its weapon gets all 5 stars first). Gems are never
+spent. Builder Base attacks are ended after 60 seconds (Builder Base page).
+
+**Android phone / emulator** (Device page → Android): only adb is used (screenshots + taps), nothing is
+mirrored or recorded and the PC stays free. The connected phone is picked automatically; at start the bot measures
+how big the game draws its buttons on that screen (phones: bigger, with margins for the camera cut-out).
 
 Account roles: **Main** (loots, donates) · **Looter** (loots in every mode, also in the cycle, and requests) · **Loot + request** (loots in "Loot all", only requests in donation modes) · **Feeder** (only requests) · **Skip**.
 
