@@ -13,7 +13,9 @@ from .core.layout import layout
 from .core.profile import profile
 from .modes import MODES, load_all
 from .modes.common import StopRun, when_done
-from .states import ensure_game
+from .states import ensure_game, restart_game
+
+MAX_AUTO_RESTARTS = 20
 
 log = logging.getLogger("bot")
 
@@ -57,8 +59,28 @@ class Runner(threading.Thread):
                 state.pop("loot_all_next", None)
             log.info("Starting '%s' on %s", mode.title, device.describe())
             self.on_status(running=True, mode=mode.title)
-            ensure_game(self.bot)
-            mode.run(self.bot, state)
+            restarts = 0
+            while True:
+                try:
+                    ensure_game(self.bot)
+                    mode.run(self.bot, state)
+                    break
+                except (BotStopped, StopRun):
+                    raise
+                except Exception as e:  # noqa: BLE001 - keep a long run alive: restart the game and go on
+                    if is_user_abort(e) or restarts >= MAX_AUTO_RESTARTS or                             not self.settings.get("auto_restart", True):
+                        raise
+                    restarts += 1
+                    log.exception("Unexpected error; restarting the game and continuing (%d/%d)",
+                                  restarts, MAX_AUTO_RESTARTS)
+                    self.bot.save_error("crash")
+                    try:
+                        restart_game(self.bot)
+                    except (BotStopped, StopRun):
+                        raise
+                    except Exception:  # noqa: BLE001
+                        log.exception("Game restart failed; trying again in 30 s")
+                        control.sleep(30)
             when_done(self.bot)
         except BotStopped as e:
             reason = "stopped"

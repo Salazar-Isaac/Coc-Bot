@@ -38,6 +38,10 @@
     },
     "full_mode": "capacity",
     "army_recipe": "loot",
+    "army_must_have": [
+      "edrag",
+      "clone"
+    ],
     "full_margin": {
       "gold": 500000,
       "elixir": 500000,
@@ -93,7 +97,7 @@
   },
   "when_full": "switch",
   "when_done": "nothing",
-  "repeat_rounds": 1,
+  "repeat_rounds": 0,
   "donate": {
     "min_elixir_keep": 4000000,
     "rounds": 0,
@@ -129,7 +133,7 @@
         "keywords": "zap, light"
       }
     ],
-    "donate_to": "all"
+    "donate_to": "mine"
   },
   "village": {
     "collect": true,
@@ -162,6 +166,7 @@
   "builder": {
     "after_main": false,
     "after_bonus": false,
+    "army": "auto",
     "max_attacks": 20,
     "stuck_attacks": 3,
     "full_margin": 50000,
@@ -188,5 +193,6 @@
   "minimize_on_start": true,
   "save_error_screenshots": true,
   "current_account": "Buggu02",
-  "current_th": 0
+  "current_th": 0,
+  "auto_restart": true
 }

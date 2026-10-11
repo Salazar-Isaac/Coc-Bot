@@ -1,4 +1,4 @@
-"""Coc-Bot: start the window.  Run:  python main.py"""
+"""Coc-Bot: start the window.  Run:  python main.py   (add --start to start the saved mode at once)"""
 
 import ctypes
 import importlib
@@ -30,6 +30,9 @@ def main():
     apply_theme(app)
     w = MainWindow()
     w.showMaximized()
+    if "--start" in sys.argv:                     # start the saved mode right away (e.g. from a shortcut)
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(2500, w.start)
     sys.exit(app.exec())
 
 
