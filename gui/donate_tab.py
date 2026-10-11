@@ -93,6 +93,10 @@ class DonateTab(QWidget):
         self.rounds = Spin(0, 999, special="Until elixir low")
         self.rounds.setFixedWidth(170)
         cycle.add(SettingRow("Request / donate rounds", "0 = until the Main's elixir runs low", self.rounds))
+        self.round_accounts = Spin(0, 99, special="Auto")
+        self.round_accounts.setFixedWidth(170)
+        cycle.add(SettingRow("Accounts per request round", "Auto: just enough that the first account's 10-minute "
+                             "request cooldown is over when the round comes back to it", self.round_accounts))
         cycle.add(divider())
         self.method = Segmented([("fast", "Fast (like XpIncrease)"), ("careful", "Careful")])
         self.method.setToolTip("Fast: each item is tapped its count in one quick burst.\n"
@@ -183,6 +187,7 @@ class DonateTab(QWidget):
         self.loot_first.toggled.connect(self.changed)
         self.min_keep.valueChanged.connect(self.changed)
         self.rounds.valueChanged.connect(self.changed)
+        self.round_accounts.valueChanged.connect(self.changed)
         self.remove_cc.toggled.connect(self.changed)
         self.request_text.textChanged.connect(self.changed)
         self.donate_to.currentIndexChanged.connect(self.changed)
@@ -361,6 +366,7 @@ class DonateTab(QWidget):
         self.loot_first.setChecked(d.get("loot_before_donate", False))
         self.min_keep.setValue(d.get("min_elixir_keep", 4_000_000))
         self.rounds.setValue(d.get("rounds", 0))
+        self.round_accounts.setValue(d.get("round_accounts", 0))
         self.remove_cc.setChecked(d.get("remove_cc_before_request", True))
         self.request_text.setText(d.get("request_text", ""))
         self.donate_to.setCurrentIndex(max(0, self.donate_to.findData(d.get("donate_to", "all"))))
@@ -380,6 +386,7 @@ class DonateTab(QWidget):
         d["loot_before_donate"] = self.loot_first.isChecked()
         d["min_elixir_keep"] = self.min_keep.value()
         d["rounds"] = self.rounds.value()
+        d["round_accounts"] = self.round_accounts.value()
         d["remove_cc_before_request"] = self.remove_cc.isChecked()
         d["request_text"] = self.request_text.text()
         d["donate_to"] = self.donate_to.currentData() or "all"

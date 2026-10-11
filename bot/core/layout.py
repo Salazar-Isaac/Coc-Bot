@@ -75,6 +75,7 @@ DEFAULT_LAYOUT = {
         "bb.builders": [1075, 32, 70, 40],
         "bb.lab": [875, 32, 70, 40],
         "home.player_name": [115, 14, 250, 32],      # in-game name next to the level badge
+        "army.request_timer": [1688, 830, 112, 36],   # "10m" under the gem price while on cooldown
         "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
     },

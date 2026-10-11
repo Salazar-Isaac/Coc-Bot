@@ -10,6 +10,7 @@ Donate only: steps 1-2, until the elixir runs low (or for the set number of roun
 """
 
 import logging
+import math
 import time
 
 from .. import config
@@ -40,11 +41,34 @@ def _switch(bot, acc, state):
     return ok
 
 
+def _learn(state, key, value, weight=0.3):
+    old = state.get(key)
+    state[key] = round(value if not old else old * (1 - weight) + value * weight, 1)
+
+
+def round_size(bot, state, total):
+    """How many accounts a request round needs: just enough that by the time they have all
+    requested and Main has donated to them, the first one's request cooldown (read from the game,
+    10 min) is over again. More accounts would only make the round longer, not give more requests.
+    "Accounts per round" on the Donate page overrides it."""
+    fixed = bot.settings["donate"].get("round_accounts", 0)
+    if fixed:
+        return min(fixed, total)
+    cooldown = state.get("request_cooldown") or 600
+    per = (state.get("request_secs") or 20) + (state.get("donate_secs") or 8)
+    return max(1, min(total, math.ceil(cooldown / per)))
+
+
 def request_round(bot, state):
-    """Every requesting account empties its Clan Castle and requests. Returns requests sent."""
+    """The first accounts (fewest scrolls in the account list) empty their Clan Castle and request,
+    as many as fit the request cooldown (round_size). Returns requests sent."""
     requesters = active_accounts(bot, REQUEST_ROLES)
     if not requesters:
-        raise StopRun("No requesting accounts (roles 'Loot + request' or 'Feeder') in the Accounts tab.")
+        raise StopRun("No requesting accounts (roles 'Looter', 'Loot + request' or 'Feeder') in the Accounts tab.")
+    want = round_size(bot, state, len(requesters))
+    log.info("Request round: %d account(s) (request cooldown %dm, about %ds per account + %ds donating each)",
+             want, (state.get("request_cooldown") or 600) // 60, state.get("request_secs") or 20,
+             state.get("donate_secs") or 8)
     sent = 0
     start = state.get("request_next", 0)              # continue where a stopped run left off
     if start:
@@ -52,25 +76,32 @@ def request_round(bot, state):
     for i, acc in enumerate(requesters, 1):
         if i - 1 < start:
             continue
+        if sent >= want:
+            break
         state["request_next"] = i - 1
         config.save_state(state)
         no_clan = state.setdefault("no_clan", {})
         if time.time() - no_clan.get(acc["name"], 0) < NO_CLAN_RECHECK:
             continue                                   # had no clan recently: do not switch to it again
 
-        bot.status(account=acc["name"], progress=f"request {i}/{len(requesters)}", action="Requesting")
+        bot.status(account=acc["name"], progress=f"request {sent + 1}/{want}", action="Requesting")
+        started = time.monotonic()
         if not _switch(bot, acc, state):
             continue
         chores(bot, acc, "arrive")
+        bot.request_cooldown = None
         result = with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings))
         if result:
             sent += 1
+            _learn(state, "request_secs", time.monotonic() - started)
+            if bot.request_cooldown:
+                state["request_cooldown"] = bot.request_cooldown
         if acc.get("_no_clan"):
             state.setdefault("no_clan", {})[acc["name"]] = time.time()
             config.save_state(state)
     state["request_next"] = 0
     config.save_state(state)
-    log.info("Requests sent: %d of %d accounts", sent, len(requesters))
+    log.info("Requests sent: %d (round of %d)", sent, want)
     return sent
 
 
@@ -87,10 +118,14 @@ def donate_round(bot, main, state, label="donate", learn=True):
     """Switch to Main and donate to every open request; learns what a round costs in elixir.
     Returns (units donated, Main's elixir afterwards or None)."""
     bot.status(account=main["name"], progress="", action="Donating")
+    started = time.monotonic()
     if not _switch(bot, main, state):
         return 0, None
     before = main_elixir(bot)
+    bot.last_donated_requests = 0
     donated = with_recovery(bot, label, lambda: clan.donate_all(bot, bot.settings)) or 0
+    if learn and bot.last_donated_requests:
+        _learn(state, "donate_secs", (time.monotonic() - started) / bot.last_donated_requests)
     after = main_elixir(bot)
     if learn and donated and before is not None and after is not None and 0 < before - after < before // 2:
         spent = before - after                         # (a bigger drop would be a misread number)

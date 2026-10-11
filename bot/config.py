@@ -66,6 +66,7 @@ DEFAULT_SETTINGS = {
     "donate": {
         "min_elixir_keep": 4000000,         # a round starts if Main's elixir > this + one round's cost (learned)
         "rounds": 0,                        # 0 = until elixir drops below min_elixir_keep
+        "round_accounts": 0,                # accounts per request round; 0 = auto (fits the request cooldown)
         "remove_cc_before_request": True,
         "request_text": "",
         "loot_before_donate": False,        # Loot + Donate: loot to full before the first round (XpIncrease: no)

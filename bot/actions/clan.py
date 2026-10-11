@@ -103,8 +103,29 @@ def request(bot, text=""):
             bot.sleep(0.2)
     if not bot.tap_template("request/send", timeout=4, after=0.5):
         return False
-    log.info("Reinforcements requested")
+    secs = request_timer(bot)
+    if secs:
+        bot.request_cooldown = secs
+    log.info("Reinforcements requested%s", f" (next request in {secs // 60}m {secs % 60}s)" if secs else "")
     return True
+
+
+def request_timer(bot, tries=4):
+    """Seconds until this account can request again, read from the request button's timer
+    (e.g. "10m", "9m 58s", "45s"). None if it cannot be read."""
+    for _ in range(tries):
+        bot.sleep(0.5)
+        f = bot.shot()
+        if not (vision.templates.has("army/request_cooldown") and
+                vision.find(f, "army/request_cooldown", any_brightness=True)):
+            continue
+        text, _ = vision.text_reader.read_line(f, bot.layout.region("army.request_timer"))
+        t = text.lower().replace(" ", "")
+        m = re.fullmatch(r"(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", t)
+        if m and any(m.groups()):
+            h, mi, se = (int(g or 0) for g in m.groups())
+            return h * 3600 + mi * 60 + se
+    return None
 
 
 def in_clan(bot):
@@ -479,6 +500,7 @@ def donate_all(bot, settings, max_requests=60):
     finally:
         close_chat(bot)
         go_home(bot)
+    bot.last_donated_requests = handled
     log.info("Donating done: %d unit(s) to %d request(s)", total, handled)
     return total
 
