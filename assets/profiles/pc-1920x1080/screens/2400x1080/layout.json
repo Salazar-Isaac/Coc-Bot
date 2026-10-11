@@ -1,0 +1,47 @@
+{
+  "points": {
+    "sid.close": [
+      164,
+      80
+    ],
+    "sid.page_from": [
+      1760,
+      1010
+    ],
+    "sid.page_to": [
+      1760,
+      370
+    ],
+    "sid.scroll_from": [
+      1760,
+      1010
+    ],
+    "sid.scroll_to": [
+      1760,
+      370
+    ],
+    "sid.page_up_from": [
+      1760,
+      300
+    ],
+    "sid.page_up_to": [
+      1760,
+      940
+    ]
+  },
+  "regions": {
+    "sid.list": [
+      1170,
+      190,
+      1200,
+      890
+    ],
+    "sid.name_column": [
+      1340,
+      190,
+      600,
+      890
+    ]
+  },
+  "_note": "Supercell ID panel on a 2400x1080 Android screen (Android's own UI, not the game's)"
+}

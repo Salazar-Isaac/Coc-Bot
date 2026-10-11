@@ -192,7 +192,10 @@ def switch_to(bot, account, state=None):
 
     # 1) straight to its page: learned on an earlier visit, else from its place on the Accounts page
     index = _list_index(bot, name)
-    target = pages.get(name, index // ROWS_PER_PAGE if index is not None else 0)
+    # accounts per page drag: 4 on the PC; on other screens estimated from the accounts found there
+    ratios = sorted(_list_index(bot, n) / p for n, p in pages.items() if p and _list_index(bot, n) is not None)
+    per_page = ratios[len(ratios) // 2] if ratios and native != (1920, 1080) else ROWS_PER_PAGE
+    target = pages.get(name, int(index // per_page) if index is not None else 0)
     for _ in range(target):
         _page(bot)                                    # the list stops at once: no wait in between
     if target:

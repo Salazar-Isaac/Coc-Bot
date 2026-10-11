@@ -64,12 +64,22 @@ RELOAD_LOG = {"popup/try_again": "Connection lost: tapping Try Again",
 
 
 def dialog_box(frame):
-    """The game's dark-grey system dialog, if one is on screen: (x, y, w, h) or None. Cheap, so the
-    (slow) text reading only runs when there really is such a dialog."""
+    """The game's system dialog (a large flat dark-grey box: (30, 28, 25) on the PC, (64, 57, 54) on
+    Android), if one is on screen: (x, y, w, h) or None. Cheap, so the (slow) text reading only
+    runs when there really is such a dialog."""
     x, y, w, h = space.region(*SYSTEM_REGION)
     step = 4                                         # every 4th pixel is plenty for a box this big
     roi = frame[y:y + h:step, x:x + w:step].astype(np.int16)
-    mask = np.abs(roi - DIALOG_BGR).max(axis=2) <= 4
+    q = roi // 8
+    packed = (q[:, :, 0] * 1024 + q[:, :, 1] * 32 + q[:, :, 2]).ravel()
+    counts = np.bincount(packed, minlength=32768)
+    top = int(counts.argmax())
+    if counts[top] < packed.size * 0.1:
+        return None
+    colour = np.array([top // 1024, (top // 32) % 32, top % 32]) * 8 + 4
+    if colour.min() < 14 or colour.max() > 100 or colour.max() - colour.min() > 24:
+        return None                                  # not a dark neutral grey (black = loading screen)
+    mask = np.abs(roi - colour).max(axis=2) <= 7
     if mask.sum() < 30000 // step ** 2:
         return None
     rows = np.where(mask.sum(axis=1) > 200 // step)[0]
@@ -77,7 +87,18 @@ def dialog_box(frame):
     if len(rows) < 60 // step or len(cols) < 200 // step:
         return None
     x0, y0 = x + int(cols.min()) * step, y + int(rows.min()) * step
-    return (x0, y0, int(cols.max() - cols.min() + 1) * step, int(rows.max() - rows.min() + 1) * step)
+    box = (x0, y0, int(cols.max() - cols.min() + 1) * step, int(rows.max() - rows.min() + 1) * step)
+    H, W = frame.shape[:2]
+    bx, by, bw, bh = box
+    if not (abs(bx + bw / 2 - W / 2) < W * 0.12 and abs(by + bh / 2 - H / 2) < H * 0.2
+            and 0.3 * W <= bw <= 0.72 * W and 0.15 * H <= bh <= 0.6 * H):
+        return None                                  # not centred / not dialog-sized (e.g. clan chat)
+    global _dialog_colour
+    _dialog_colour = tuple(int(c) for c in colour)
+    return box
+
+
+_dialog_colour = DIALOG_BGR
 
 
 def _button_boxes(frame, box):
@@ -85,7 +106,10 @@ def _button_boxes(frame, box):
     x, y, w, h = box
     x0, y0 = x + 20, y + int(h * 0.55)                 # the buttons are in the lower part
     strip = frame[y0:y + h - 12, x0:x + w - 20].astype(np.int16)
-    ink = np.abs(strip - DIALOG_BGR).max(axis=2) > 60
+    ink = np.abs(strip - np.array(_dialog_colour)).max(axis=2) > 60
+    if ink.size:
+        ink[ink.mean(axis=1) > 0.5, :] = False       # an outlined button (Android): drop its frame lines
+        ink[:, ink.mean(axis=0) > 0.5] = False
     cols = np.where(ink.any(axis=0))[0]
     out = []
     if len(cols) == 0:

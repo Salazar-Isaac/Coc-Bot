@@ -96,13 +96,29 @@ class Layout:
         self.points = data["points"]
         self.regions = data["regions"]
 
+    def _screen(self):
+        """Points/regions measured on this very screen (screens/<W>x<H>/layout.json), if any."""
+        native = space.native
+        if native != getattr(self, "_screen_for", "?"):
+            self._screen_for, self._own = native, {"points": {}, "regions": {}}
+            d = profile.screen_dir(native)
+            p = d and os.path.join(d, "layout.json")
+            if p and os.path.exists(p):
+                with open(p, encoding="utf-8") as f:
+                    own = json.load(f)
+                for section in ("points", "regions"):
+                    self._own[section].update(own.get(section, {}))
+        return self._own
+
     def point(self, name):
         """A click point in the current game space (pinned to its screen edge)."""
-        return space.point(*self.points[name])
+        own = self._screen()["points"].get(name)
+        return tuple(own) if own else space.point(*self.points[name], name=name)
 
     def region(self, name):
         """A read region in the current game space (pinned to its screen edge)."""
-        return space.region(*self.regions[name])
+        own = self._screen()["regions"].get(name)
+        return tuple(own) if own else space.region(*self.regions[name], name=name)
 
 
 layout = Layout()

@@ -24,6 +24,20 @@ from .profile import profile
 
 log = logging.getLogger("bot")
 
+# Windows drawn in the middle of the screen (Settings, army, popups ...). On a phone each one has
+# its own size (e.g. Settings 1.0x, army 1.15x the PC's), learned the first time it is waited for.
+WINDOW_GROUPS = {"settings", "army", "popup", "request", "shop", "results", "chest", "lab", "upgrade", "clan",
+                 "dialog", "attack_menu"}
+KIND_OVERRIDE = {"battle/confirm_okay": "settings"}     # the Okay dialog: a small centred window
+
+
+def group_of(name):
+    """'army/close' or 'army.close' -> 'army' (the window it belongs to), or None for the HUD."""
+    if name in KIND_OVERRIDE:
+        return KIND_OVERRIDE[name]
+    g = name.replace(".", "/").split("/")[0]
+    return g if g in WINDOW_GROUPS else None
+
 
 class Space:
     def __init__(self):
@@ -34,6 +48,7 @@ class Space:
         self.left = 0               # safe-area margins at the sides (camera cut-out), game space
         self.right = 0
         self._calibrated = {}       # native size -> (ui, left, right)
+        self.windows = {}           # window group -> its scale on this screen (phones; learned)
 
     @property
     def base(self):
@@ -69,6 +84,17 @@ class Space:
         """A length measured on the base screen (button size, offset from a button) in game space."""
         return int(round(length * self.ui))
 
+    def scale_of(self, name):
+        """How much bigger than on the PC the game draws this template / point."""
+        if self.ui == 1:
+            return 1.0
+        g = group_of(name)
+        return self.windows.get(g, 1.0) if g else self.ui
+
+    def _win(self, x, y, k):
+        bw, bh = self.base
+        return self.w / 2 + (x - bw / 2) * k, self.h / 2 + (y - bh / 2) * k
+
     # --- base -> game space ----------------------------------------------------------
     def _ax(self, x, ref=None):
         ref = x if ref is None else ref
@@ -88,13 +114,21 @@ class Space:
             return self.h - (bh - y) * k
         return self.h / 2 + (y - bh / 2) * k
 
-    def point(self, x, y):
-        """A UI point measured on the base screen, pinned to its nearest edge."""
+    def point(self, x, y, name=None):
+        """A UI point measured on the base screen, pinned to its nearest edge (a point of a centred
+        window - name like "army.close" - stays centred, at that window's scale)."""
+        if name and self.ui != 1 and group_of(name):
+            px, py = self._win(x, y, self.scale_of(name))
+            return round(px), round(py)
         return round(self._ax(x)), round(self._ay(y))
 
-    def region(self, x, y, w, h):
+    def region(self, x, y, w, h, name=None):
         """A UI region measured on the base screen, pinned by its centre."""
         cx, cy = x + w / 2, y + h / 2
+        if name and self.ui != 1 and group_of(name):
+            k = self.scale_of(name)
+            px, py = self._win(cx, cy, k)
+            return round(px - w * k / 2), round(py - h * k / 2), int(round(w * k)), int(round(h * k))
         k = self.ui
         return (round(self._ax(cx) - w * k / 2), round(self._ay(cy) - h * k / 2),
                 int(round(w * k)), int(round(h * k)))

@@ -100,6 +100,8 @@ def calibrate(bot, timeout=60):
             break
         control.sleep(1.0)
     space.set_ui(*result)
+    if bot.state is not None:                         # window sizes learned on this screen before
+        space.windows = bot.state.setdefault("windows", {}).setdefault(key, space.windows or {})
     if result != (1.0, 0, 0) or known:
         log.info("Interface on this %s screen: %.2fx the PC's size, side margins %d / %d px", key, *result)
     if bot.state is not None:
