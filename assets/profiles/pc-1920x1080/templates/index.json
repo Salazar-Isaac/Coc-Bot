@@ -1349,6 +1349,21 @@
     ],
     "threshold": 0.85
   },
+  "popup/exit_title": {
+    "box": [
+      800,
+      338,
+      324,
+      46
+    ],
+    "region": [
+      740,
+      278,
+      444,
+      166
+    ],
+    "threshold": 0.85
+  },
   "popup/hoggy_title": {
     "box": [
       705,

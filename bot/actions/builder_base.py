@@ -50,22 +50,28 @@ def where(bot):
 
 def go_home_bb(bot, timeout=60.0):
     """Get back to the Builder Base village from any of its screens."""
+    from ..states import cancel_placement
+    cancel_placement(bot)                            # a building left waiting to be placed
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         f = bot.shot()
         if vision.find(f, BB_MARK):
             return True
         for key, tap in (("bb/star_bonus_okay", None), ("bb/return_home", None), ("bb/menu_close", None),
-                         ("upgrade/close", None), ("lab/close", None), ("shop/close", None),
-                         ("building/place_cancel", None)):
+                         ("upgrade/close", None), ("lab/close", None), ("shop/close", None)):
             if vision.templates.has(key):
                 m = vision.find(f, key)
                 if m:
                     bot.tap_match(m)
                     break
         else:
-            if detect(f) == "home":
+            st = detect(f)
+            if st == "home":
                 return False                         # we are in the main village
+            if st == "exit_dialog":
+                bot.tap_point("dialog.cancel")       # never quit the game
+                control.sleep(0.6)
+                continue
             bot.tap_point("bb.safe", jitter=5)
         control.sleep(0.6)
     return False

@@ -29,10 +29,15 @@ resource price is pressed (see village._confirm).
 import difflib
 import logging
 import re
+import time
+
+import cv2
+import numpy as np
 
 from ..core import vision
 from ..core.control import control
 from ..core.space import space
+from .. import states
 from ..states import go_home
 from . import loot, village
 
@@ -369,20 +374,33 @@ def _build_new(bot, item, home):
     arrow = bot.wait("shop/new_arrow", 6)
     if not arrow:
         log.info("%s: the Shop did not point at it", item["name"])
+        bot.save_error("bb-new-arrow")
         home(bot, 20)
         return False
     bot.tap(arrow.x - space.s(100), arrow.y + space.s(110), jitter=3)   # the card under the arrow
-    bot.sleep(1.8)
-    ok = bot.wait("building/place_ok", 5)
-    if not ok:
+    tick = None
+    end = time.monotonic() + 6
+    last = None
+    while time.monotonic() < end:                     # wait for the tick, with the camera standing still
+        control.sleep(0.4)
+        f = bot.shot()
+        small = cv2.resize(f, (480, 270)).astype(np.int16)
+        still = last is not None and np.abs(small - last).mean() < 1.5
+        last = small
+        tick, _ = states.placement(f)
+        if tick and still:
+            break
+    if not tick:
         log.info("%s: it was not put on the village (no free spot, or not affordable)", item["name"])
+        bot.save_error("bb-new-building")
+        states.cancel_placement(bot)
         home(bot, 20)
         return False
-    bot.tap_match(ok)
+    bot.tap_match(tick, jitter=1)
     bot.sleep(1.5)
-    if bot.exists("building/place_ok"):              # not a free spot: the tick did nothing
+    if states.placement(bot.shot())[0]:                # still waiting: not a free spot
         log.info("%s: no free spot for it; cancelled", item["name"])
-        bot.tap_template("building/place_cancel", timeout=2)
+        states.cancel_placement(bot)
         home(bot, 20)
         return False
     home(bot, 20)

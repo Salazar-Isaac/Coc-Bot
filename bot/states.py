@@ -4,6 +4,7 @@ import logging
 import re
 import time
 
+import cv2
 import numpy as np
 
 from .core import net, vision
@@ -17,6 +18,7 @@ log = logging.getLogger("bot")
 # first, then the village itself (the most common screen: checked early to save time; every
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
+    ("exit_dialog", ["popup/exit_title"]),        # "Confirm Exit - quit the game?": ALWAYS Cancel, never Okay
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
     ("reload", ["popup/try_again", "popup/reload_device", "popup/reload", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
@@ -196,6 +198,49 @@ def after_reload(bot):
         bot._reopening = False
 
 
+def placement(frame):
+    """A building waiting to be placed (after buying one): its green tick and red X, drawn at the
+    map's zoom (so at any size). Returns (tick, cross) matches, either can be None."""
+    small = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)   # half size: 4x faster
+    found = {}
+    for key, hues in (("building/place_ok", (35, 90)), ("building/place_cancel", (0, 12))):
+        if not vision.templates.has(key):
+            continue
+        base = vision.templates.image(key)
+        best = None
+        for sc in (0.8, 0.9, 1.0, 1.1, 1.2):
+            tpl = cv2.resize(base, None, fx=sc / 2, fy=sc / 2, interpolation=cv2.INTER_AREA)
+            _, score, _, loc = cv2.minMaxLoc(cv2.matchTemplate(small, tpl, cv2.TM_CCOEFF_NORMED))
+            if score >= 0.8 and (best is None or score > best[0]):
+                h, w = tpl.shape[0] * 2, tpl.shape[1] * 2
+                best = (score, vision.Match(loc[0] * 2 + w // 2, loc[1] * 2 + h // 2, float(score),
+                                            (loc[0] * 2, loc[1] * 2, w, h)))
+        m = best[1] if best else None
+        if m:
+            x, y, w, h = m.box
+            hsv = cv2.cvtColor(frame[y:y + h, x:x + w], cv2.COLOR_BGR2HSV)
+            px = hsv[(hsv[..., 1] > 120) & (hsv[..., 2] > 100)]
+            hue = float(np.median(px[:, 0])) if len(px) > 30 else -1
+            if hues[0] <= hue <= hues[1] or (key.endswith("cancel") and hue >= 165):
+                found[key] = m                     # the right colour: a tick is green, a cross red
+    tick, cross = found.get("building/place_ok"), found.get("building/place_cancel")
+    if tick and cross and not (tick.x > cross.x and abs(tick.y - cross.y) < 25):
+        return None, None                          # not the pair (the tick is right of the cross)
+    return tick, cross
+
+
+def cancel_placement(bot, frame=None):
+    """Leave placement mode with the red X (nothing is bought). Returns True if it was open."""
+    frame = bot.shot() if frame is None else frame
+    _, cross = placement(frame)
+    if cross:
+        bot.tap_match(cross, jitter=1)
+        control.sleep(1.0)
+        log.info("Left placement mode (cancelled)")
+        return True
+    return False
+
+
 def detect(frame):
     for name, keys in STATES:
         if name == "reload" and dialog_box(frame) is not None:
@@ -224,6 +269,8 @@ def _close_any_popup(bot, frame):
             if m:
                 bot.tap_match(m, jitter=2)
                 return
+    if cancel_placement(bot, frame):
+        return
     if bot.device.kind == "adb":
         bot.key("back")                  # Android: Back closes the window on top - safer than a blind tap
         return
@@ -272,7 +319,9 @@ def go_home(bot, timeout=60.0):
                 _close_any_popup(bot, frame)
         else:
             unknown = 0
-        if state == "switcher":
+        if state == "exit_dialog":
+            bot.tap_point("dialog.cancel")           # never quit the game
+        elif state == "switcher":
             bot.tap_point("sid.close", jitter=2)
         elif state == "settings":
             bot.tap_point("settings.close", jitter=2)
