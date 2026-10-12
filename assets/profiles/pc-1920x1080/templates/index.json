@@ -1649,6 +1649,21 @@
     ],
     "threshold": 0.8
   },
+  "shop/new_arrow_tip": {
+    "box": [
+      998,
+      700,
+      66,
+      70
+    ],
+    "region": [
+      0,
+      150,
+      1920,
+      800
+    ],
+    "threshold": 0.72
+  },
   "shop/title": {
     "box": [
       815,

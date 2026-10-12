@@ -371,13 +371,15 @@ def _build_new(bot, item, home):
     if not _open_row(bot, item, BB, home):
         return False
     bot.sleep(1.5)
-    arrow = bot.wait("shop/new_arrow", 6)
-    if not arrow:
+    # the arrow's tip (it can be half off the screen for a card at the right edge) sits on the
+    # card's top-right corner: the card is just below-left of it
+    tip = bot.wait("shop/new_arrow_tip", 6)
+    if not tip:
         log.info("%s: the Shop did not point at it", item["name"])
         bot.save_error("bb-new-arrow")
         home(bot, 20)
         return False
-    bot.tap(arrow.x - space.s(100), arrow.y + space.s(110), jitter=3)   # the card under the arrow
+    bot.tap(tip.box[0] - space.s(40), tip.box[1] + tip.box[3] + space.s(52), jitter=3)
     tick = None
     end = time.monotonic() + 6
     last = None
@@ -417,7 +419,8 @@ def run_bb(bot, account, when="", max_count=None):
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
     plan = cfg.get("bb_plan", BB_DEFAULT)
     started, rows, have, fails = 0, None, None, 0
-    while started < max_count and fails < 2:
+    skipped = set()                                   # new buildings that could not be placed this visit
+    while started < max_count and fails < 3:
         control.checkpoint()
         if not go_home_bb(bot, 20):
             break
@@ -430,7 +433,7 @@ def run_bb(bot, account, when="", max_count=None):
         have = {"gold": st.get("gold"), "elixir": st.get("elixir")}
         if rows is None:
             rows = scan(bot, BB)
-        item = choose_bb(rows, have, plan)
+        item = choose_bb([r for r in rows if not (r.get("new") and r["base"] in skipped)], have, plan)
         if not item:
             log.info("%s Builder Base: nothing in the plan is affordable now (%d items listed)",
                      account["name"], len(rows))
@@ -450,5 +453,7 @@ def run_bb(bot, account, when="", max_count=None):
         else:
             fails += 1
             rows = None
+            if item.get("new"):
+                skipped.add(item["base"])             # go on with the rest of the plan
     go_home_bb(bot, 20)
     return started
