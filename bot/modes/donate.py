@@ -3,14 +3,14 @@
 Loot + Donate cycle (the XpIncrease way):
   1. On Main: donate to any request that is still open.
   2. If Main has enough elixir for a whole round ("Main keeps at least" + what one round
-     cost last time): every requesting account (Looter, Loot + request, Feeder) empties
-     its Clan Castle and requests, then Main donates to all of them. Back to 2.
+     cost last time): the requesting accounts (Looter, Loot + request, Feeder) from the top
+     of the list empty their Clan Castle and request - as many as fit the 10-minute request
+     cooldown together with the donating - then Main donates to all of them. Back to 2.
   3. Not enough elixir: Main and the Looter account(s) loot until full, then back to 1.
 Donate only: steps 1-2, until the elixir runs low (or for the set number of rounds).
 """
 
 import logging
-import math
 import time
 
 from .. import config
@@ -46,45 +46,68 @@ def _learn(state, key, value, weight=0.3):
     state[key] = round(value if not old else old * (1 - weight) + value * weight, 1)
 
 
+OVER_COOLDOWN = 1.05            # a round (requests + donating) may take at most 5% longer than the cooldown
+
+
 def round_size(bot, state, total):
-    """How many accounts a request round needs: just enough that by the time they have all
-    requested and Main has donated to them, the first one's request cooldown (read from the game,
-    10 min) is over again. More accounts would only make the round longer, not give more requests.
+    """About how many accounts fit a request round: by the time they have all requested and Main
+    has donated to them, the first one's request cooldown (read from the game, 10 min) is over
+    again. Only an estimate for the log - request_round stops on the clock.
     "Accounts per round" on the Donate page overrides it."""
     fixed = bot.settings["donate"].get("round_accounts", 0)
     if fixed:
         return min(fixed, total)
     cooldown = state.get("request_cooldown") or 600
     per = (state.get("request_secs") or 20) + (state.get("donate_secs") or 8)
-    return max(1, min(total, math.ceil(cooldown / per)))
+    return max(1, min(total, int(cooldown * OVER_COOLDOWN // per)))
 
 
 def request_round(bot, state):
-    """The first accounts (fewest scrolls in the account list) empty their Clan Castle and request,
-    as many as fit the request cooldown (round_size). Returns requests sent."""
+    """Accounts from the top of the list (Omi ji first) empty their Clan Castle and request, as many
+    as fit the request cooldown: the whole round - their requests plus Main donating to all of them -
+    may take at most a little longer than the 10 minutes an account waits to request again. One
+    more account that would make it longer is left out, so the next round starts right when the
+    first account can request again. Returns requests sent."""
     requesters = active_accounts(bot, REQUEST_ROLES)
     if not requesters:
         raise StopRun("No requesting accounts (roles 'Looter', 'Loot + request' or 'Feeder') in the Accounts tab.")
-    want = round_size(bot, state, len(requesters))
-    log.info("Request round: %d account(s) (request cooldown %dm, about %ds per account + %ds donating each)",
-             want, (state.get("request_cooldown") or 600) // 60, state.get("request_secs") or 20,
-             state.get("donate_secs") or 8)
-    sent = 0
-    start = state.get("request_next", 0)              # continue where a stopped run left off
-    if start:
-        log.info("Continuing the request round at account %d of %d", start + 1, len(requesters))
-    for i, acc in enumerate(requesters, 1):
-        if i - 1 < start:
+    cooldown = state.get("request_cooldown") or 600
+    fixed = bot.settings["donate"].get("round_accounts", 0)
+    limit = min(fixed, len(requesters)) if fixed else len(requesters)
+    # a stopped round goes on where it was only while its requests are still on cooldown;
+    # later the first accounts can request again, so it starts from the top
+    start, sent = state.get("request_next", 0), state.get("request_sent", 0)
+    ago = time.time() - state.get("request_round_at", 0)
+    if start and ago < cooldown:
+        log.info("Continuing the request round at account %d of %d (started %ds ago)", start + 1,
+                 len(requesters), ago)
+        t0 = time.monotonic() - ago
+    else:
+        start, sent, t0 = 0, 0, time.monotonic()
+        state["request_round_at"] = time.time()
+    log.info("Request round: %s (request cooldown %dm; about %ds per request + %ds donating each)",
+             f"{limit} account(s)" if fixed else
+             f"about {round_size(bot, state, len(requesters))} account(s), as many as fit the cooldown",
+             cooldown // 60, state.get("request_secs") or 20, state.get("donate_secs") or 8)
+    for i, acc in enumerate(requesters):
+        if i < start:
             continue
-        if sent >= want:
+        if sent >= limit:
             break
-        state["request_next"] = i - 1
+        if sent and not fixed:
+            elapsed = time.monotonic() - t0
+            finish = elapsed + (state.get("request_secs") or 20) + (sent + 1) * (state.get("donate_secs") or 8)
+            if finish > cooldown * OVER_COOLDOWN:
+                log.info("Round full after %d request(s) in %ds: one more would make requests + donating "
+                         "about %ds, longer than the %dm cooldown", sent, elapsed, finish, cooldown // 60)
+                break
+        state["request_next"], state["request_sent"] = i, sent
         config.save_state(state)
         no_clan = state.setdefault("no_clan", {})
         if time.time() - no_clan.get(acc["name"], 0) < NO_CLAN_RECHECK:
             continue                                   # had no clan recently: do not switch to it again
 
-        bot.status(account=acc["name"], progress=f"request {sent + 1}/{want}", action="Requesting")
+        bot.status(account=acc["name"], progress=f"request {sent + 1}", action="Requesting")
         started = time.monotonic()
         if not _switch(bot, acc, state):
             continue
@@ -98,9 +121,9 @@ def request_round(bot, state):
         if acc.get("_no_clan"):
             state.setdefault("no_clan", {})[acc["name"]] = time.time()
             config.save_state(state)
-    state["request_next"] = 0
+    state["request_next"], state["request_sent"] = 0, 0
     config.save_state(state)
-    log.info("Requests sent: %d (round of %d)", sent, want)
+    log.info("Requests sent: %d in %ds", sent, time.monotonic() - t0)
     return sent
 
 

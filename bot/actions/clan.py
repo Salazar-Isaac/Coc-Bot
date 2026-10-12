@@ -76,13 +76,23 @@ def remove_cc_troops(bot):
     return True
 
 
+WAIT_COOLDOWN = 60      # a request cooldown this close to its end is waited out
+
+
 def request(bot, text=""):
     """Send a reinforcement request (army screen must be open). Returns True if sent."""
     frame = bot.shot()
     if vision.templates.has("army/request_cooldown") and vision.find(frame, "army/request_cooldown",
                                                                       any_brightness=True):
-        log.info("Request is on cooldown (never paying gems to skip it)")
-        return False
+        secs = request_timer(bot, tries=2)
+        if not secs or secs > WAIT_COOLDOWN:
+            log.info("Request is on cooldown%s (never paying gems to skip it)",
+                     f" for {secs // 60}m {secs % 60}s" if secs else "")
+            return False
+        # the round came back a little early: wait the last seconds instead of losing the request
+        log.info("Request cooldown ends in %ds: waiting for it", secs)
+        bot.sleep(secs + 1.5)
+        frame = bot.shot()
     m = _active(frame, "army/request_button")
     if not m or m.score < 0.9:
         log.info("Request button not available (cooldown, request still open, or Clan Castle full)")

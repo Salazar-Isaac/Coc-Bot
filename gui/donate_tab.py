@@ -95,14 +95,15 @@ class DonateTab(QWidget):
         cycle.add(SettingRow("Request / donate rounds", "0 = until the Main's elixir runs low", self.rounds))
         self.round_accounts = Spin(0, 99, special="Auto")
         self.round_accounts.setFixedWidth(170)
-        cycle.add(SettingRow("Accounts per request round", "Auto: just enough that the first account's 10-minute "
-                             "request cooldown is over when the round comes back to it", self.round_accounts))
+        cycle.add(SettingRow("Accounts per request round", "Auto: accounts from the top of the list request "
+                             "while the whole round (requests + donating) still fits the 10-minute request "
+                             "cooldown", self.round_accounts))
         cycle.add(divider())
         self.method = Segmented([("fast", "Fast (like XpIncrease)"), ("careful", "Careful")])
-        self.method.setToolTip("Fast: each item is tapped its count in one quick burst.\n"
-                               "Careful: the bot checks every single unit before the next tap.")
-        cycle.add(field("Donate method", self.method, "Fast taps each item its count in a quick burst (the game "
-                        "ignores what does not fit); Careful checks every single unit (slower)."))
+        self.method.setToolTip("Fast: each item gets exactly the taps that fit, in one quick burst.\n"
+                               "Careful: the same bursts, then one check per item that the game took them.")
+        cycle.add(field("Donate method", self.method, "Both tap exactly what fits the request in one quick "
+                        "burst; Careful also checks once per item that the game took it."))
         cycle.add(divider())
         self.special = QLineEdit()
         self.special.setPlaceholderText("empty = every request counts as small")

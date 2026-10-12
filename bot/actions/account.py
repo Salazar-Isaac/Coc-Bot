@@ -211,6 +211,8 @@ def switch_to(bot, account, state=None):
     ratios = sorted(_list_index(bot, n) / p for n, p in pages.items() if p and _list_index(bot, n) is not None)
     per_page = ratios[len(ratios) // 2] if ratios and native != (1920, 1080) else ROWS_PER_PAGE
     target = pages.get(name, int(index // per_page) if index is not None else 0)
+    if index is not None and abs(target - index / per_page) > 1.5:
+        target = int(index // per_page)               # a page learned with an older scroll: from the list
     for _ in range(target):
         _page(bot)                                    # the list stops at once: no wait in between
     if target:
@@ -238,6 +240,9 @@ def switch_to(bot, account, state=None):
             if found:
                 break
     if not found:
+        pages.pop(name, None)                         # look for it from its place in the list next time
+        if save:
+            config.save_state(state)
         bot.save_error("account-not-found")
         go_home(bot)
         raise BotError(f"Account '{name}' not found in the Supercell ID list")
