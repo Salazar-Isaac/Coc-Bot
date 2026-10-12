@@ -398,14 +398,28 @@ def _build_new(bot, item, home):
         states.cancel_placement(bot)
         home(bot, 20)
         return False
-    bot.tap_match(tick, jitter=1)
-    bot.sleep(1.5)
-    if states.placement(bot.shot())[0]:                # still waiting: not a free spot
-        log.info("%s: no free spot for it; cancelled", item["name"])
-        states.cancel_placement(bot)
-        home(bot, 20)
-        return False
+    from .builder_base import status
+    gold = status(bot).get(item["res"]) if item["res"] in ("gold", "elixir") else None
+    placed = 0
+    for _ in range(8):                                 # traps come several at a time ("Mine x2")
+        bot.tap_match(tick, jitter=1)
+        bot.sleep(1.5)
+        tick, _ = states.placement(bot.shot())
+        now = status(bot).get(item["res"]) if gold is not None else None
+        paid = gold is None or (now is not None and now < gold)
+        if paid:
+            placed += 1
+            gold = now
+        if not tick:
+            break                                      # placed and done
+        if not paid:                                   # the tick did nothing: not a free spot
+            log.info("%s: no free spot for it; cancelled", item["name"])
+            states.cancel_placement(bot)
+            break
+        bot.sleep(0.5)                                 # the next copy is waiting: place it too
     home(bot, 20)
+    if not placed:
+        return False
     log.info("Built a new %s for %s %s", item["name"], f"{item['cost']:,}", item["res"])
     return True
 
