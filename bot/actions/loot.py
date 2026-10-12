@@ -115,8 +115,9 @@ def attack_once(bot):
         return None
     plan = attack.get_plan(bot.settings["loot"]["attack_plan"])
     bot.status(action="Attacking")
+    started = time.monotonic()
     attack.deploy(bot, plan)
-    attack.finish_battle(bot, bot.settings["loot"]["battle_seconds"])
+    attack.finish_battle(bot, bot.settings["loot"]["battle_seconds"], started)   # deploying counts too
     bot.stats["attacks"] += 1
     if not go_home(bot, timeout=90):          # results -> reward chest -> home
         raise BotError("Did not get home after the battle")

@@ -25,6 +25,11 @@ from ..states import detect, go_home
 log = logging.getLogger("bot")
 
 BB_MARK = "bb/trophy_hammer"     # the hammer by the trophy count: only shown in the Builder Base
+TROOPS_BOX = (400, 435, 650, 60)   # the "Your troops" line in the Start Attack window
+
+
+class NoArmy(BotError):
+    """The Builder Base army is empty ("Train an army before attacking!")."""
 
 # Builder-Hall-first priority: the Builder Hall, then NEW buildings (unlocks), then the
 # Cannon / Archer Tower / Mortar line (needed for Gear Up), then the rest (part of a name is enough).
@@ -283,7 +288,14 @@ def attack(bot):
         raise BotError("Not in the Builder Base")
     before = status(bot)
     bot.tap_point("bb.attack")
-    if not bot.tap_template("bb/find_now", timeout=6, after=0.5):
+    if not bot.wait("bb/find_now", 6):
+        raise BotError("Builder Base attack menu did not open")
+    bot.sleep(0.3)
+    text, _ = vision.text_reader.read_line(bot.shot(), space.region(*TROOPS_BOX))
+    if "train" in text.lower() and "army" in text.lower():
+        go_home_bb(bot, 15)
+        raise NoArmy("the Builder Base army is empty (\"Train an army before attacking!\")")
+    if not bot.tap_template("bb/find_now", timeout=3, after=0.5):
         raise BotError("Builder Base attack menu did not open")
     if not bot.wait_any(["bb/battle_starts", "bb/end_battle"], 40)[0]:
         raise BotError("Builder Base battle did not start")
@@ -293,14 +305,20 @@ def attack(bot):
     limit = bot.settings.get("builder", {}).get("battle_seconds", 60)
     ended = False
     end = time.monotonic() + 7 * 60
+    next_end = 0.0
     while time.monotonic() < end:
         f = bot.shot()
         if vision.templates.has("bb/return_home") and vision.find(f, "bb/return_home"):
             break
-        if limit and not ended and time.monotonic() - started > limit:
-            ended = _end_battle(bot, f)                # each attack lasts at most `limit` seconds
-            if ended:
-                log.info("Builder Base battle ended after %d s", limit)
+        if limit and time.monotonic() - started > limit:
+            # each attack lasts at most `limit` seconds in all: ending stage 1 can lead into
+            # stage 2, so End Battle is tapped again until the results show (no stage 2 troops)
+            if time.monotonic() >= next_end:
+                if _end_battle(bot, f) and not ended:
+                    ended = True
+                    log.info("Builder Base battle ended after %d s", time.monotonic() - started)
+                next_end = time.monotonic() + 2.5
+            control.sleep(0.6)
             continue
         stage_start = vision.find(f, "bb/battle_starts") is not None
         if stage_start and stage_seen < 2:
@@ -509,6 +527,15 @@ def session(bot, account, plan=False):
         try:
             attack(bot)
             attacks += 1
+        except NoArmy as e:
+            if account.get("_bb_army_retry"):
+                log.warning("%s Builder Base: %s - no attacks this visit", name, e)
+                break
+            account["_bb_army_retry"] = True
+            log.info("%s Builder Base: %s - choosing the army again", name, e)
+            if not set_army(bot, cfg.get("army", "auto") if cfg.get("army", "auto") != "keep" else "auto"):
+                log.warning("%s Builder Base: no army - no attacks this visit", name)
+                break
         except BotError as e:
             log.warning("%s Builder Base attack: %s", name, e)
             bot.save_error("bb-attack")
@@ -532,13 +559,19 @@ def session(bot, account, plan=False):
 BB_UNITS = ["pekka", "night_witch", "archer", "barbarian", "boxer_giant", "bomber", "cannon_cart", "drop_ship",
             "hog_glider", "beta_minion", "baby_dragon", "electrofire_wizard"]
 AUTO_ORDER = ["pekka", "archer", "barbarian"]          # "Auto": P.E.K.K.A when unlocked, else Sneaky Archer
-SLOTS_REGION = (455, 340, 1120, 170)                    # starting + reinforcement slots
+SLOTS_REGION = (310, 330, 1300, 190)                    # starting + reinforcement slots (4-6 + 0-2)
 LIST_REGION = (320, 640, 1300, 270)                     # the unit list
 
 
-def _unit(frame, name, region):
+def _unit(frame, name, region, unlocked=False):
+    """The unit's icon; unlocked=True: only if it is in colour (a locked unit is drawn grey)."""
     key = f"bb/unit_{name}"
-    return vision.find(frame, key, region=space.region(*region)) if vision.templates.has(key) else None
+    m = vision.find(frame, key, region=space.region(*region)) if vision.templates.has(key) else None
+    if m and unlocked:
+        x, y, w, h = m.box
+        if cv2.cvtColor(frame[y:y + h, x:x + w], cv2.COLOR_BGR2HSV)[:, :, 1].mean() < 40:
+            return None
+    return m
 
 
 def set_army(bot, choice):
@@ -558,31 +591,38 @@ def set_army(bot, choice):
         f = bot.shot()
         # already this army (first slot and a reinforcement slot show the wanted unit)? then leave it
         u = wanted[0]                                   # only the first choice counts as "already set"
-        if _unit(f, u, (455, 340, 140, 170)) and _unit(f, u, (1300, 340, 280, 170)):
+        if _unit(f, u, (310, 340, 300, 170)) and _unit(f, u, (1300, 340, 280, 170)):
             log.info("Builder Base army is already %s", u.replace("_", " "))
             return u
         bot.tap_point("bb.army_clear")                  # empty the army (no confirmation)
         bot.sleep(0.6)
         f = bot.shot()
-        unit = next((u for u in wanted if _unit(f, u, LIST_REGION)), None)   # in colour = unlocked
+        unit = next((u for u in wanted if _unit(f, u, LIST_REGION, unlocked=True)), None)
         if unit is None:
             log.info("None of %s unlocked on this Builder Base; using what is available", ", ".join(wanted))
-            unit = next((u for u in BB_UNITS if _unit(f, u, LIST_REGION)), None)
-        hero = _unit(f, "battle_machine", LIST_REGION) or _unit(f, "battle_copter", LIST_REGION)
+            unit = next((u for u in BB_UNITS if _unit(f, u, LIST_REGION, unlocked=True)), None)
+        hero = next((h for h in ("battle_machine", "battle_copter") if _unit(f, h, LIST_REGION, unlocked=True)), None)
         if hero:
-            bot.tap_match(hero, jitter=2)
+            bot.tap_match(_unit(f, hero, LIST_REGION), jitter=2)
             bot.sleep(0.4)
-        if unit:
+        ok = None
+        for _ in range(2):                              # a second go if the slots stayed empty
+            if not unit:
+                break
             m = _unit(bot.shot(), unit, LIST_REGION)
             for _ in range(8):                          # every free slot (6 + 2 at the top Builder Hall)
                 control.checkpoint()
                 bot.tap_match(m, jitter=2)
                 bot.sleep(0.3)
-        bot.sleep(0.4)
-        ok = unit and _unit(bot.shot(), unit, SLOTS_REGION)
-        log.info("Builder Base army: Battle Machine + %s%s", (unit or "?").replace("_", " "),
-                 "" if ok else " (could not confirm)")
-        return unit
+            bot.sleep(0.4)
+            ok = _unit(bot.shot(), unit, SLOTS_REGION)
+            if ok:
+                break
+        if ok:
+            log.info("Builder Base army: %s%s", "Battle Machine + " if hero else "", unit.replace("_", " "))
+            return unit
+        log.warning("Builder Base army could not be filled (%s)", unit.replace("_", " ") if unit else "no unit unlocked")
+        return None
     finally:
         bot.tap_point("bb.army_close")
         bot.sleep(0.5)

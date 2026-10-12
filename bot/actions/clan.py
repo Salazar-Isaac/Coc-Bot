@@ -95,8 +95,15 @@ def request(bot, text=""):
         frame = bot.shot()
     m = _active(frame, "army/request_button")
     if not m or m.score < 0.9:
-        log.info("Request button not available (cooldown, request still open, or Clan Castle full)")
-        return False
+        secs = request_timer(bot, tries=1, need_icon=False)     # a cooldown timer after all?
+        if secs and secs <= WAIT_COOLDOWN:
+            log.info("Request cooldown ends in %ds: waiting for it", secs)
+            bot.sleep(secs + 1.5)
+            m = _active(bot.shot(), "army/request_button")
+        if not m or m.score < 0.9:
+            log.info("Request button not available (%s)", f"cooldown {secs // 60}m {secs % 60}s" if secs else
+                     "cooldown, request still open, or Clan Castle full")
+            return False
     bot.tap_match(m)
     if not bot.wait("request/title", 5, interval=0.2):
         log.info("Request window did not open")
@@ -120,14 +127,15 @@ def request(bot, text=""):
     return True
 
 
-def request_timer(bot, tries=4):
+def request_timer(bot, tries=4, need_icon=True):
     """Seconds until this account can request again, read from the request button's timer
-    (e.g. "10m", "9m 58s", "45s"). None if it cannot be read."""
+    (e.g. "10m", "9m 58s", "45s"). None if it cannot be read. need_icon=False also reads it when
+    the cooldown button is not recognised."""
     for _ in range(tries):
         bot.sleep(0.5)
         f = bot.shot()
-        if not (vision.templates.has("army/request_cooldown") and
-                vision.find(f, "army/request_cooldown", any_brightness=True)):
+        if need_icon and not (vision.templates.has("army/request_cooldown") and
+                              vision.find(f, "army/request_cooldown", any_brightness=True)):
             continue
         text, _ = vision.text_reader.read_line(f, bot.layout.region("army.request_timer"))
         t = text.lower().replace(" ", "")

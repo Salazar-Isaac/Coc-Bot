@@ -283,10 +283,25 @@ def _tap_empty(bot, frame):
     bot.tap_point("bb.safe" if bb else "home.safe", jitter=5)
 
 
-def surrender(bot):
-    """End a battle in progress and return to the results screen."""
-    if bot.tap_template("battle/surrender", timeout=3):
-        bot.tap_template("battle/confirm_okay", timeout=4)
+SURRENDER_WIDE = (0, 560, 560, 520)      # bottom-left quarter: where the Surrender button can be
+
+
+def surrender(bot, frame=None, blind=False):
+    """End a battle in progress: Surrender, then Okay. The button is looked for where it usually is,
+    then in the whole bottom-left corner; blind=True (the caller knows a battle is running) also
+    taps its usual spot when it cannot be seen. Returns True if the battle was ended."""
+    frame = bot.shot() if frame is None else frame
+    m = (vision.find(frame, "battle/surrender") or
+         vision.find(frame, "battle/surrender", region=space.region(*SURRENDER_WIDE), threshold=0.75,
+                     any_brightness=True))
+    if m:
+        bot.tap_match(m)
+    elif blind:
+        x, y, w, h = vision.templates.meta("battle/surrender")["box"]
+        bot.tap(*space.point(x + w // 2, y + h // 2), jitter=2)
+    else:
+        return False
+    return bool(bot.tap_template("battle/confirm_okay", timeout=3))
 
 
 def go_home(bot, timeout=60.0):

@@ -429,17 +429,29 @@ def deploy(bot, plan):
                 frame = bot.shot()
 
 
-def finish_battle(bot, seconds):
-    """Wait up to `seconds` for the battle to end by itself, then surrender.
-    Returns once the results screen is showing (or after a timeout)."""
-    end = time.monotonic() + seconds
+def finish_battle(bot, seconds, started=None):
+    """The battle lasts at most `seconds` from `started` (when the attack began; default now): it
+    is surrendered then, retrying until the results show (a single missed Surrender let battles
+    run to the game's 3 minutes). Returns True once the results screen is showing."""
+    end = (time.monotonic() if started is None else started) + seconds
     while time.monotonic() < end:
         if detect(bot.shot()) == "results":
             return True
         control.sleep(0.6)
-    surrender(bot)
-    for _ in range(20):
-        if detect(bot.shot()) == "results":
+    give_up = time.monotonic() + 25
+    tries = 0
+    while time.monotonic() < give_up:
+        frame = bot.shot()
+        state = detect(frame)
+        if state == "results":
             return True
-        control.sleep(0.5)
+        if state in ("battle", "unknown", "confirm"):
+            if state == "confirm":
+                bot.tap_template("battle/confirm_okay", timeout=1)
+            elif not surrender(bot, frame, blind=tries >= 2):
+                if tries == 1:
+                    bot.save_error("no-surrender")     # what is covering the Surrender button
+                tries += 1
+        control.sleep(0.7)
+    log.warning("The battle could not be ended after %d s", seconds)
     return False

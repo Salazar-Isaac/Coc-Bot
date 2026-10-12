@@ -47,6 +47,7 @@ def _learn(state, key, value, weight=0.3):
 
 
 OVER_COOLDOWN = 1.05            # a round (requests + donating) may take at most 5% longer than the cooldown
+WAIT_BEFORE_SWITCH = 60         # an account this close to the end of its request cooldown is waited for
 
 
 def round_size(bot, state, total):
@@ -89,18 +90,31 @@ def request_round(bot, state):
              f"{limit} account(s)" if fixed else
              f"about {round_size(bot, state, len(requesters))} account(s), as many as fit the cooldown",
              cooldown // 60, state.get("request_secs") or 20, state.get("donate_secs") or 8)
+    requested_at = state.setdefault("requested_at", {})
+    waiting = []                                       # still on cooldown: not switched to
     for i, acc in enumerate(requesters):
         if i < start:
             continue
         if sent >= limit:
             break
+        # when it requested last is known: wait the last seconds of its cooldown before switching
+        # (the request is tapped about request_secs after the switch starts), or leave it out
+        lead = max(5, (state.get("request_secs") or 20) - 6)
+        wait = requested_at.get(acc["name"], 0) + cooldown - lead - time.time()
+        if wait > WAIT_BEFORE_SWITCH:
+            waiting.append(acc["name"])
+            continue
+        wait = max(0.0, wait)
         if sent and not fixed:
             elapsed = time.monotonic() - t0
-            finish = elapsed + (state.get("request_secs") or 20) + (sent + 1) * (state.get("donate_secs") or 8)
+            finish = elapsed + wait + (state.get("request_secs") or 20) + (sent + 1) * (state.get("donate_secs") or 8)
             if finish > cooldown * OVER_COOLDOWN:
                 log.info("Round full after %d request(s) in %ds: one more would make requests + donating "
                          "about %ds, longer than the %dm cooldown", sent, elapsed, finish, cooldown // 60)
                 break
+        if wait:
+            log.info("%s can request again in %ds: waiting", acc["name"], wait + lead)
+            bot.sleep(wait)
         state["request_next"], state["request_sent"] = i, sent
         config.save_state(state)
         no_clan = state.setdefault("no_clan", {})
@@ -115,6 +129,7 @@ def request_round(bot, state):
         result = with_recovery(bot, f"request on {acc['name']}", lambda a=acc: clan.feeder_turn(bot, a, bot.settings))
         if result:
             sent += 1
+            requested_at[acc["name"]] = time.time()
             _learn(state, "request_secs", time.monotonic() - started)
             if bot.request_cooldown:
                 state["request_cooldown"] = bot.request_cooldown
@@ -123,6 +138,8 @@ def request_round(bot, state):
             config.save_state(state)
     state["request_next"], state["request_sent"] = 0, 0
     config.save_state(state)
+    if waiting:
+        log.info("Still on request cooldown, left out of this round: %s", ", ".join(waiting))
     log.info("Requests sent: %d in %ds", sent, time.monotonic() - t0)
     return sent
 
