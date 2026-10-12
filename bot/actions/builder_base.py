@@ -56,7 +56,8 @@ def go_home_bb(bot, timeout=60.0):
         if vision.find(f, BB_MARK):
             return True
         for key, tap in (("bb/star_bonus_okay", None), ("bb/return_home", None), ("bb/menu_close", None),
-                         ("upgrade/close", None), ("lab/close", None)):
+                         ("upgrade/close", None), ("lab/close", None), ("shop/close", None),
+                         ("building/place_cancel", None)):
             if vision.templates.has(key):
                 m = vision.find(f, key)
                 if m:

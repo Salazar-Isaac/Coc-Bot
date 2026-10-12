@@ -19,7 +19,7 @@ DEFAULT_LAYOUT = {
         "home.chat": [65, 490],
         "home.army": [65, 830],
         "home.safe": [1830, 420],          # home village: forest edge (NOT 330: that is the gems counter -> Shop)
-        "bb.safe": [1450, 38],             # Builder Base: sky/cliff above the island (the boat can be at the right edge)
+        "bb.safe": [1640, 470],            # Builder Base: forest right of the island (NOT the top: the boat is there)
         "popup.shield_continue": [960, 902],
         "shop.close": [1857, 66],
         "attack_menu.find_match": [273, 745],

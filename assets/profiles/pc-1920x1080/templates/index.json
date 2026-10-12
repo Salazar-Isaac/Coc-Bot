@@ -719,6 +719,36 @@
     ],
     "threshold": 0.82
   },
+  "building/place_cancel": {
+    "box": [
+      911,
+      284,
+      34,
+      33
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "building/place_ok": {
+    "box": [
+      977,
+      284,
+      34,
+      33
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
   "building/upgrade_button": {
     "box": [
       1150,
@@ -1588,6 +1618,21 @@
       164
     ],
     "threshold": 0.85
+  },
+  "shop/new_arrow": {
+    "box": [
+      1000,
+      632,
+      132,
+      136
+    ],
+    "region": [
+      940,
+      572,
+      252,
+      256
+    ],
+    "threshold": 0.8
   },
   "shop/title": {
     "box": [

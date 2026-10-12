@@ -358,27 +358,33 @@ def choose_bb(rows, have, plan):
 
 
 def _build_new(bot, item, home):
-    """A new building from the builder menu: the game opens the shop on it; tap it, and confirm
-    the spot the game offers with the green tick. True if it was placed."""
-    if not vision.templates.has("building/place_ok"):
-        log.info("%s: placing new buildings is not set up yet (template building/place_ok)", item["name"])
-        return False
+    """A new building from the builder menu: the game opens the Shop with an arrow pointing at its
+    card; tap the card, and the game puts the building on a free spot - confirm it with the green
+    tick (a spot that is not free leaves the building there: then cancel with the red X).
+    Only rows with a gold / elixir price get here (gem prices, e.g. B.O.T.O's Shack, never).
+    True if it was placed."""
     if not _open_row(bot, item, BB, home):
         return False
     bot.sleep(1.5)
-    card = bot.wait("shop/new_arrow", 5) if vision.templates.has("shop/new_arrow") else None
-    if card:                                          # the shop points at the building: tap its card
-        bot.tap(card.x, card.y + space.s(120), jitter=3)
-        bot.sleep(1.5)
+    arrow = bot.wait("shop/new_arrow", 6)
+    if not arrow:
+        log.info("%s: the Shop did not point at it", item["name"])
+        home(bot, 20)
+        return False
+    bot.tap(arrow.x - space.s(100), arrow.y + space.s(110), jitter=3)   # the card under the arrow
+    bot.sleep(1.8)
     ok = bot.wait("building/place_ok", 5)
     if not ok:
-        log.info("%s: no place for it (or the shop did not open)", item["name"])
-        if vision.templates.has("building/place_cancel"):
-            bot.tap_template("building/place_cancel", timeout=2)
+        log.info("%s: it was not put on the village (no free spot, or not affordable)", item["name"])
         home(bot, 20)
         return False
     bot.tap_match(ok)
     bot.sleep(1.5)
+    if bot.exists("building/place_ok"):              # not a free spot: the tick did nothing
+        log.info("%s: no free spot for it; cancelled", item["name"])
+        bot.tap_template("building/place_cancel", timeout=2)
+        home(bot, 20)
+        return False
     home(bot, 20)
     log.info("Built a new %s for %s %s", item["name"], f"{item['cost']:,}", item["res"])
     return True
