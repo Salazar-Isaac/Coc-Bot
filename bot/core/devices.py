@@ -98,6 +98,18 @@ class Device:
         self.prepare()
         self._tap_native(*self.to_native(x, y))
 
+    def tap_burst(self, x, y, n, interval=0.05):
+        """Tap the same spot n times as fast as the game takes them (e.g. 12 Balloons)."""
+        self.prepare()
+        a, b = self.to_native(x, y)
+        self._burst_native(a, b, n, interval)
+
+    def _burst_native(self, x, y, n, interval):
+        for i in range(n):
+            if i:
+                time.sleep(interval)
+            self._tap_native(x, y)
+
     def swipe(self, x1, y1, x2, y2, ms=500):
         self.prepare()
         a, b = self.to_native(x1, y1)
@@ -114,6 +126,17 @@ class Device:
 
     def _drag_native(self, x1, y1, x2, y2, ms):
         self._swipe_native(x1, y1, x2, y2, ms)
+
+    def flick(self, x1, y1, x2, y2):
+        """A fast fling (XpIncrease's siege move): press, jump to the end, let go - the row keeps
+        sliding to its end."""
+        self.prepare()
+        a, b = self.to_native(x1, y1)
+        c, d = self.to_native(x2, y2)
+        self._flick_native(a, b, c, d)
+
+    def _flick_native(self, x1, y1, x2, y2):
+        self._swipe_native(x1, y1, x2, y2, 60)
 
 
 # =============================================================================
@@ -197,6 +220,9 @@ class PcDevice(Device):
     def _tap_native(self, x, y):
         self._pg.click(*self._screen(x, y))
 
+    def _burst_native(self, x, y, n, interval):
+        self._pg.click(*self._screen(x, y), clicks=n, interval=interval)   # one call, like XpIncrease
+
     def _swipe_native(self, x1, y1, x2, y2, ms):
         self._pg.moveTo(*self._screen(x1, y1))
         self._pg.mouseDown()
@@ -212,6 +238,19 @@ class PcDevice(Device):
         self._pg.mouseDown()
         try:
             self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
+        finally:
+            self._pg.mouseUp()
+
+    def _flick_native(self, x1, y1, x2, y2):
+        # exactly XpIncrease (pyautogui's default 0.1 s pause between the steps): with shorter
+        # gaps the game sees a tap, not a drag
+        self._pg.moveTo(*self._screen(x1, y1))
+        time.sleep(0.1)
+        self._pg.mouseDown()
+        try:
+            time.sleep(0.1)
+            self._pg.moveTo(*self._screen(x2, y2))
+            time.sleep(0.1)
         finally:
             self._pg.mouseUp()
 
@@ -388,8 +427,13 @@ class AdbDevice(Device):
         self._sh(f"input tap {x} {y}")
         time.sleep(0.05)
 
+    def _burst_native(self, x, y, n, interval):
+        self._sh("; ".join([f"input tap {x} {y}"] * n))
+        time.sleep(0.08 * n)
+
     def _swipe_native(self, x1, y1, x2, y2, ms):
-        self._sh(f"input swipe {x1} {y1} {x2} {y2} {int(ms)}")
+        ms = max(60, int(ms))                        # 0 ms is a tap at the far end on Android, not a flick
+        self._sh(f"input swipe {x1} {y1} {x2} {y2} {ms}")
         time.sleep(ms / 1000 + 0.1)
 
     def key(self, name):

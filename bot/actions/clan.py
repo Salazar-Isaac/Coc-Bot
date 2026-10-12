@@ -315,42 +315,49 @@ def _find_item(bot, frame, key, dy, cat):
 
 
 def fill_request(bot, items, left=None):
-    """Donate window is open: donate items in order until each category's space is used.
-    Returns the number of units donated. A tap counts only if the 'donated' row changed."""
+    """Donate window is open: each item gets exactly the taps that fit its free space (troop space
+    comes in steps of 5, a Balloon takes 5), in one quick burst like XpIncrease, then one check that
+    the 'donated' row took them. Returns the number of units donated."""
     left = dict(left or {})
     donated = 0
     for item in items:
-        key, cat, size = item["template"], item.get("category", "troop"), item.get("space", 1)
+        key, cat = item["template"], item.get("category", "troop")
+        size = max(1, int(item.get("space") or 1))
         if not vision.templates.has(key):
             continue
-        for _ in range(max(1, int(item.get("clicks", 1)))):
-            control.checkpoint()
-            if left.get(cat) is not None and left[cat] < size:
-                break                               # this unit no longer fits
-            frame = bot.shot()
-            dy = _window_dy(frame)
-            if dy is None:
-                return donated                      # window closed itself: request filled
+        n = max(1, int(item.get("clicks", 1)))
+        if left.get(cat) is not None:
+            n = min(n, left[cat] // size)
+            if n <= 0:
+                continue                            # this unit no longer fits
+        control.checkpoint()
+        frame = bot.shot()
+        dy = _window_dy(frame)
+        if dy is None:
+            return donated                          # window closed itself: request filled
+        if cat == "siege":
+            m, frame = _find_fast(bot, frame, key, dy, cat)     # one fast flick to the row's end
+        else:
             m = _find_item(bot, frame, key, dy, cat)
-            if not m:
-                break                               # not trained / not available
             frame = bot.frame
-            before = _donated_strip(frame, dy)
-            bot.tap_match(m, jitter=2)
-            changed = False
-            for _ in range(4):                      # the row updates 0.2-0.5 s after the tap
-                time.sleep(0.15)
-                after = bot.shot()
-                if _window_dy(after) is None:
-                    return donated + 1              # that tap filled the request and closed the window
-                if _strip_changed(before, _donated_strip(after, dy)):
-                    changed = True
-                    break
-            if not changed:
-                break                               # the game refused (no room for this unit)
-            donated += 1
-            if left.get(cat) is not None:
-                left[cat] -= size
+        if not m:
+            continue                                # not trained / not available
+        before = _donated_strip(frame, dy)
+        bot.tap_burst(m, n, 0.25 if cat == "siege" else 0.05)
+        took = False
+        for _ in range(4):                          # the row updates 0.2-0.5 s after the taps
+            time.sleep(0.15)
+            after = bot.shot()
+            if _window_dy(after) is None:
+                return donated + n                  # that filled the request and closed the window
+            if _strip_changed(before, _donated_strip(after, dy)):
+                took = True
+                break
+        if not took:
+            continue                                # the game refused (no room for this unit)
+        donated += n
+        if left.get(cat) is not None:
+            left[cat] -= n * size
     return donated
 
 
@@ -365,22 +372,39 @@ def is_big_request(frame, dy, settings):
     return _active(frame, key, region=_shifted(ROWS["troop"], dy)) is not None
 
 
+def _settled(bot, region, timeout=2.0):
+    """After a flick the row bounces back at its end: wait until it stands still (a tap on a
+    moving row only stops it). Returns the still frame."""
+    x, y, w, h = region
+    bot.sleep(0.5)
+    last = bot.shot()
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        bot.sleep(0.2)
+        f = bot.shot()
+        if np.abs(f[y:y + h, x:x + w].astype(np.int16) - last[y:y + h, x:x + w]).mean() < 1.5:
+            return f
+        last = f
+    return last
+
+
 def _find_fast(bot, frame, key, dy, cat):
     """An item's icon. Siege machines are at the far right end of the troop rows: the row is
-    dragged left (like XpIncrease) until the machine shows up or the row stops moving."""
+    flicked to its end in one fast move (like XpIncrease); a second flick only if it is not there yet."""
     region = _shifted(ROWS.get(cat, ROWS["troop"]), dy)
     m = _active(frame, key, region=region)
     if m or cat != "siege":
         return m, frame
     x, y, w, h = region
     cy = y + h // 3
-    for _ in range(5):
+    for _ in range(3):
         if vision.find(frame, key, region=region, any_brightness=True, threshold=0.8):
             return None, frame                      # visible but grey: not available for this request
         before = frame[y:y + h, x:x + w].astype(np.int16)
-        bot.swipe((x + w - space.s(40), cy), (max(5, x - space.s(600)), cy), 450)
-        bot.sleep(0.6)
-        frame = bot.shot()
+        # one fast flick right to left (XpIncrease: mouseDown, jump to x=5, mouseUp): the row
+        # flies to its end, where the siege machines are
+        bot.flick((x + w * 3 // 4, cy), (5, cy))
+        frame = _settled(bot, region)
         m = _active(frame, key, region=region)
         if m:
             return m, frame
@@ -389,11 +413,13 @@ def _find_fast(bot, frame, key, dy, cat):
     return None, frame
 
 
-def fill_fast(bot, items, dy, big):
-    """Donate window is open: tap each item its count times in a quick burst (no check after each
-    tap; the game ignores taps that do not fit). Items marked "big" are only used for big requests,
-    "small" only for the others. Returns the number of taps that went to available items."""
+def fill_fast(bot, items, dy, big, left=None):
+    """Donate window is open: tap each item in one quick burst (like XpIncrease). With the free
+    space of the request known, exactly the taps that fit are made (troop space comes in steps of
+    5, a Balloon takes 5: 35 free = 7 Balloons). Items marked "big" are only used for big requests,
+    "small" only for the others. Returns the number of units donated."""
     taps = 0
+    left = dict(left or {})
     frame = bot.shot()
     for item in items:
         use = item.get("use", "all")
@@ -405,15 +431,21 @@ def fill_fast(bot, items, dy, big):
             continue
         if _window_dy(frame) is None:
             break                                   # the request is full: the window closed itself
-        m, frame = _find_fast(bot, frame, key, dy, item.get("category", "troop"))
+        cat = item.get("category", "troop")
+        n = max(1, int(item.get("clicks", 1)))
+        free = left.get(cat)
+        if free is not None:                        # exactly what fits, no wasted taps
+            n = min(n, free // max(1, int(item.get("space") or 1)))
+            if n <= 0:
+                continue
+        m, frame = _find_fast(bot, frame, key, dy, cat)
         if not m:
             continue
-        for _ in range(max(1, int(item.get("clicks", 1)))):
-            control.checkpoint()
-            bot.tap_match(m, jitter=2)
-            time.sleep(0.07)
-        taps += int(item.get("clicks", 1))
-        time.sleep(0.25)
+        bot.tap_burst(m, n, 0.25 if cat == "siege" else 0.05)
+        taps += n
+        if free is not None:
+            left[cat] = free - n * max(1, int(item.get("space") or 1))
+        time.sleep(0.15)
         frame = bot.shot()
     return taps
 
@@ -436,7 +468,7 @@ def donate_all(bot, settings, max_requests=60):
     open_chat(bot)
     total, handled = 0, 0
     page, empty_pages = 0, 0
-    tried, skipped, done_names, retries = set(), set(), set(), {}
+    tried, skipped, done_names, retries, visits = set(), set(), set(), {}, {}
     try:
         while handled < max_requests and empty_pages < 3:
             frame = bot.shot()
@@ -453,10 +485,14 @@ def donate_all(bot, settings, max_requests=60):
             handled += 1
             req = read_request(frame, b)
             who = req["name"] or "?"
-            ident = re.sub(r"[^a-z0-9]", "", req["name"].lower()) or f"?{page}:{b.y}"
-            if ident in done_names:
+            # several accounts share an in-game name ("WhiteDevil"): a request is its name + message +
+            # free space, so each one is donated to; one that took nothing keeps its key and is skipped
+            ident = "|".join([re.sub(r"[^a-z0-9]", "", req["name"].lower()) or f"?{page}:{b.y}",
+                              re.sub(r"[^a-z0-9]", "", (req["message"] or "").lower())]
+                             + [str(req.get(c)) for c in ("troop", "spell", "siege")])
+            if ident in done_names or visits.get(ident, 0) >= 4:
                 handled -= 1
-                continue                               # already handled this requester in this pass
+                continue                               # already handled this request in this pass
             if only_mine and req["name"] and not _is_mine(bot, req["name"]):
                 if req["name"] not in skipped:
                     log.info("Skipping %s's request (not one of your accounts)", who)
@@ -490,16 +526,22 @@ def donate_all(bot, settings, max_requests=60):
                 else:
                     tried.discard((page, b.y // 12))
                 continue
-            done_names.add(ident)
+            visits[ident] = visits.get(ident, 0) + 1
             if settings["donate"].get("method", "fast") == "fast":
                 g = bot.shot()
                 dy = _window_dy(g) or 0
                 big = is_big_request(g, dy, settings)
-                n = fill_fast(bot, order, dy, big)
+                n = fill_fast(bot, order, dy, big, left)
                 if big:
                     log.info("%s: big request (Super Wizard available)", who)
             else:
                 n = fill_request(bot, order, left)
+            if not n:
+                done_names.add(ident)                  # nothing more fits / nothing available
+            else:
+                # a filled request disappears and the chat shifts: other requests move into spots
+                # already tried, so this page is read again (handled ones are known by their key)
+                tried = {t for t in tried if t[0] != page}
             total += n
             bot.stats["donated"] = bot.stats.get("donated", 0) + n
             log.info("Donated %d unit(s) to %s", n, who)

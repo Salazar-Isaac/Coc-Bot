@@ -93,6 +93,12 @@ class Bot:
             j = jitter
             self.device.tap(x + (random.randint(-j, j) if j else 0), y + (random.randint(-j, j) if j else 0))
 
+    def tap_burst(self, m, n, interval=0.05):
+        """Tap a match n times in one quick burst (no checks in between)."""
+        control.checkpoint()
+        if n > 0:
+            self.device.tap_burst(m.x, m.y, n, interval)
+
     def tap_point(self, name, **kw):
         x, y = self.layout.point(name)
         self.tap(x, y, **kw)
@@ -112,6 +118,10 @@ class Bot:
     def swipe(self, a, b, ms=500):
         control.checkpoint()
         self.device.swipe(a[0], a[1], b[0], b[1], ms)
+
+    def flick(self, a, b):
+        control.checkpoint()
+        self.device.flick(a[0], a[1], b[0], b[1])
 
     def drag(self, a, b, ms=500):
         control.checkpoint()
