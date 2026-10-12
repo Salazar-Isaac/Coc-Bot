@@ -147,11 +147,12 @@ class Bot:
         return None
 
     # --- diagnostics -------------------------------------------------------------------------
-    def save_error(self, label):
+    def save_error(self, label, frame=None):
+        """Save the screen (or `frame`, a picture taken earlier) to logs/errors."""
         if not self.settings.get("save_error_screenshots", True):
             return None
         try:
-            frame = self.device.capture()
+            frame = self.device.capture() if frame is None else frame
         except Exception:
             return None
         name = f"{datetime.now():%Y%m%d-%H%M%S}-{label}.png"

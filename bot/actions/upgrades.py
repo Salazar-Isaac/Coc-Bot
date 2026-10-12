@@ -307,6 +307,7 @@ def run(bot, account, when="", max_count=None):
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
     groups = plan_groups(bot.settings)
     started, rows, have, fails = 0, None, None, 0
+    refused = set()                                   # not accepted this visit: not tried again
     while started < max_count and fails < 2:
         control.checkpoint()
         if not go_home(bot):
@@ -319,7 +320,7 @@ def run(bot, account, when="", max_count=None):
         have = loot.home_resources(bot)               # fresh after each upgrade (never a guessed amount)
         if rows is None:
             rows = scan(bot, MAIN)
-        item = choose(rows, have, groups)
+        item = choose([r for r in rows if r["base"] not in refused], have, groups)
         if not item:
             log.info("%s: nothing in the upgrade plan is affordable now (%d upgradable items listed)",
                      account["name"], len(rows))
@@ -336,6 +337,7 @@ def run(bot, account, when="", max_count=None):
             rows = [r for r in rows if (r["base"], r["cost"]) != listed]
         else:
             fails += 1
+            refused.add(item["base"])
             rows = None                               # read the menu again
     go_home(bot)
     return started

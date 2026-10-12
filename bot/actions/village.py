@@ -193,6 +193,7 @@ def _confirm(bot, item, which, home=None):
         return False
     bot.tap_match(m)
     bot.sleep(1.5)
+    tapped = bot.shot()                           # what the game showed after Confirm (kept if refused)
     (home or go_home)(bot, 10)
     if home is not None:                          # Builder Base: read its own resource bar
         from . import builder_base
@@ -210,6 +211,7 @@ def _confirm(bot, item, which, home=None):
         _close_offer(bot)
         (home or go_home)(bot, 30)
         log.info("%s: the game did not accept the upgrade", item["name"])
+        bot.save_error("upgrade-refused", tapped)
         return False
     log.info("%s %s started for %s %s", "Research" if which == "lab" else "Upgrade", item["name"],
              f"{cost:,}", item["res"])
