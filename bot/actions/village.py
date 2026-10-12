@@ -199,7 +199,13 @@ def _confirm(bot, item, which, home=None):
         after = builder_base.status(bot).get(item["res"])
     else:
         after = loot.home_resources(bot).get(item["res"])
-    if bot.exists("upgrade/confirm") or (after is not None and have is not None and after >= have):
+    paid = after is None or have is None or after < have
+    if not paid and item.get("free_before") is not None:
+        # the amount can be misread: a builder that went to work also means it started
+        region = bot.layout.region("bb.builders" if home is not None else "top.builders")
+        now = vision.digits.read_fraction(bot.shot(), region)
+        paid = bool(now) and now[0] < item["free_before"]
+    if bot.exists("upgrade/confirm") or not paid:
         # still open, or nothing was paid: a gem offer or an error popup -> back out
         _close_offer(bot)
         (home or go_home)(bot, 30)

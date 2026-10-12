@@ -322,10 +322,12 @@ def run(bot, account, when="", max_count=None):
         log.info("%s%s: upgrading %s (%s) for %s %s", account["name"], f" {when}" if when else "", item["name"],
                  item["group"], f"{item['cost']:,}", item["res"])
         item["have"] = have.get(item["res"])
+        item["free_before"] = counter[0]
+        listed = (item["base"], item["cost"])        # as read in the list (the price may be corrected)
         if _start(bot, item, MAIN, go_home):
             started += 1
             bot.stats["upgrades"] = bot.stats.get("upgrades", 0) + 1
-            rows = [r for r in rows if not (r["base"] == item["base"] and r["cost"] == item["cost"])]
+            rows = [r for r in rows if (r["base"], r["cost"]) != listed]
         else:
             fails += 1
             rows = None                               # read the menu again
@@ -414,11 +416,13 @@ def run_bb(bot, account, when="", max_count=None):
                  "building" if item.get("new") else "upgrading", item["name"], item["group"],
                  f"{item['cost']:,}", item["res"])
         item["have"] = have.get(item["res"])
+        item["free_before"] = counter[0]
+        listed = (item["base"], item["cost"])
         ok = _build_new(bot, item, go_home_bb) if item.get("new") else _start(bot, item, BB, go_home_bb)
         if ok:
             started += 1
             bot.stats["upgrades"] = bot.stats.get("upgrades", 0) + 1
-            rows = [r for r in rows if not (r["base"] == item["base"] and r["cost"] == item["cost"])]
+            rows = [r for r in rows if (r["base"], r["cost"]) != listed]
         else:
             fails += 1
             rows = None
