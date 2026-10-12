@@ -198,6 +198,7 @@ def _scroll(bot, region, cx):
 def scan(bot, where=MAIN, max_pages=14):
     """Open a builder menu and read every upgradable item (scrolling through the list).
     Each row gets the page it is on. The menu is left open, scrolled to the end."""
+    village.close_menu(bot, where["safe"])           # a menu left open: tapping its button would close it
     bot.tap_point(where["menu"])
     bot.sleep(1.0)
     region, cx = _panel(bot, where)
@@ -369,6 +370,8 @@ def _build_new(bot, item, home):
     Only rows with a gold / elixir price get here (gem prices, e.g. B.O.T.O's Shack, never).
     True if it was placed."""
     if not _open_row(bot, item, BB, home):
+        log.info("Could not find %s in the menu again", item["name"])
+        village.close_menu(bot, BB["safe"])
         return False
     bot.sleep(1.5)
     # the arrow's tip (it can be half off the screen for a card at the right edge) sits on the
