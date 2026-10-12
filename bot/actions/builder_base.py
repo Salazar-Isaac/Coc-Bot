@@ -110,10 +110,17 @@ def travel(bot, to):
         here = where(bot)
         if here == to:
             return True
-    bot.tap_point("home.safe" if here == "main" else "bb.safe", jitter=5)    # deselect anything first
-    bot.device.zoom_out()
-    control.sleep(0.5)
-    boat = _find_boat(bot, here)
+    boat = None
+    for attempt in range(2):
+        bot.tap_point("home.safe" if here == "main" else "bb.safe", jitter=5)    # deselect anything first
+        bot.device.zoom_out()
+        control.sleep(0.5)
+        boat = _find_boat(bot, here)
+        if boat is not None:
+            break
+        # e.g. right after building something the view can be moved: clear the screen and look again
+        (go_home(bot, 20) if here == "main" else go_home_bb(bot, 20))
+        control.sleep(1.0)
     if boat is None:
         if to == "builder":
             raise BotError("No boat found: the Builder Base is not unlocked on this account yet "
