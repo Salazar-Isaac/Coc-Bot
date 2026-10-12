@@ -27,21 +27,23 @@ Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.
 | **Loot current account only** | Loots the open account. With "When full: Wait for me" you spend the resources, press Continue (F8) and it loots again. |
 | **Loot + Donate cycle** | Like XpIncrease, always starting on Main: not enough elixir for a whole round ("Main keeps at least" + what the last round cost) → Main and the Looter accounts loot until full. Enough → Main first donates to requests that are still open, then every Looter / "Loot + request" / Feeder account empties its Clan Castle and requests → Main donates → repeat while the elixir covers another round → loot again. |
 | **Donate only** | The same without looting: stops when Main's elixir is too low for a round. |
+| **Loot + Upgrade** | Accounts #1-#15 of the Accounts page (Buggu01 … Buggu7; set on the Upgrades page) loot until full; on the ones ticked "Upgrade" (all but the Main and Omi ji) the upgrade plan runs before looting (if there are resources) and after looting. |
+| **Builder Base upgrades** | The same accounts' Builder Base: attacks as set on the Builder Base page, and the Builder Base plan before and after - new buildings first, then your list (default Cannon, Archer Tower, Mortar), then the Builder Hall when the list is maxed (gear up). |
 | **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |
 
 "Loot the Builder Base after the home village is full" (Builder Base page) makes every loot mode do the
 night village too, right after each account's home village.
 
-**Upgrade plan** (Upgrades page; tick "Upgrade" per account on the Accounts page - by default every account
-except the Main and Omishrisha): when such an account is looted, free builders are put to work first if it has
-the resources, and again after looting. Order: storages → army camp → barracks / dark barracks / spell factories
-(new troops and spells) → blacksmith → hero hall → laboratory, pet house → archer tower, cannon → Town Hall (only
-when nothing above can be upgraded any more; from Town Hall 16 its weapon gets all 5 stars first). Gems are never
-spent. Builder Base attacks are ended after 60 seconds (Builder Base page).
+**Upgrade plan** (Upgrades page; only in the two upgrade modes): storages → army camp → barracks / dark
+barracks / spell factories (new troops and spells) → blacksmith → hero hall → laboratory, pet house → archer
+tower, cannon → the buildings you add ("Also upgrade") → Town Hall (only when nothing above can be upgraded any
+more; from Town Hall 16 its weapon gets all 5 stars first). Prices are read from the game every time (sales and
+price changes are fine) and gems are never spent. Builder Base attacks are ended after 60 seconds. When the bot
+starts the game it closes the Google Play Games store window that opens with it.
 
-**Android phone / emulator** (Device page → Android): only adb is used (screenshots + taps), nothing is
-mirrored or recorded and the PC stays free. The connected phone is picked automatically; at start the bot measures
-how big the game draws its buttons on that screen (phones: bigger, with margins for the camera cut-out).
+**Android emulator** (Device page → Android): set the emulator to 1920×1080 and switch on its ADB. Only adb
+is used (screenshots + taps), nothing is mirrored or recorded and the PC stays free. The running emulator is
+picked automatically.
 
 Account roles: **Main** (loots, donates) · **Looter** (loots in every mode, also in the cycle, and requests) · **Loot + request** (loots in "Loot all", only requests in donation modes) · **Feeder** (only requests) · **Skip**.
 

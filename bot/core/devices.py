@@ -1,7 +1,7 @@
 """Device backends: where screenshots come from and where taps go.
 
   PcDevice   Google Play Games on Windows (PrintWindow capture + real mouse/keyboard)
-  AdbDevice  Any Android over ADB: BlueStacks, LDPlayer, MuMu, Nox or a USB/Wi-Fi phone
+  AdbDevice  An Android emulator over ADB: BlueStacks, LDPlayer, MuMu, Nox, MEmu
 
 The bot works in "game space" (see space.py): the device image scaled uniformly
 to the profile's height (1080), so any window size or aspect ratio works.
@@ -70,6 +70,9 @@ class Device:
 
     def describe(self):
         return self.kind
+
+    def tidy_up(self):
+        """Called once the game is up (e.g. close windows a launcher opened next to it)."""
 
     # --- game-space API used by the bot ------------------------------------------------
     def capture(self):
@@ -241,6 +244,12 @@ class PcDevice(Device):
     def launch_game(self):
         self.window.launch()
 
+    def tidy_up(self):
+        """After a start: close the Google Play Games store window that opens with the game."""
+        from .window import close_store_window
+        if close_store_window():
+            log.info("Closed the Google Play Games store window")
+
     def close_game(self):
         self.window.close()
 
@@ -291,9 +300,10 @@ ANDROID_KEYS = {"back": 4, "esc": 4, "home": 3, "enter": 66, "space": 62, "backs
 
 
 class AdbDevice(Device):
-    """Android over plain ADB: `screencap` for pictures, `input` for taps and swipes and a
-    two-finger pinch written to the touchscreen with `sendevent` for zooming out. Nothing is
-    mirrored or recorded, and the PC's mouse and keyboard stay free for you."""
+    """An Android emulator (BlueStacks, LDPlayer, MuMu, Nox, MEmu) over plain ADB: `screencap` for
+    pictures, `input` for taps and swipes and a two-finger pinch written to the touchscreen with
+    `sendevent` for zooming out. Nothing is mirrored or recorded, and the PC's mouse stays free.
+    Set the emulator to 1920x1080 so it uses the same pictures as the PC game."""
 
     kind = "adb"
 
@@ -322,8 +332,8 @@ class AdbDevice(Device):
         return r.stdout if binary else r.stdout.decode(errors="replace")
 
     def connect(self):
-        """Use the device from Settings; if it is empty or not connected and exactly one
-        phone/emulator is connected, use that one."""
+        """Use the emulator from Settings; if it is empty or not connected and exactly one
+        emulator is connected, use that one."""
         if ":" in self.serial:   # network device / emulator
             subprocess.run([self.adb, "connect", self.serial], capture_output=True, timeout=15,
                            creationflags=subprocess.CREATE_NO_WINDOW)
@@ -336,15 +346,12 @@ class AdbDevice(Device):
             if len(ready) == 1:
                 match = ready
             elif len(ready) > 1:
-                raise RuntimeError("Several Android devices are connected (" +
+                raise RuntimeError("Several emulators are connected (" +
                                    ", ".join(f"{m or '?'} {s}" for s, m in ready) +
                                    "): choose one on the Device page")
-            elif any(st == "unauthorized" for _, st, _ in devices):
-                raise RuntimeError("The phone has not allowed this PC yet: unlock it and tap Allow on "
-                                   "'Allow USB debugging?' (tick 'Always allow')")
             else:
-                raise RuntimeError("No Android device found: connect the phone by USB with USB debugging "
-                                   "on (Settings > Developer options), or start the emulator")
+                raise RuntimeError("No emulator found over ADB: start it and switch on ADB in its "
+                                   "settings (BlueStacks: Settings > Advanced > Android Debug Bridge)")
         self.serial, self.model = match[0]
         size = self._run("shell", "wm", "size").strip().splitlines()
         log.info("Using %s, %s", self.describe(), size[-1] if size else "screen size unknown")
@@ -370,7 +377,7 @@ class AdbDevice(Device):
     def _capture_native(self):
         raw = self._run("exec-out", "screencap", binary=True, timeout=20)
         if len(raw) < 16:
-            raise RuntimeError("screencap returned no data (is the phone unlocked?)")
+            raise RuntimeError("screencap returned no data")
         w = int.from_bytes(raw[0:4], "little")
         h = int.from_bytes(raw[4:8], "little")
         header = len(raw) - w * h * 4          # 12 bytes on old Android, 16 on Android 10+
@@ -461,15 +468,6 @@ class AdbDevice(Device):
             log.warning("Zoom-out over ADB is not possible on this device (%s). Zoom out once by hand; "
                         "the game keeps it.", e)
 
-    def _awake(self):
-        """Switch the screen on if it went off (a locked phone has to be unlocked by you)."""
-        power = self._run("shell", "dumpsys power | grep -m 1 mWakefulness=")
-        if "Awake" not in power:
-            self._sh("input keyevent 224")                 # KEYCODE_WAKEUP
-            time.sleep(1.0)
-        if "mScreenLocked=true" in self._run("shell", "dumpsys deviceidle | grep -m 1 mScreenLocked"):
-            log.warning("The phone is locked: unlock it so the bot can play")
-
     def is_game_running(self):
         """Running and on screen (in front of other apps)."""
         if not self._run("shell", "pidof", self.package).strip():
@@ -479,7 +477,6 @@ class AdbDevice(Device):
 
     def launch_game(self):
         """Start the game, or bring it to the front if it is running behind another app."""
-        self._awake()
         self._run("shell", "monkey", "-p", self.package, "-c", "android.intent.category.LAUNCHER", "1")
 
     def close_game(self):

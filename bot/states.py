@@ -380,10 +380,11 @@ def ensure_game(bot, timeout=150.0):
             if time.monotonic() - start > 60:
                 raise BotError("Clash of Clans did not start")
             control.sleep(2)
-    if dev.kind == "adb" and not getattr(bot, "_calibrated", False):
-        from .core.calibrate import calibrate
-        calibrate(bot)                    # phones draw the interface bigger, with side margins
-        bot._calibrated = True
+        for _ in range(4):                    # the store window can appear a little after the game
+            dev.tidy_up()
+            control.sleep(2)
+    else:
+        dev.tidy_up()
     if not go_home(bot, timeout):
         raise BotError("Could not reach the home village")
     return True

@@ -219,15 +219,13 @@ def _window_dy(frame):
 
 def _shifted(region, anchor):
     """A part of the donate window (measured on the base screen with the window at its lowest
-    place), placed relative to where the window's title is now, at the screen's UI scale."""
+    place), placed relative to where the window's title is now."""
     tx, ty = vision.templates.meta("donate/window_title").get("box", [0, BASE_TITLE_Y])[:2]
     if not anchor:
         anchor = space.region(tx, ty, 1, 1)[:2]
     ax, ay = anchor
     x, y, w, h = region
-    k = space.ui
-    return (max(0, int(round(ax + (x - tx) * k))), max(0, int(round(ay + (y - ty) * k))),
-            int(round(w * k)), int(round(h * k)))
+    return max(0, int(ax + x - tx)), max(0, int(ay + y - ty)), int(w), int(h)
 
 
 def _donated_strip(frame, dy=0):

@@ -45,13 +45,6 @@ class Profile:
     def size(self):
         return self.width, self.height
 
-    def screen_dir(self, native):
-        """Overrides for one screen size (in its own pixels), or None."""
-        if not native:
-            return None
-        d = os.path.join(self.dir, "screens", f"{native[0]}x{native[1]}")
-        return d if os.path.isdir(d) else None
-
     @staticmethod
     def available():
         return sorted(d for d in os.listdir(paths.PROFILES) if os.path.isdir(os.path.join(paths.PROFILES, d)))

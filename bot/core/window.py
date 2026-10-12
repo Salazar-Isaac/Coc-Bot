@@ -8,6 +8,7 @@ import numpy as np
 import win32api
 import win32con
 import win32gui
+import win32process
 import win32ui
 
 PW_CLIENTONLY_FULLCONTENT = 3  # PW_CLIENTONLY | PW_RENDERFULLCONTENT
@@ -107,3 +108,29 @@ class GameWindow:
         if hwnd:
             win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
         self._hwnd = None
+
+
+STORE_TITLE = "Google Play Games"
+
+
+def close_store_window():
+    """Starting the game through Google Play Games also opens its store window (client.exe).
+    Close that window only - the game itself runs in its own window and keeps running.
+    Returns how many windows were closed."""
+    import psutil
+    found = []
+
+    def cb(hwnd, _):
+        if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd) == STORE_TITLE:
+            try:
+                name = psutil.Process(win32process.GetWindowThreadProcessId(hwnd)[1]).name().lower()
+            except Exception:  # noqa: BLE001 - the process just ended
+                return
+            if name == "client.exe":
+                found.append(hwnd)
+
+    win32gui.EnumWindows(cb, None)
+    for hwnd in found:
+        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+    return len(found)
+

@@ -446,10 +446,13 @@ def research(bot):
     return False
 
 
-def session(bot, account):
+def session(bot, account, plan=False):
     """A Builder Base visit for this account: sail there, collect, attack until the Star Bonus is
     done (and optionally keep going), stop early if storages are full or stop growing, upgrade,
-    research, sail back. Returns False if the account has no Builder Base."""
+    research, sail back. Returns False if the account has no Builder Base.
+    plan=True ("Builder Base upgrades" mode): the Builder Base upgrade plan (upgrades.py) runs
+    before attacking, if there are resources already, and again after attacking."""
+    from . import upgrades
     cfg = bot.settings.get("builder", {})
     name = account.get("name", "?")
     try:
@@ -461,6 +464,8 @@ def session(bot, account):
     bot.status(action="Builder Base")
     if cfg.get("collect", True):
         collect(bot)
+    if plan:
+        upgrades.run_bb(bot, account, "before attacking")
     if cfg.get("army", "auto") != "keep" and account.get("_bb_army") != cfg.get("army", "auto"):
         set_army(bot, cfg.get("army", "auto"))
         account["_bb_army"] = cfg.get("army", "auto")      # once per visit
@@ -495,7 +500,9 @@ def session(bot, account):
             bot.save_error("bb-attack")
             if not go_home_bb(bot, 45):
                 break
-    if cfg.get("upgrade", False):
+    if plan:
+        upgrades.run_bb(bot, account, "after attacking")
+    elif cfg.get("upgrade", False):
         upgrade(bot, cfg.get("max_upgrades", 1))
     if cfg.get("research", False):
         research(bot)

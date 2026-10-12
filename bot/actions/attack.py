@@ -151,8 +151,6 @@ def card_keys(frame, slots):
         area = frame[y:y + space.s(56), cx + space.s(20):cx + space.s(68)]   # tall: a raised card moves up
         best, best_s = "", 0.0
         for k, tpl in hints.items():
-            if space.ui != 1:
-                tpl = cv2.resize(tpl, None, fx=space.ui, fy=space.ui, interpolation=cv2.INTER_LINEAR)
             if area.shape[0] >= tpl.shape[0] and area.shape[1] >= tpl.shape[1]:
                 sc = float(cv2.matchTemplate(area, tpl, cv2.TM_CCOEFF_NORMED).max())
                 if sc > best_s:

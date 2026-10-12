@@ -78,6 +78,10 @@ DEFAULT_SETTINGS = {
     "upgrades": {
         "enabled": True,                    # the upgrade plan on accounts ticked "Upgrade" (Accounts page)
         "max_per_visit": 5,                 # upgrades started per visit (one per free builder)
+        "from": 1,                          # Loot + Upgrade: accounts #from-#to of the Accounts page
+        "to": 15,
+        "extra": [],                        # more buildings for the plan (before the Town Hall)
+        "bb_plan": ["Cannon", "Archer Tower", "Mortar"],   # Builder Base: these, then the Builder Hall
     },
     "builder": {
         "after_main": False,                # loot modes: after an account's home village is full, loot its Builder Base

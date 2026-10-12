@@ -6,3 +6,4 @@ pyautogui>=0.9.54       # mouse clicks on Google Play Games (installs Pillow)
 pynput>=1.7             # keyboard keys + global hotkeys F8/F9/F10
 pywin32>=306            # find/capture the game window, desktop shortcut
 rapidocr_onnxruntime>=1.3   # reads words only (account names, request messages); NOT PaddleOCR
+psutil

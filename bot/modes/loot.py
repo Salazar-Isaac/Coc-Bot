@@ -11,10 +11,11 @@ from .common import StopRun, active_accounts, when_full, with_recovery
 log = logging.getLogger("bot")
 
 
-def _loot_account(bot, acc, state, switch=True, cycle=False):
+def _loot_account(bot, acc, state, switch=True, cycle=False, plan=False):
     """Loot one account until full, applying 'when full'. Returns when we should move on.
     In the donation cycle (cycle=True) "switch to the next account" is implied, but
-    "wait for me" and "stop" still apply."""
+    "wait for me" and "stop" still apply. plan=True ("Loot + Upgrade" mode): the upgrade plan
+    runs before looting (if there are resources already) and again after looting."""
     if switch:
         ok = with_recovery(bot, f"switch to {acc['name']}",
                            lambda: account_actions.switch_to(bot, acc, state))
@@ -22,7 +23,8 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
             log.error("Skipping %s: could not switch to it", acc["name"])
             return
         config.save_accounts(bot.accounts)          # remembers the Town Hall level we read
-    upgrade(bot, acc, "before looting")             # resources there already: builders first
+    if plan:
+        upgrade(bot, acc, "before looting")         # resources there already: builders first
     while True:
         result = with_recovery(bot, f"loot {acc['name']}", lambda: loot.loot_until_full(bot, acc))
         if result is None:
@@ -30,11 +32,10 @@ def _loot_account(bot, acc, state, switch=True, cycle=False):
         log.info("%s: %s", acc["name"], {"full": "storages full", "stuck": "storages full (stopped growing)",
                                           "limit": "attack limit reached"}[result])
         builder_after(bot, acc)
-        if cycle and bot.settings.get("when_full") == "switch":
-            upgrade(bot, acc, "after looting")
-            return
-        if bot.settings.get("when_full") != "wait":
+        if plan and bot.settings.get("when_full") != "wait":
             upgrade(bot, acc, "after looting")      # spend before moving on (not when you spend yourself)
+        if cycle and bot.settings.get("when_full") == "switch":
+            return
         if when_full(bot, acc) == "next":
             return
 

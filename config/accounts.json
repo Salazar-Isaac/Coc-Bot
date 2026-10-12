@@ -9,8 +9,8 @@
       "elixir": 0,
       "dark": 0
     },
-    "player": "WhiteDevi",
-    "upgrade": false
+    "upgrade": false,
+    "player": "WhiteDevi"
   },
   {
     "name": "Omishrisha",
@@ -190,9 +190,9 @@
       "elixir": 0,
       "dark": 0
     },
+    "upgrade": true,
     "player": "Buggu8",
-    "collected_at": 1791735180,
-    "upgrade": true
+    "collected_at": 1791735180
   },
   {
     "name": "Buggu9",

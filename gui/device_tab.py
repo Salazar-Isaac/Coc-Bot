@@ -65,14 +65,13 @@ class DeviceTab(QWidget):
         self.adb_path.setPlaceholderText("auto (C:\\platform-tools\\adb.exe, C:\\scrcpy\\adb.exe, PATH)")
         al.addWidget(field("adb.exe", self.adb_path))
         self.serial = Combo(editable=True)
-        self.serial.lineEdit().setPlaceholderText("auto: the phone / emulator that is connected")
+        self.serial.lineEdit().setPlaceholderText("auto: the emulator that is running")
         detect = Button("Detect", "search", "secondary")
         detect.clicked.connect(self._detect)
         al.addWidget(field("Device", hbox(self.serial, detect, spacing=8),
                            "Empty = the one connected device is used."))
-        al.addWidget(Banner("Phone: turn on USB debugging (Settings → Developer options), connect it by USB and tap "
-                            "Allow. Only adb is used (screenshots + taps): the phone's screen is not mirrored or "
-                            "recorded and your PC's mouse stays free. The screen size is detected by itself.",
+        al.addWidget(Banner("Emulator: set it to 1920×1080 and switch on ADB in its settings. Only adb is used "
+                            "(screenshots + taps): nothing is mirrored or recorded and your PC's mouse stays free.",
                             "info"))
         dev.add(self.adb_box)
 
@@ -182,9 +181,9 @@ class DeviceTab(QWidget):
         if found:
             text = "Connected: " + ", ".join(f"{m or '?'} ({s})" for s, st, m in devices if st == "device")
         elif unauthorized:
-            text = "The phone has not allowed this PC yet: unlock it and tap Allow on 'Allow USB debugging?'"
+            text = "A device has not allowed this PC yet (Allow USB debugging?)"
         else:
-            text = "No phone or emulator connected (USB debugging on? cable a data cable?)"
+            text = "No emulator found (is it running with ADB switched on?)"
         self.set_result(text, ok=bool(found))
 
     def load(self, settings, accounts):

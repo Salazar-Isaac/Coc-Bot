@@ -8,7 +8,7 @@
     "scrcpy_dir": "C:\\scrcpy"
   },
   "profile": "pc-1920x1080",
-  "mode": "loot_donate",
+  "mode": "loot_all",
   "loot": {
     "watch": {
       "gold": false,
@@ -101,6 +101,7 @@
   "donate": {
     "min_elixir_keep": 4000000,
     "rounds": 0,
+    "round_accounts": 0,
     "remove_cc_before_request": true,
     "request_text": "",
     "loot_before_donate": false,
@@ -160,6 +161,40 @@
     ],
     "donate_to": "all"
   },
+  "upgrades": {
+    "enabled": true,
+    "max_per_visit": 5
+  },
+  "builder": {
+    "after_main": false,
+    "after_bonus": false,
+    "army": "auto",
+    "max_attacks": 20,
+    "battle_seconds": 60,
+    "stuck_attacks": 3,
+    "full_margin": 50000,
+    "collect": true,
+    "upgrade": false,
+    "gear_up": true,
+    "max_upgrades": 1,
+    "research": false,
+    "upgrade_skip": [],
+    "research_skip": [],
+    "zoom_out": true,
+    "on_roles": [
+      "main",
+      "loot",
+      "both",
+      "feeder"
+    ]
+  },
+  "hotkeys": {
+    "continue": "f8",
+    "pause": "f9",
+    "stop": "f10"
+  },
+  "minimize_on_start": true,
+  "save_error_screenshots": true,
   "village": {
     "collect": true,
     "collect_every": 60,
@@ -189,40 +224,7 @@
       "feeder"
     ]
   },
-  "builder": {
-    "after_main": false,
-    "after_bonus": false,
-    "army": "auto",
-    "max_attacks": 20,
-    "stuck_attacks": 3,
-    "full_margin": 50000,
-    "collect": true,
-    "upgrade": false,
-    "gear_up": true,
-    "max_upgrades": 1,
-    "research": false,
-    "upgrade_skip": [],
-    "research_skip": [],
-    "zoom_out": true,
-    "on_roles": [
-      "main",
-      "loot",
-      "both",
-      "feeder"
-    ]
-  },
-  "hotkeys": {
-    "continue": "f8",
-    "pause": "f9",
-    "stop": "f10"
-  },
-  "minimize_on_start": true,
-  "save_error_screenshots": true,
   "current_account": "Buggu02",
   "current_th": 0,
-  "auto_restart": true,
-  "upgrades": {
-    "enabled": true,
-    "max_per_visit": 5
-  }
+  "auto_restart": true
 }

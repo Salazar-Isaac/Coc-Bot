@@ -54,7 +54,6 @@ class Bot:
         if not vision.templates.has(key):
             return None
         frame = self.shot() if fresh or self.frame is None else self.frame
-        kw.setdefault("learn", True)
         return vision.find(frame, key, **kw)
 
     def exists(self, key, fresh=True, **kw):
@@ -67,11 +66,8 @@ class Bot:
         while True:
             frame = self.shot()
             for k in keys:
-                m = vision.find(frame, k, learn=True)
+                m = vision.find(frame, k)
                 if m:
-                    if vision.window_pending(k):      # a window's size seen once: confirm it settled
-                        control.sleep(0.4)
-                        m = vision.find(self.shot(), k, learn=True) or m
                     return k, m
             if time.monotonic() >= end:
                 return None, None
