@@ -188,35 +188,51 @@ def _read_page(frame, region, cols, section):
     return rows, section
 
 
+def _moved(a, b):
+    """Did the menu list move between two pictures of it? The panel is see-through, so the village
+    behind it changes a little all the time (~5% of the pixels); a scroll changes 14-17%."""
+    d = np.abs(a.astype(np.int16) - b.astype(np.int16)).max(axis=2)
+    return float((d > 60).mean()) > 0.09
+
+
 def _scroll(bot, region, cx):
-    """About half a page down: every row is seen on two pages, so none is missed at a page edge."""
+    """About half a page down: every row is seen on two pages, so none is missed at a page edge.
+    Returns False if the list did not move (its end) - a swipe that did not take is tried again."""
     x, y, w, h = region
-    bot.swipe((cx, y + h - space.s(80)), (cx, y + h - space.s(80) - space.s(300)), 600)
-    bot.sleep(0.7)
+    before = bot.shot()[y:y + h, x:x + w]
+    for _ in range(2):
+        bot.swipe((cx, y + h - space.s(80)), (cx, y + h - space.s(80) - space.s(300)), 600)
+        bot.sleep(0.7)
+        if _moved(before, bot.shot()[y:y + h, x:x + w]):
+            return True
+    return False
 
 
-def scan(bot, where=MAIN, max_pages=14):
+def scan(bot, where=MAIN, max_pages=14, enough=None):
     """Open a builder menu and read every upgradable item (scrolling through the list).
-    Each row gets the page it is on. The menu is left open, scrolled to the end."""
+    Each row gets the page it is on. The menu is left open, scrolled to the end - or, when
+    enough(rows) says so after a page, left on that page (its rows can be tapped right away)."""
     village.close_menu(bot, where["safe"])           # a menu left open: tapping its button would close it
     bot.tap_point(where["menu"])
     bot.sleep(1.0)
     region, cx = _panel(bot, where)
     cols, section = [None, None], "progress"
     seen, out = set(), []
-    last = None
     for page in range(max_pages):
         rows, section = _read_page(bot.shot(), region, cols, section)
-        sig = tuple((r["base"], r["cost"]) for r in rows)
-        if page and sig == last:
-            break                                     # the list did not move: end reached
-        last = sig
         for r in rows:
             key = (r["base"], r["cost"])
             if key not in seen:
                 seen.add(key)
-                out.append(dict(r, page=page))
-        _scroll(bot, region, cx)
+                out.append(dict(r, page=page, last=True))
+        if enough is not None and enough(out):
+            for r in out:
+                r["last"] = r["page"] == page            # on screen now
+            return out
+        if not _scroll(bot, region, cx):
+            break                                     # the list did not move: end reached
+    for r in out:
+        r["last"] = False
     return out
 
 
@@ -241,7 +257,8 @@ def _open_row(bot, item, where=MAIN, home=None):
                 item["cost"] = hit["cost"]
             bot.tap(*hit["tap"], jitter=2)
             return True
-        _scroll(bot, region, cx)
+        if not _scroll(bot, region, cx):
+            break                                     # end of the list
     return False
 
 
@@ -255,7 +272,16 @@ def _affordable(r, have):
 
 # --- main village ----------------------------------------------------------------------------------
 
-def choose(rows, have, groups=None):
+def list_groups(buildings):
+    """The flow's own building list as plan groups (one building each, in its order) and whether
+    the Town Hall is on it."""
+    th = _base(TOWN_HALL)
+    groups = [(b, [_base(b) if _base(b) in _KNOWN else _base(b) + "*"])   # a name not known: its start
+              for b in buildings if b.strip() and _base(b) != th]
+    return groups, any(b.strip() and _base(b) == th for b in buildings)
+
+
+def choose(rows, have, groups=None, town_hall=True):
     """The upgrade to start (or None): the first group of the plan with an affordable item;
     the Town Hall (weapon first) only when no plan building is listed any more."""
     groups = groups or plan_groups({})
@@ -267,7 +293,7 @@ def choose(rows, have, groups=None):
             ok = [r for r in group if _matches(r["base"], base) and _affordable(r, have)]
             if ok:
                 return dict(min(ok, key=lambda r: r["cost"]), group=title)
-    if listed:
+    if listed or not town_hall:
         return None                                   # plan buildings not maxed yet: no Town Hall
     weapon = [r for r in rows if _is_weapon(r)]
     if weapon:                                        # Town Hall 16+: all weapon levels first
@@ -297,15 +323,21 @@ def _start(bot, item, where, home):
     return ok
 
 
-def run(bot, account, when="", max_count=None):
+def run(bot, account, when="", max_count=None, buildings=None):
     """Use the free builders on the main village plan. Returns the number of upgrades started.
     The menu is read once; the builders are then given one item after another (what is left to
-    spend goes down with each one), and the list is only read again if something did not work."""
+    spend goes down with each one), and the list is only read again if something did not work.
+    buildings: the flow's own list (in order; the Town Hall only if it is on it). When all
+    builders end up busy, the time the first one is free again is remembered (timers)."""
+    from . import timers
     cfg = bot.settings.get("upgrades", {})
-    if not cfg.get("enabled", True) or not account.get("upgrade"):
+    if buildings is None and (not cfg.get("enabled", True) or not account.get("upgrade")):
         return 0
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
-    groups = plan_groups(bot.settings)
+    if buildings is None:
+        groups, town_hall = plan_groups(bot.settings), True
+    else:
+        groups, town_hall = list_groups(buildings)
     started, rows, have, fails = 0, None, None, 0
     refused = set()                                   # not accepted this visit: not tried again
     while started < max_count and fails < 2:
@@ -316,15 +348,18 @@ def run(bot, account, when="", max_count=None):
         if not counter or counter[0] <= 0:
             if started == 0:
                 log.info("%s: no free builder%s", account["name"], f" ({counter[0]}/{counter[1]})" if counter else "")
+            if counter:
+                timers.note_busy(bot, account, "builders", MAIN)
             break
         have = loot.home_resources(bot)               # fresh after each upgrade (never a guessed amount)
         if rows is None:
             rows = scan(bot, MAIN)
-        item = choose([r for r in rows if r["base"] not in refused], have, groups)
+        item = choose([r for r in rows if r["base"] not in refused], have, groups, town_hall)
         if not item:
             log.info("%s: nothing in the upgrade plan is affordable now (%d upgradable items listed)",
                      account["name"], len(rows))
             village.close_menu(bot)
+            timers.clear(bot, account, "builders")
             break
         log.info("%s%s: upgrading %s (%s) for %s %s", account["name"], f" {when}" if when else "", item["name"],
                  item["group"], f"{item['cost']:,}", item["res"])
@@ -429,14 +464,16 @@ def _build_new(bot, item, home):
     return True
 
 
-def run_bb(bot, account, when="", max_count=None):
-    """Builder Base plan (you must be in the Builder Base). Returns the number started."""
+def run_bb(bot, account, when="", max_count=None, plan=None, new_first=True):
+    """Builder Base plan (you must be in the Builder Base). Returns the number started.
+    plan: the flow's own list (new buildings first when new_first, then the list, then the
+    Builder Hall)."""
     from .builder_base import go_home_bb, status
     cfg = bot.settings.get("upgrades", {})
-    if not cfg.get("enabled", True) or not account.get("upgrade"):
+    if plan is None and (not cfg.get("enabled", True) or not account.get("upgrade")):
         return 0
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
-    plan = cfg.get("bb_plan", BB_DEFAULT)
+    plan = plan if plan is not None else cfg.get("bb_plan", BB_DEFAULT)
     started, rows, have, fails = 0, None, None, 0
     skipped = set()                                   # new buildings that could not be placed this visit
     while started < max_count and fails < 3:
@@ -452,7 +489,8 @@ def run_bb(bot, account, when="", max_count=None):
         have = {"gold": st.get("gold"), "elixir": st.get("elixir")}
         if rows is None:
             rows = scan(bot, BB)
-        item = choose_bb([r for r in rows if not (r.get("new") and r["base"] in skipped)], have, plan)
+        item = choose_bb([r for r in rows if not (r.get("new") and (r["base"] in skipped or not new_first))],
+                         have, plan)
         if not item:
             log.info("%s Builder Base: nothing in the plan is affordable now (%d items listed)",
                      account["name"], len(rows))

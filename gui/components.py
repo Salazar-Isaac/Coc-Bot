@@ -1019,6 +1019,97 @@ class Card(QFrame):
         return w
 
 
+class FoldCard(Card):
+    """Card whose body folds away behind a Show / Hide button in its header (clicking the title works too)."""
+
+    toggled = Signal(bool)
+
+    def __init__(self, title, subtitle="", icon=None, color=T.GOLD, open_=False, padding=18, spacing=12,
+                 parent=None):
+        super().__init__(title, subtitle, icon, color, padding, spacing, parent)
+        self.body = QWidget()
+        self.body_layout = QVBoxLayout(self.body)
+        self.body_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_layout.setSpacing(spacing)
+        self.layout().addWidget(self.body)
+        self.fold_btn = Button("Show", "chevron-down", "ghost", "sm")
+        self.fold_btn.clicked.connect(lambda: self.set_open(not self.is_open))
+        self.add_action(self.fold_btn)
+        self.title_label.setCursor(Qt.PointingHandCursor)
+        self.title_label.installEventFilter(self)
+        self.is_open = None
+        self.set_open(open_)
+
+    def add(self, w, stretch=0):
+        if isinstance(w, QWidget):
+            self.body_layout.addWidget(w, stretch)
+        else:
+            self.body_layout.addLayout(w, stretch)
+        return w
+
+    def set_open(self, on):
+        on = bool(on)
+        if on == self.is_open:
+            return
+        self.is_open = on
+        self.body.setVisible(on)
+        self.fold_btn.set_text("Hide" if on else "Show")
+        self.fold_btn.set_icon("chevron-up" if on else "chevron-down")
+        self.toggled.emit(on)
+
+    def eventFilter(self, obj, e):
+        if obj is self.title_label and e.type() == QEvent.MouseButtonRelease and e.button() == Qt.LeftButton:
+            self.set_open(not self.is_open)
+            return True
+        return super().eventFilter(obj, e)
+
+
+class Columns(QWidget):
+    """Cards side by side in two columns when the width allows it, otherwise one under the other
+    (in the order they were added). add(w, 0) / add(w, 1) picks the column of the wide layout."""
+
+    def __init__(self, wide_at=980, spacing=16, parent=None):
+        super().__init__(parent)
+        self.wide_at = wide_at
+        self._items = []
+        self._wide = None
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(spacing)
+        self._cols = []
+        for _ in range(2):
+            w = QWidget()
+            v = QVBoxLayout(w)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(spacing)
+            lay.addWidget(w, 1, Qt.AlignTop)
+            self._cols.append(w)
+        self._place(False)
+
+    def add(self, w, col=0):
+        self._items.append((w, col))
+        self._place(bool(self._wide))
+        return w
+
+    def is_wide(self):
+        return bool(self._wide)
+
+    def _place(self, wide):
+        self._wide = wide
+        for w, _col in self._items:          # removeWidget deletes the layout item (takeAt would leave it alive
+            for c in self._cols:             # and the widget would keep invalidating that stale item's size cache)
+                c.layout().removeWidget(w)
+        for w, col in self._items:
+            self._cols[col if wide else 0].layout().addWidget(w)
+        self._cols[1].setVisible(wide)
+
+    def resizeEvent(self, e):
+        wide = e.size().width() >= self.wide_at
+        if wide != self._wide:
+            self._place(wide)
+        super().resizeEvent(e)
+
+
 class SettingRow(QWidget):
     """Settings-list row: title + description on the left, a control on the right.
     Clicking the text of a Toggle row flips the toggle."""

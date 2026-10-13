@@ -95,6 +95,14 @@ _STROKE = {
             '<path d="M2.5 17h19l-2.1 3.1a2 2 0 0 1-1.66.9H6.26a2 2 0 0 1-1.66-.9z"/>',
     "star": '<path d="m12 2.8 2.83 5.74 6.33.92-4.58 4.47 1.08 6.3L12 17.25l-5.66 2.98 1.08-6.3-4.58-4.47 '
             '6.33-.92z"/>',
+    "crosshair": '<circle cx="12" cy="12" r="8"/><path d="M12 2v5"/><path d="M12 17v5"/><path d="M2 12h5"/>'
+                 '<path d="M17 12h5"/><path d="M12 12h.01"/>',
+    "arrow-left": '<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+    "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+    "blocks": '<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/>'
+              '<rect x="3" y="14" width="7" height="7" rx="1.6"/><path d="M17.5 14v7"/><path d="M14 17.5h7"/>',
+    "flow": '<rect x="3" y="3" width="7" height="6" rx="1.6"/><rect x="14" y="15" width="7" height="6" rx="1.6"/>'
+            '<path d="M6.5 9v3.5a2.5 2.5 0 0 0 2.5 2.5h5"/><path d="m12 12.5 2.5 2.5-2.5 2.5"/>',
 }
 
 # filled icons (stroke="none")
@@ -105,6 +113,8 @@ _FILL = {
     "next": '<path d="M4.5 5.4v13.2a1.1 1.1 0 0 0 1.7.92l9.6-6.6a1.1 1.1 0 0 0 0-1.84l-9.6-6.6a1.1 1.1 0 0 0-1.7.92z"/>'
             '<rect x="17" y="4.5" width="3" height="15" rx="1.3"/>',
     "dot": '<circle cx="12" cy="12" r="5"/>',
+    "grip": '<circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/>'
+            '<circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/>',
 }
 
 

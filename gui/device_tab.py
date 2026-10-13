@@ -1,16 +1,16 @@
-"""Device & settings page: where the game runs, screen profile, hotkeys and behaviour."""
+"""Device & hotkeys: where the game runs, screen profile, hotkeys and behaviour."""
 
 import os
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QButtonGroup, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QFileDialog, QLineEdit, QVBoxLayout, QWidget
 
 from bot import paths
 from bot.core.devices import EMULATOR_PORTS, find_adb, adb_devices
 from bot.core.profile import Profile
 from gui import icons
 from gui import theme as T
-from gui.components import Banner, Button, Card, ChoiceCard, SettingRow, Toggle, divider, field, hbox, label, scroll
+from gui.components import Banner, Button, Card, ChoiceCard, Columns, SettingRow, Toggle, divider, field, hbox, label
 from gui.widgets import Combo
 
 
@@ -21,15 +21,10 @@ class DeviceTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        content = QWidget()
-        cols = QHBoxLayout(content)
-        cols.setSpacing(16)
-        left = QVBoxLayout()
-        left.setSpacing(16)
-        right = QVBoxLayout()
-        right.setSpacing(16)
-        cols.addLayout(left, 11)
-        cols.addLayout(right, 9)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        cols = Columns()
+        root.addWidget(cols)
 
         # --- device ---
         dev = Card("Where does Clash of Clans run?", icon="plug")
@@ -84,7 +79,7 @@ class DeviceTab(QWidget):
         self.test_result = label("Takes one screenshot to check that the bot can see the game.", "rowDesc", wrap=True)
         dev.add(hbox(self.test_btn, 6, self.test_icon, self.test_result, spacing=8))
         self.test_icon.hide()
-        left.addWidget(dev)
+        cols.add(dev, 0)
 
         # --- profile ---
         prof = Card("Screen profile", "Templates, digits and click points for one screen size.", icon="layers",
@@ -94,8 +89,7 @@ class DeviceTab(QWidget):
         new_prof.setToolTip("Creates an empty profile with the size of the device screen")
         new_prof.clicked.connect(self.new_profile_requested)
         prof.add(hbox(self.profile, new_prof, spacing=8))
-        left.addWidget(prof)
-        left.addStretch(1)
+        cols.add(prof, 0)
 
         # --- hotkeys ---
         hk = Card("Hotkeys", "Work while the game is in front.", icon="keyboard", color="#5cc8ff")
@@ -111,7 +105,7 @@ class DeviceTab(QWidget):
             if i:
                 hk.add(divider())
             hk.add(SettingRow(title, desc, e))
-        right.addWidget(hk)
+        cols.add(hk, 1)
 
         # --- behaviour ---
         misc = Card("Behaviour", icon="sliders", color=T.GREEN)
@@ -126,12 +120,7 @@ class DeviceTab(QWidget):
         open_logs = Button("Open logs folder", "folder", "secondary", "sm")
         open_logs.clicked.connect(lambda: os.startfile(paths.LOGS))
         misc.add(SettingRow("Logs", "bot.log and error screenshots", open_logs))
-        right.addWidget(misc)
-        right.addStretch(1)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(scroll(content))
+        cols.add(misc, 1)
 
         for w in (self.shortcut, self.window_title, self.adb_path, *self.hotkeys.values()):
             w.textChanged.connect(self.changed)

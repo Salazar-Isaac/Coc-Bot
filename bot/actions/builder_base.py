@@ -498,6 +498,26 @@ def session(bot, account, plan=False):
         collect(bot)
     if plan:
         upgrades.run_bb(bot, account, "before attacking")
+    attacks(bot, account)
+    if plan:
+        upgrades.run_bb(bot, account, "after attacking")
+    elif cfg.get("upgrade", False):
+        upgrade(bot, cfg.get("max_upgrades", 1))
+    if cfg.get("research", False):
+        research(bot)
+    try:
+        travel(bot, "main")
+    except BotError as e:
+        log.warning("%s: %s", name, e)
+    return True
+
+
+def attacks(bot, account):
+    """Builder Base attacks on this account (you must be in its Builder Base): until the Star Bonus
+    is done (or on, see the settings), the storages are full or stop growing, or the attack limit."""
+    cfg = bot.settings.get("builder", {})
+    name = account.get("name", "?")
+    bot.status(action="Builder Base attack")
     if cfg.get("army", "auto") != "keep" and account.get("_bb_army") != cfg.get("army", "auto"):
         set_army(bot, cfg.get("army", "auto"))
         account["_bb_army"] = cfg.get("army", "auto")      # once per visit
@@ -541,17 +561,7 @@ def session(bot, account, plan=False):
             bot.save_error("bb-attack")
             if not go_home_bb(bot, 45):
                 break
-    if plan:
-        upgrades.run_bb(bot, account, "after attacking")
-    elif cfg.get("upgrade", False):
-        upgrade(bot, cfg.get("max_upgrades", 1))
-    if cfg.get("research", False):
-        research(bot)
-    try:
-        travel(bot, "main")
-    except BotError as e:
-        log.warning("%s: %s", name, e)
-    return True
+    return attacks
 
 
 # --- Builder Base army ------------------------------------------------------------------------

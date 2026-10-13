@@ -45,9 +45,20 @@ def is_full(bot, account, res):
     return (all(flags) if rule == "all" else any(flags)), f
 
 
-def loot_is_good(settings, loot):
+def min_loot(settings, account=None):
+    """The loot a base needs: by the attacking account's Town Hall ("Base choice per Town Hall",
+    like completeid.py: more for a higher Town Hall), else the same minimum for all."""
+    lo = settings["loot"]
+    table = lo.get("min_loot_th") or {}
+    th = str((account or {}).get("th") or "")
+    if lo.get("min_loot_mode", "th") == "th" and th in table:
+        return table[th]
+    return lo["min_loot"]
+
+
+def loot_is_good(settings, loot, account=None):
     """Is the scouted base worth attacking?"""
-    mins = settings["loot"]["min_loot"]
+    mins = min_loot(settings, account)
     checks = [(loot.get(r) or 0) >= mins.get(r, 0) for r in watched(settings) if mins.get(r, 0) > 0]
     if not checks:
         return True
@@ -85,7 +96,7 @@ def stable_loot(bot, max_wait=2.0):
         control.sleep(0.25)
 
 
-def search(bot):
+def search(bot, account=None):
     """Press Next until a base meets the loot minimum. Returns the loot dict or None."""
     max_searches = bot.settings["loot"]["max_searches"]
     for n in range(1, max_searches + 1):
@@ -95,7 +106,7 @@ def search(bot):
         loot = stable_loot(bot)
         bot.stats["searches"] += 1
         bot.status(action=f"Searching #{n}", loot=loot)
-        if loot_is_good(bot.settings, loot):
+        if loot_is_good(bot.settings, loot, account):
             log.info("Search %d: %s -> attack", n, _fmt(loot))
             return loot
         log.debug("Search %d: %s -> next", n, _fmt(loot))
@@ -105,11 +116,11 @@ def search(bot):
     return None
 
 
-def attack_once(bot):
+def attack_once(bot, account=None):
     """One full attack from the home village back to the home village.
     Returns the scouted loot, or None if no good base was found."""
     start_search(bot)
-    loot = search(bot)
+    loot = search(bot, account)
     if loot is None:
         go_home(bot)
         return None
@@ -124,10 +135,13 @@ def attack_once(bot):
     return loot
 
 
-def loot_until_full(bot, account):
+def loot_until_full(bot, account, keep_going=False, between=None, max_attacks=None):
     """Attack until the account's watched storages are full.
-    Returns "full", "limit" (max attacks reached) or "stuck"."""
+    Returns "full", "limit" (max attacks reached) or "stuck".
+    keep_going ("Loot current"): attack on even when full, until the attack limit or Stop.
+    between(): called before each attack (the flow may visit another account's builders)."""
     s = bot.settings["loot"]
+    limit = s["max_attacks_per_account"] if max_attacks is None else max_attacks
     attacks = 0
     stuck = 0
     before = None
@@ -139,11 +153,11 @@ def loot_until_full(bot, account):
         full, detail = is_full(bot, account, res)
         bot.status(account=account["name"], resources=res, fullness=detail)
         log.info("%s: %s", account["name"], _fmt_full(detail))
-        if full:
+        if full and not keep_going:
             return "full"
-        if s["max_attacks_per_account"] and attacks >= s["max_attacks_per_account"]:
+        if limit and attacks >= limit:
             return "limit"
-        if before is not None:
+        if before is not None and not keep_going:
             grew = any((res.get(r) or 0) > (before.get(r) or 0) for r in watched(bot.settings))
             stuck = 0 if grew else stuck + 1
             if stuck >= s.get("stuck_attacks", 2):
@@ -154,8 +168,11 @@ def loot_until_full(bot, account):
                 if res.get(r) is not None and before.get(r) is not None and res[r] > before[r]:
                     bot.stats["loot"][r] += res[r] - before[r]
         before = res
+        if between is not None and between():
+            before = None                            # been away: the storages are read afresh
+            continue
         ensure_army(bot, account)                # only now: the account really is going to attack
-        if attack_once(bot) is not None:
+        if attack_once(bot, account) is not None:
             attacks += 1
 
 

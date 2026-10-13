@@ -6,6 +6,7 @@ import os
 import threading
 
 from . import paths
+from .flow import DEFAULT_MIN_LOOT_TH, DEFAULT_STEPS
 
 SETTINGS_PATH = os.path.join(paths.CONFIG, "settings.json")
 ACCOUNTS_PATH = os.path.join(paths.CONFIG, "accounts.json")
@@ -39,12 +40,18 @@ DEFAULT_SETTINGS = {
         "adb_serial": "127.0.0.1:5555",
     },
     "profile": "pc-1920x1080",
-    "mode": "loot_all",
+    "mode": "flow",
+    # the functions in the order they run (keys of bot/flow.py STEPS; a key may appear more than once,
+    # e.g. upgrade before and after looting) and each function's own settings
+    "flow": ["attack_all"],
+    "steps": DEFAULT_STEPS,
     "loot": {
         "watch": {"gold": False, "elixir": True, "dark": False},
         "full_rule": "any",                 # account is full when "any" / "all" watched resources are full
         "min_loot": {"gold": 0, "elixir": 1200000, "dark": 0},
         "min_loot_rule": "any",             # attack when "any" / "all" watched resources reach the minimum
+        "min_loot_mode": "th",              # "th": the minimum by the account's Town Hall (table below); "fixed": min_loot
+        "min_loot_th": DEFAULT_MIN_LOOT_TH,
         "max_searches": 150,                # give up searching after this many "Next" (then retry)
         "max_attacks_per_account": 0,       # 0 = no limit
         "battle_seconds": 60,               # max battle time: end the battle after this many seconds
@@ -114,7 +121,7 @@ DEFAULT_ACCOUNTS = []
 def _merge(defaults, data):
     out = copy.deepcopy(defaults)
     for k, v in (data or {}).items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict) and k != "full_at":
+        if isinstance(v, dict) and isinstance(out.get(k), dict) and k not in ("full_at", "min_loot_th"):
             out[k] = _merge(out[k], v)
         else:
             out[k] = v

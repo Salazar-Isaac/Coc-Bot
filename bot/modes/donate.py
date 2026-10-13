@@ -17,9 +17,7 @@ from .. import config
 from ..core.context import BotError
 from ..actions import account as account_actions
 from ..actions import clan, loot
-from . import register
 from .common import StopRun, active_accounts, with_recovery
-from .loot import _loot_account
 
 log = logging.getLogger("bot")
 
@@ -214,42 +212,3 @@ def donation_cycle(bot, main, state):
         if donated == 0:
             log.info("Nothing was donated this round (no requests or nothing to give)")
             return "idle"
-
-
-@register("loot_donate", "Loot + Donate cycle",
-          "Like XpIncrease: Main first donates to open requests; while it has enough elixir for a round, "
-          "every Looter / 'Loot + request' / Feeder account empties its Clan Castle and requests and Main "
-          "donates. When the elixir runs low, Main and the Looter accounts loot until full, then it repeats.",
-          order=3)
-def run_loot_donate(bot, state):
-    main = _main_account(bot)
-    looters = [main] + active_accounts(bot, ["loot"])
-    rounds = bot.settings.get("repeat_rounds", 1)
-    n = 0
-    while rounds == 0 or n < rounds:
-        n += 1
-        log.info("Cycle %d%s", n, f" of {rounds}" if rounds else "")
-        if n == 1 and bot.settings["donate"].get("loot_before_donate", False):
-            _loot_all(bot, looters, state)              # "Always loot to full first"
-        donation_cycle(bot, main, state)
-        _loot_all(bot, looters, state)
-
-
-def _loot_all(bot, looters, state):
-    for acc in looters:
-        bot.status(account=acc["name"], progress="loot", action="Looting")
-        _loot_account(bot, acc, state, cycle=True)
-
-
-@register("donate_only", "Donate only",
-          "Main first donates to open requests; then, while it has enough elixir for a round, every "
-          "requesting account requests and Main donates.", order=4)
-def run_donate_only(bot, state):
-    main = _main_account(bot)
-    rounds = bot.settings.get("repeat_rounds", 1)
-    n = 0
-    while rounds == 0 or n < rounds:
-        n += 1
-        if donation_cycle(bot, main, state) == "low":
-            log.info("Main's elixir is low: Donate only is done")
-            return

@@ -1,7 +1,8 @@
-"""Accounts page: the list of Supercell ID accounts, their role and limits."""
+"""Accounts: the list of Supercell ID accounts in switching order, their role and limits. The position (#) is
+what the functions' accounts fields use ("1-15", "3,5,9-12")."""
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtCore import QEvent, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QAbstractItemView, QTableWidgetItem, QVBoxLayout, QWidget
 
 from bot import config
@@ -11,19 +12,17 @@ from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, IconButt
                             ToggleDelegate, hbox)
 from gui.widgets import BigSpin, Spin
 
-# role, label, icon, colour, hint.  Main loots and donates; Looter loots in every mode (also in the Loot + Donate
-# cycle) and requests; Loot + request loots in "Loot all" and only requests in the donation modes; Feeder only
-# requests; Skip is ignored.
-ROLES = [("main", "Main (donates)", "crown", T.GOLD, "Loots and donates to the others"),
-         ("loot", "Looter", "swords", T.ELIXIR_HI, "Loots in every mode (also in the Loot + Donate cycle) and "
-          "requests troops"),
-         ("both", "Loot + request", "sparkles", "#4fd1c5",
-          "Loots in “Loot all” and also requests in the donation modes"),
-         ("feeder", "Feeder (requests)", "send", "#5cc8ff", "Only requests troops"),
-         ("skip", "Skip", "x-circle", T.TEXT_DIM, "Ignored by every mode")]
-COLS = ["Use", "Name (as in the switch list)", "Role", "Town Hall", "Gold full at", "Elixir full at",
-        "Dark full at", "Upgrade"]
-UPGRADE_COL = 7
+# role, label, icon, colour, hint. The roles are used by Donate: Main donates, the others request; Skip = left out
+# by every function.
+ROLES = [("main", "Main (donates)", "crown", T.GOLD, "Donate: donates to the others"),
+         ("loot", "Looter", "swords", T.ELIXIR_HI, "Donate: requests troops"),
+         ("both", "Loot + request", "sparkles", "#4fd1c5", "Donate: requests troops"),
+         ("feeder", "Feeder (requests)", "send", "#5cc8ff", "Donate: requests troops"),
+         ("skip", "Skip", "x-circle", T.TEXT_DIM, "Left out by every function")]
+COLS = ["#", "Use", "Name (as in the switch list)", "Role", "Town Hall", "Gold full at", "Elixir full at",
+        "Dark full at"]
+POS, USE, NAME, ROLE_COL, TH, FULL = 0, 1, 2, 3, 4, 5        # FULL..FULL+2: gold, elixir, dark
+FIXED = Qt.ItemIsEnabled | Qt.ItemIsSelectable
 EDITABLE = Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
 
@@ -70,9 +69,10 @@ class AccountsTab(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
-        lay.addWidget(Banner("Names must match the Supercell ID switch list (small typos are fine). Town Hall is "
-                             "filled in automatically when the bot switches. <b>Full at</b> left at “TH table” uses "
-                             "the Town Hall table in Loot settings. Click a cell to change it.", "info"))
+        lay.addWidget(Banner("Names must match the Supercell ID switch list (small typos are fine). <b>#</b> is the "
+                             "position you type in the functions' accounts fields (e.g. 1-15). Town Hall is filled in "
+                             "automatically when the bot switches. <b>Full at</b> left at “TH table” uses the Town "
+                             "Hall table (Attack all bases). Click a cell to change it.", "info"))
 
         self.add_btn = Button("Add", "plus", "secondary", "sm")
         self.remove_btn = Button("Remove", "trash", "secondary", "sm")
@@ -86,29 +86,30 @@ class AccountsTab(QWidget):
                            self.scan_btn, spacing=8))
 
         card = Card(padding=1)
-        t = self.table = Table(COLS, row_height=48)
+        t = self.table = Table(COLS, row_height=46)
         t.empty_text = "No accounts yet.\nAdd them one by one or let the bot read the names from the game."
         t.empty_icon = "users"
-        t.resize_modes(1, {0: 72, 2: 190, 3: 100, 4: 138, 5: 138, 6: 130, 7: 96})
+        t.resize_modes(NAME, self._widths(True))
         t.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked
                           | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
         self._delegates = [ToggleDelegate(t), ChoiceDelegate(t, ROLES), NumberDelegate(t, _th_text, _th_editor)]
-        t.setItemDelegateForColumn(0, self._delegates[0])
-        t.setItemDelegateForColumn(2, self._delegates[1])
-        t.setItemDelegateForColumn(3, self._delegates[2])
+        t.setItemDelegateForColumn(USE, self._delegates[0])
+        t.setItemDelegateForColumn(ROLE_COL, self._delegates[1])
+        t.setItemDelegateForColumn(TH, self._delegates[2])
         for i, res in enumerate(config.RESOURCES):
             d = NumberDelegate(t, _full_text, lambda parent, r=res: _full_editor(parent, r))
             self._delegates.append(d)
-            t.setItemDelegateForColumn(4 + i, d)
-            t.horizontalHeaderItem(4 + i).setIcon(resource_icon(res))
-        up = ToggleDelegate(t)
-        self._delegates.append(up)
-        t.setItemDelegateForColumn(UPGRADE_COL, up)
-        t.horizontalHeaderItem(UPGRADE_COL).setToolTip("Upgrade plan (Upgrades page): storages, army camp, "
-                                                       "barracks, ... Town Hall")
+            t.setItemDelegateForColumn(FULL + i, d)
+            t.horizontalHeaderItem(FULL + i).setIcon(resource_icon(res))
+        t.horizontalHeaderItem(POS).setToolTip("Position in the list: type it in a function's accounts field "
+                                               "(e.g. 1-15 or 3,5,9-12)")
         t.itemChanged.connect(lambda *_: self.changed.emit())
+        t.installEventFilter(self)
+        t.model().rowsInserted.connect(self._rows_changed)
+        t.model().rowsRemoved.connect(self._rows_changed)
         card.add(t, 1)
-        lay.addWidget(card, 1)
+        lay.addWidget(card)
+        self._narrow = None
 
         self.add_btn.clicked.connect(self._add_new)
         self.remove_btn.clicked.connect(self._remove)
@@ -117,6 +118,41 @@ class AccountsTab(QWidget):
         self.scan_btn.clicked.connect(self.scan_requested)
         self.changed.connect(self._summary)
         self._summary()
+
+    # --------------------------------------------------------------------- layout
+    @staticmethod
+    def _widths(wide):
+        return ({POS: 50, USE: 66, ROLE_COL: 190, TH: 96, FULL: 138, FULL + 1: 138, FULL + 2: 124} if wide else
+                {POS: 44, USE: 58, ROLE_COL: 168, TH: 80, FULL: 112, FULL + 1: 112, FULL + 2: 104})
+
+    def eventFilter(self, obj, e):
+        if obj is self.table and e.type() == QEvent.Resize:
+            narrow = e.size().width() < 1040
+            if narrow != self._narrow:
+                self._narrow = narrow
+                hdr = self.table.horizontalHeader()
+                for c, w in self._widths(not narrow).items():
+                    hdr.resizeSection(c, w)
+        return super().eventFilter(obj, e)
+
+    def _rows_changed(self, *_):
+        """Positions follow the order; the table shows up to 10 rows (the page scrolls, not the table)."""
+        t = self.table
+        blocked = t.signalsBlocked()
+        t.blockSignals(True)
+        for r in range(t.rowCount()):
+            it = t.item(r, POS)
+            if it is None:
+                it = QTableWidgetItem()
+                it.setFlags(FIXED)
+                it.setForeground(QColor(T.TEXT_MUTED))
+                it.setFont(T.font(9.5, QFont.DemiBold))
+                t.setItem(r, POS, it)
+            if it.text() != str(r + 1):
+                it.setText(str(r + 1))
+        t.blockSignals(blocked)
+        rows = max(3, min(10, t.rowCount()))
+        t.setFixedHeight(t.horizontalHeader().height() + rows * 46 + 4)
 
     # --------------------------------------------------------------------- rows
     @staticmethod
@@ -131,34 +167,40 @@ class AccountsTab(QWidget):
         r = self.table.rowCount() - 1
         self.table.selectRow(r)
         self.table.scrollToBottom()
-        self.table.editItem(self.table.item(r, 1))
+        self.table.editItem(self.table.item(r, NAME))
 
     def _add(self, acc, row=None):
         t = self.table
         r = t.rowCount() if row is None else row
+        blocked = t.signalsBlocked()
+        t.blockSignals(True)
         t.insertRow(r)
-        t.setItem(r, 0, self._cell(bool(acc.get("enabled", True)), Qt.ItemIsEnabled | Qt.ItemIsSelectable))
+        t.setItem(r, USE, self._cell(bool(acc.get("enabled", True)), FIXED))
         name = QTableWidgetItem(acc.get("name", ""))
         name.setFlags(EDITABLE)
-        t.setItem(r, 1, name)
-        t.setItem(r, 2, self._cell(acc.get("role", "loot")))
-        t.setItem(r, 3, self._cell(int(acc.get("th") or 0)))
+        t.setItem(r, NAME, name)
+        t.setItem(r, ROLE_COL, self._cell(acc.get("role", "loot")))
+        t.setItem(r, TH, self._cell(int(acc.get("th") or 0)))
         for i, res in enumerate(config.RESOURCES):
-            t.setItem(r, 4 + i, self._cell(int((acc.get("full_at") or {}).get(res, 0) or 0)))
-        t.setItem(r, UPGRADE_COL, self._cell(bool(acc.get("upgrade", False)), Qt.ItemIsEnabled | Qt.ItemIsSelectable))
+            t.setItem(r, FULL + i, self._cell(int((acc.get("full_at") or {}).get(res, 0) or 0)))
+        t.blockSignals(blocked)
+        self._rows_changed()
         self.changed.emit()
 
     def _row_data(self, r):
         t = self.table
-        name_item = t.item(r, 1)
+        name_item = t.item(r, NAME)
         return {
             "name": name_item.text().strip() if name_item else "",
-            "enabled": bool(t.item(r, 0).data(ROLE)),
-            "role": t.item(r, 2).data(ROLE),
-            "th": t.item(r, 3).data(ROLE) or 0,
-            "full_at": {res: t.item(r, 4 + i).data(ROLE) or 0 for i, res in enumerate(config.RESOURCES)},
-            "upgrade": bool(t.item(r, UPGRADE_COL).data(ROLE)) if t.item(r, UPGRADE_COL) else False,
+            "enabled": bool(t.item(r, USE).data(ROLE)),
+            "role": t.item(r, ROLE_COL).data(ROLE),
+            "th": t.item(r, TH).data(ROLE) or 0,
+            "full_at": {res: t.item(r, FULL + i).data(ROLE) or 0 for i, res in enumerate(config.RESOURCES)},
         }
+
+    def rows(self):
+        """The accounts as the table shows them now (not saved yet), for the live previews."""
+        return [self._row_data(r) for r in range(self.table.rowCount())]
 
     def _remove(self):
         r = self.table.currentRow()
@@ -175,6 +217,7 @@ class AccountsTab(QWidget):
         self.table.removeRow(r)
         self._add(data, r + d)
         self.table.blockSignals(False)
+        self._rows_changed()
         self.table.selectRow(r + d)
         self.changed.emit()
 
@@ -193,6 +236,16 @@ class AccountsTab(QWidget):
 
     def count(self):
         return self.table.rowCount()
+
+    def summary(self):
+        """Short text for the folded Accounts section."""
+        rows = self.rows()
+        on = [a for a in rows if a["enabled"] and a["role"] != "skip"]
+        if not rows:
+            return "No accounts yet"
+        main = [a["name"] for a in on if a["role"] == "main"]
+        return (f"{len(rows)} accounts" + (f" · {len(rows) - len(on)} off" if len(rows) != len(on) else "")
+                + (f" · Main: {main[0]}" if main else " · no Main"))
 
     # ------------------------------------------------------------- settings io
     def load(self, settings, accounts):
@@ -226,7 +279,7 @@ class AccountsTab(QWidget):
                 self._add(acc)
                 added += 1
             elif th:
-                self.table.item(r, 3).setData(ROLE, int(th))
+                self.table.item(r, TH).setData(ROLE, int(th))
         self.changed.emit()
         return added
 

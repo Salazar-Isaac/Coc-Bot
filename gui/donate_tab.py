@@ -1,17 +1,17 @@
-"""Donate page: settings for the Loot + Donate and Donate only modes, and what the Main account donates."""
+"""Donate settings (the flow's Donate function): the donation cycle, Clan Castle requests and what the Main
+account donates."""
 
 import re
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QHeaderView, QLineEdit, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHeaderView, QLineEdit, QTableWidgetItem, QVBoxLayout, QWidget
 
 from bot.actions import troops
 from bot.core import vision
-from bot.modes import MODES, load_all
 from gui import theme as T
-from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, IconButton, NumberDelegate, Pill,
+from gui.components import (ROLE, Banner, Button, Card, ChoiceDelegate, Columns, IconButton, NumberDelegate, Pill,
                             PillDelegate, PlaceholderDelegate, Segmented, SettingRow, Table, Toggle, ToggleDelegate,
-                            divider, field, hbox, label, scroll)
+                            divider, field, hbox, label)
 from gui.widgets import BigSpin, Spin
 
 COLS = ["On", "Name", "Type", "Space", "Taps / max", "Use for", "Keywords", "Template", "Icon"]
@@ -69,18 +69,13 @@ class DonateTab(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        load_all()
-        content = QWidget()
-        lay = QVBoxLayout(content)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(16)
-        self.notice = Banner("<b>A donation mode is not ready yet.</b> Everything here is saved now and used as "
-                             "soon as it is.", "warning")
-        lay.addWidget(self.notice)
-
-        row = QHBoxLayout()
-        row.setSpacing(16)
+        row = Columns()
         cycle = Card("Donation cycle", "Like XpIncrease: open requests first, then request + donate while the Main "
-                     "has elixir for a whole round, then loot.", icon="refresh", color=T.ELIXIR_HI)
+                     "has elixir for a whole round. Main donates; Looter, Loot + request and Feeder accounts "
+                     "request (roles in Accounts).", icon="refresh", color=T.ELIXIR_HI)
         self.loot_first = Toggle()
         cycle.add(SettingRow("Always loot to full first", "Off: start donating right away when the Main has "
                              "enough elixir (XpIncrease); On: Main and Looters loot until full first",
@@ -112,8 +107,7 @@ class DonateTab(QWidget):
         cycle.add(field("Big-request check (template)", hbox(self.special, self.special_state, spacing=10),
                         "Advanced: the icon that is only donatable for big requests (the Super Wizard, "
                         f"{SPECIAL_DEFAULT})."))
-        cycle.layout().addStretch(1)
-        row.addWidget(cycle, 1)
+        row.add(cycle, 0)
 
         req = Card("Clan Castle requests", "Who requests and who gets troops.", icon="send", color="#5cc8ff")
         self.remove_cc = Toggle()
@@ -130,9 +124,8 @@ class DonateTab(QWidget):
                                   "the Accounts page")
         req.add(field("Donate to", self.donate_to, "Only my accounts = requests from the names on your Accounts "
                       "page; other clan mates are skipped."))
-        req.layout().addStretch(1)
-        row.addWidget(req, 1)
-        lay.addLayout(row)
+        row.add(req, 1)
+        lay.addWidget(row)
 
         items = Card("What the Main account donates",
                      "For each request the bot reads its free space (troops / spells / siege) and its message. "
@@ -167,7 +160,7 @@ class DonateTab(QWidget):
         }
         for c, d in self._delegates.items():
             t.setItemDelegateForColumn(c, d)
-        self.table.setMinimumHeight(300)
+        t.setVerticalScrollMode(Table.ScrollPerPixel)
         self.table.itemChanged.connect(self._item_changed)
         items.add(self.table, 1)
         big_hint = label("<b>Use for:</b> a request is <b>big</b> when the Super Wizard (10 space) can still be "
@@ -179,11 +172,7 @@ class DonateTab(QWidget):
         items.add(Banner("Each item needs its icon from the donate window: open <b>Templates</b>, take a screenshot "
                          "of the donate window and capture the keys listed under the screen “Donate” "
                          "(group <b>donate/</b>, e.g. <i>donate/balloon</i>).", "info"))
-        lay.addWidget(items, 1)
-
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(scroll(content))
+        lay.addWidget(items)
 
         self.loot_first.toggled.connect(self.changed)
         self.min_keep.valueChanged.connect(self.changed)
@@ -200,12 +189,14 @@ class DonateTab(QWidget):
         up.clicked.connect(lambda: self._move(-1))
         down.clicked.connect(lambda: self._move(1))
         to_templates.clicked.connect(self.templates_requested)
-        self._update_notice()
+        self.table.model().rowsInserted.connect(self._fit_height)
+        self.table.model().rowsRemoved.connect(self._fit_height)
+        self._fit_height()
 
-    def _update_notice(self):
-        """Data-driven: only shown while one of the donation modes is registered as not ready."""
-        modes = [MODES[k] for k in ("loot_donate", "donate_only") if k in MODES]
-        self.notice.setVisible(any(not m.ready for m in modes))
+    def _fit_height(self, *_):
+        """The table shows all its rows (up to 10) so the page scrolls instead of the table."""
+        rows = max(3, min(10, self.table.rowCount()))
+        self.table.setFixedHeight(self.table.horizontalHeader().height() + rows * 46 + 4)
 
     # ------------------------------------------------------------------ table layout
     def eventFilter(self, obj, e):
@@ -380,7 +371,7 @@ class DonateTab(QWidget):
             if isinstance(it, dict):
                 self._add(it)
         self.blockSignals(False)
-        self._update_notice()
+        self._fit_height()
 
     def apply(self, settings, accounts):
         d = settings.setdefault("donate", {})

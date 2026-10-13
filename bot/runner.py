@@ -41,7 +41,7 @@ class Runner(threading.Thread):
         reason = "finished"
         try:
             load_all()
-            mode = MODES[self.mode_key]
+            mode = MODES.get(self.mode_key) or MODES["flow"]      # the old modes are flows now
             profile.use(self.settings.get("profile", profile.name))
             vision.templates.reload()
             vision.digits.reload()
@@ -58,6 +58,7 @@ class Runner(threading.Thread):
             self.bot.state = state                    # e.g. to reopen the right account after a reload
             if not self.resume:
                 state.pop("loot_all_next", None)
+                state.pop("flow_next", None)
             log.info("Starting '%s' on %s", mode.title, device.describe())
             self.on_status(running=True, mode=mode.title)
             restarts = 0

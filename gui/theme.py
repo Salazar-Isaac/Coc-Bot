@@ -98,7 +98,8 @@ QToolTip { background: $SURFACE_2; color: $TEXT; border: 1px solid $BORDER_STRON
            padding: 6px 8px; }
 
 QFrame#Card { background: $SURFACE; border: 1px solid $BORDER; border-radius: 14px; }
-QFrame#Sidebar { background: $SIDEBAR; border: none; border-right: 1px solid $BORDER; }
+QFrame#TopBar { background: $SIDEBAR; border: none; border-bottom: 1px solid $BORDER; }
+QSplitter { background: transparent; }
 QFrame#Divider { background: $BORDER; border: none; max-height: 1px; min-height: 1px; }
 QFrame#Banner { border-radius: 10px; }
 QFrame#Banner[kind="info"] { background: $INFO_BG; border: 1px solid $INFO_BORDER; }
@@ -117,6 +118,9 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabl
     color: $TEXT_DIM; background: #12152400; border-color: $BORDER;
 }
 QSpinBox[dim="true"] { color: $TEXT_DIM; }
+QLineEdit[invalid="true"], QLineEdit[invalid="true"]:hover, QLineEdit[invalid="true"]:focus {
+    border-color: $RED; background: $ERR_BG;
+}
 QLineEdit[role="key"] { font-family: "Cascadia Mono", "Consolas"; font-weight: 600; qproperty-alignment: AlignCenter; }
 QLineEdit[role="search"] { border-radius: 9px; }
 
