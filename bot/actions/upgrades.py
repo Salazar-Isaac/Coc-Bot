@@ -371,6 +371,9 @@ def run(bot, account, when="", max_count=None, buildings=None):
             bot.stats["upgrades"] = bot.stats.get("upgrades", 0) + 1
             rows = [r for r in rows if (r["base"], r["cost"]) != listed]
         else:
+            if item.get("builders_busy"):             # only the Goblin Builder (gems) was "free"
+                timers.note_busy(bot, account, "builders", MAIN)
+                break
             fails += 1
             refused.add(item["base"])
             rows = None                               # read the menu again

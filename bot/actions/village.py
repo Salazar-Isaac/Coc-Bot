@@ -149,6 +149,17 @@ def _skipped(name, skip):
 
 # --- confirming an upgrade / research ----------------------------------------------------------
 
+BUSY_POPUP = (900, 260, 730, 330)    # "Hey Chief! ... all your Builders are busy" (Goblin Builder for gems)
+
+
+def builders_busy(frame):
+    """The game's "all your Builders are busy - the Goblin Builder can do it for gems" offer: the
+    builder counter still counts the Goblin Builder as free, but he only works for gems."""
+    text = "".join(t for t, _, _ in vision.text_reader.read(frame, space.region(*BUSY_POPUP)))
+    low = re.sub(r"[^a-z]", "", text.lower())
+    return "buildersarebusy" in low or "goblinbuilder" in low
+
+
 def _close_offer(bot):
     """Close any 'buy with gems' or leftover window without accepting it."""
     for key in ("upgrade/close", "lab/close", "popup/close_x"):
@@ -210,6 +221,10 @@ def _confirm(bot, item, which, home=None):
         # still open, or nothing was paid: a gem offer or an error popup -> back out
         _close_offer(bot)
         (home or go_home)(bot, 30)
+        if which == "builders" and builders_busy(tapped):
+            item["builders_busy"] = True
+            log.info("%s: all builders are busy (the free one is the Goblin Builder, who wants gems)", item["name"])
+            return False
         log.info("%s: the game did not accept the upgrade", item["name"])
         bot.save_error("upgrade-refused", tapped)
         return False
