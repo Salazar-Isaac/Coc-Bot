@@ -44,25 +44,31 @@ def run_flow(bot, state):
     if not keys:
         raise StopRun("The flow is empty: drag functions into it first.")
     ctx = Ctx(bot, keys, state)
-    sig = ",".join(keys)
     rounds = bot.settings.get("repeat_rounds", 1)
+    # "Start from account" (in the window): the account the first round starts with. It follows the
+    # run (the window shows the account the bot is on), so after a stop the next run goes on there.
+    start = max(1, int(bot.settings.get("start_from", 1) or 1))
     log.info("Flow: %s", " -> ".join(BY_KEY[k].title for k in keys))
+    if start > 1:
+        log.info("Starting from account #%d (%s)", start,
+                 bot.accounts[start - 1]["name"] if start <= len(bot.accounts) else "?")
     n = 0
     while rounds == 0 or n < rounds:
         n += 1
         log.info("Round %d%s", n, f" of {rounds}" if rounds else "")
-        resume = state.get("flow_next") if n == 1 and (state.get("flow_next") or {}).get("sig") == sig else None
-        for si, (kind, part) in enumerate(segments(keys)):
-            if resume and si < resume.get("seg", 0):
-                continue
+        for kind, part in segments(keys):
             if kind == "once":
                 _run_once(bot, ctx, part)
             else:
-                start = resume.get("pos", 0) if resume and si == resume.get("seg") else 0
-                _run_accounts(bot, ctx, si, part, sig, start)
-            resume = None
-        state.pop("flow_next", None)
-        config.save_state(state)
+                _run_accounts(bot, ctx, part, start)
+                start = 1                              # only the first part of the first round skips
+        _set_start(bot, 1)                             # a whole round done: the next one starts at #1
+
+
+def _set_start(bot, pos):
+    """Where the next run starts: the window shows it and saves it."""
+    bot.settings["start_from"] = pos
+    bot.status(start_from=pos)
 
 
 # --- steps that run once -------------------------------------------------------------------------
@@ -114,8 +120,9 @@ def _loot_current(bot, ctx):
 
 # --- steps that run account by account -----------------------------------------------------------
 
-def _run_accounts(bot, ctx, si, keys, sig, start_pos=0):
-    """Each account (in list order) that any of these steps works on does them in flow order."""
+def _run_accounts(bot, ctx, keys, start_pos=1):
+    """Each account (in list order) that any of these steps works on does them in flow order,
+    from account #start_pos on."""
     plan = {}
     for key in keys:
         for pos, acc in step_accounts(ctx.cfg[key].get("accounts", ""), bot.accounts, key):
@@ -128,8 +135,7 @@ def _run_accounts(bot, ctx, si, keys, sig, start_pos=0):
         if pos < start_pos:
             continue
         acc, todo = plan[pos]
-        ctx.state["flow_next"] = {"sig": sig, "seg": si, "pos": pos}
-        config.save_state(ctx.state)
+        _set_start(bot, pos)                           # a stop here: the next run starts with this account
         bot.status(account=acc["name"], progress=f"{i + 1}/{len(order)}")
         if not with_recovery(bot, f"switch to {acc['name']}", lambda a=acc: account_actions.switch_to(bot, a, ctx.state)):
             log.error("Skipping %s: could not switch to it", acc["name"])

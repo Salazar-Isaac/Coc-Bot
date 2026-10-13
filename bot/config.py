@@ -45,6 +45,7 @@ DEFAULT_SETTINGS = {
     # e.g. upgrade before and after looting) and each function's own settings
     "flow": ["attack_all"],
     "option": "loot_all",                   # the option chosen in the window (bot/flow.py OPTIONS) -> "flow"
+    "start_from": 1,                        # account # the run starts with (follows the run: where it stopped)
     "research_too": {"home": False, "builder": False},   # upgrade options: also start lab research
     "steps": DEFAULT_STEPS,
     "loot": {

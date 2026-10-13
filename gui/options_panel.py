@@ -14,6 +14,7 @@ from bot.flow import BY_KEY, OPTION, OPTIONS, DEFAULT_OPTION, option_flow
 from gui import icons
 from gui import theme as T
 from gui.components import Card, ChoiceCard, FlowLayout, Pill, SettingRow, Toggle, label, scroll
+from gui.widgets import Combo
 
 SHORT = {"attack_all": "Loot", "loot_current": "Loot current", "donate": "Donate", "bb_attack": "Builder loot",
          "home_upgrade": "Home upgrade", "bb_upgrade": "Builder upgrade", "home_research": "Lab research",
@@ -137,12 +138,23 @@ class OptionsPanel(QWidget):
         steps = QWidget()
         self.steps_box = FlowLayout(steps, 6, 6)
         self.steps_card.add(steps)
+        self.start_combo = Combo()
+        self.start_combo.setMinimumWidth(230)
+        self.start_combo.setToolTip("The account the run starts with. It follows the run (it shows the account the "
+                                    "bot is on), so after a stop the next run goes on from there; after a whole round "
+                                    "it is back at #1. Upgrades never run on accounts 1-2, also when you start at #1.")
+        self.start_row = SettingRow("Start from account", "Moves along as the bot changes account", self.start_combo,
+                                    240)
+        self.steps_card.add(self.start_row)
+        self._accounts = []
+        self._start = 1
         self.steps_card.title_label.setToolTip("Account by account: each account does these in this order, then "
                                                "the next account. Click one for its settings.")
         lay.addWidget(self.steps_card)
 
         self.step_rows = []
         self.group.buttonClicked.connect(self._chosen)
+        self.start_combo.currentIndexChanged.connect(self._start_changed)
         self.research_home.toggled.connect(self._research_changed)
         self.research_bb.toggled.connect(self._research_changed)
         self._sync()
@@ -180,6 +192,7 @@ class OptionsPanel(QWidget):
             c.setEnabled(not running or c.isChecked())
         for t in (self.research_home, self.research_bb):
             t.setEnabled(not running)
+        self.start_combo.setEnabled(not running)          # it follows the run meanwhile
         if not running:
             self.set_running_key(None)
         self._sync()
@@ -198,13 +211,50 @@ class OptionsPanel(QWidget):
             t.setChecked(bool(v))
             t.blockSignals(False)
         self.cards[key].setChecked(True)
+        self._start = max(1, int(settings.get("start_from", 1) or 1))
+        self.set_accounts(accounts)
         self._sync()
 
     def apply(self, settings, accounts):
+        settings["start_from"] = self._start
         settings["option"] = self._option
         settings["research_too"] = {"home": self.research_home.isChecked(), "builder": self.research_bb.isChecked()}
         settings["flow"] = self.keys()
         settings["mode"] = "flow"
+
+    def set_accounts(self, accounts):
+        """The accounts for "Start from account" (#position, name, Town Hall), from the Accounts table."""
+        self._accounts = [dict(a) for a in (accounts or [])]
+        self._fill_start()
+
+    def set_start(self, pos):
+        """The run moved to account #pos (or finished a round: #1)."""
+        self._start = max(1, int(pos or 1))
+        self._fill_start()
+        self.changed.emit()                               # saved, so a later run goes on from here
+
+    def _fill_start(self):
+        c = self.start_combo
+        c.blockSignals(True)
+        c.clear()
+        for i, a in enumerate(self._accounts):
+            if not a.get("enabled", True) or a.get("role") == "skip":
+                continue
+            th = a.get("th")
+            c.addItem(f"#{i + 1}  {a.get('name', '?')}{f' · TH {th}' if th else ''}", i + 1)
+        if c.count():
+            idx = c.findData(self._start)
+            if idx < 0:                                   # that account is off now: the next one after it
+                later = [j for j in range(c.count()) if c.itemData(j) > self._start]
+                idx = later[0] if later else 0
+            c.setCurrentIndex(idx)
+        c.blockSignals(False)
+
+    def _start_changed(self, *_):
+        data = self.start_combo.currentData()
+        if data and not self.locked:
+            self._start = int(data)
+            self.changed.emit()
 
     # --- internals
     def _chosen(self, card):
@@ -222,6 +272,7 @@ class OptionsPanel(QWidget):
 
     def _sync(self):
         steps = self.option().steps
+        self.start_row.setVisible(any(BY_KEY[k].per_account for k in steps))
         self.research_rows[0].setVisible("home_upgrade" in steps)
         self.research_rows[1].setVisible("bb_upgrade" in steps)
         keys = self.keys()

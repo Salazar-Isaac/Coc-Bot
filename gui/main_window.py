@@ -295,6 +295,7 @@ class MainWindow(QMainWindow):
         fp.step_clicked.connect(self.settings_panel.show_step)
         fp.cleared.connect(self.settings_panel.clear_peek)
         fp.preset_chosen.connect(self._preset_accounts)
+        sp.accounts_rows_changed.connect(fp.set_accounts)
         sp.add_requested.connect(self._add_to_flow)
         sp.changed.connect(self._refresh_details)
         ct = self.controls
@@ -499,7 +500,7 @@ class MainWindow(QMainWindow):
         self._set_running(True)
         status = lambda **kw: self.bridge.status.emit(kw)  # noqa: E731
         self.runner = Runner("flow", self.settings, self.accounts, status,
-                             lambda reason: self.bridge.finished.emit(reason), resume=self.general.resume.isChecked())
+                             lambda reason: self.bridge.finished.emit(reason))
         device = ("Google Play Games (PC)" if self.settings["device"]["type"] == "pc"
                   else f"ADB {self.settings['device']['adb_serial']}")
         self.bridge.status.emit({"device": device})
@@ -561,6 +562,8 @@ class MainWindow(QMainWindow):
                              "was selected.", timeout=60000, action=("Cancel shutdown", self._cancel_shutdown))
         if self._running and ("action" in st or "step" in st):
             self.flow_panel.set_running_key(self.live.current_step())
+        if "start_from" in st:
+            self.flow_panel.set_start(st["start_from"])
 
     def _dismiss_wait(self):
         t, self._wait_toast = self._wait_toast, None

@@ -128,6 +128,7 @@ class AttackAllSettings(StepSettings):
         atk = Card("Accounts and army", "Each account attacks until its storages are full, then the next one "
                    "goes.", icon="swords", color=T.GOLD)
         self.accounts_field = AccountsField()
+        self.accounts_field.step = self.key
         atk.add(self.accounts_field)
         atk.add(divider())
         self.battle_seconds = Spin(20, 180, suffix=" s")
@@ -521,6 +522,7 @@ class BBAttackSettings(StepSettings):
         who = Card("Accounts and army", "Accounts without a Builder Base yet are skipped automatically.",
                    icon="boat", color=NIGHT)
         self.accounts_field = AccountsField()
+        self.accounts_field.step = self.key
         who.add(self.accounts_field)
         who.add(divider())
         self.army = Combo(BB_ARMIES)
@@ -597,6 +599,7 @@ class _ListStep(StepSettings):
         super().__init__(parent)
         self.who = Card(who_title, icon=who_icon, color=color)
         self.accounts_field = AccountsField()
+        self.accounts_field.step = self.key
         self.who.add(self.accounts_field)
         self.cols.add(self.who, 0)
         self.order_card = Card(order_title, order_text, icon="list", color=color)
@@ -708,12 +711,9 @@ class GeneralSettings(StepSettings):
         self.when_full = Combo(WHEN_FULL)
         self.when_done = Combo(WHEN_DONE)
         self.rounds = Spin(0, 999, special="Forever")
-        self.resume = Toggle(checked=True)          # not saved: on at every start of the window
         card.add(SettingRow("When an account is full", control=self.when_full, control_width=190))
         card.add(SettingRow("When the run ends", control=self.when_done, control_width=190))
         card.add(SettingRow("Rounds over the flow", "0 = Forever", self.rounds, 120))
-        card.add(SettingRow("Continue where the last run stopped", "Off: start the flow from its first step",
-                            self.resume))
         self.cols.add(card, 0)
         self._connect(self.when_full, self.when_done, self.rounds)
 

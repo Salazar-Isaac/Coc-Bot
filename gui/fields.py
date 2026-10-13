@@ -55,6 +55,7 @@ class AccountsField(QWidget):
                  "Empty = all.", parent=None):
         super().__init__(parent)
         self._accounts = []
+        self.step = None                  # the step these accounts are for (upgrades skip the Main / Looters)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(2)
@@ -91,7 +92,7 @@ class AccountsField(QWidget):
         self._update()
 
     def picked(self):
-        return flow.step_accounts(self.text(), self._accounts) if self.is_valid() else []
+        return flow.step_accounts(self.text(), self._accounts, self.step) if self.is_valid() else []
 
     def _update(self, *_):
         ok = self.is_valid()
@@ -100,7 +101,9 @@ class AccountsField(QWidget):
             self.edit.style().unpolish(self.edit)
             self.edit.style().polish(self.edit)
         if ok:
-            text = flow.describe_accounts(self.text(), self._accounts)
+            text = flow.describe_accounts(self.text(), self._accounts, step=self.step)
+            if self.step in flow.UPGRADE_STEPS:
+                text += " · the Main and Looters (accounts 1-2) are never upgraded"
             color = T.TEXT_MUTED if self.picked() else T.AMBER
             self.icon.setPixmap(icons.pixmap("users", color, 14))
         else:

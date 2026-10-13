@@ -156,6 +156,8 @@ class SettingsPanel(QWidget):
     """All settings in one scroll area. pages = the parts with load / apply / changed / set_running."""
 
     changed = Signal()
+
+    accounts_rows_changed = Signal(list)          # the Accounts table changed (not saved yet)
     add_requested = Signal(str)
 
     def __init__(self, parent=None):
@@ -321,6 +323,7 @@ class SettingsPanel(QWidget):
             if hasattr(b, "set_accounts") and k not in ("accounts", "device", "donate"):
                 b.set_accounts(rows)
         self.sections["accounts"].set_summary(self.accounts.summary())
+        self.accounts_rows_changed.emit(rows)
 
     def details(self):
         """Short text per function for its rows in the flow (accounts it works on, ...)."""
