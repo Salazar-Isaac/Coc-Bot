@@ -30,9 +30,13 @@ log = logging.getLogger("bot")
 # --- army screen ------------------------------------------------------------------------
 
 def open_army(bot):
+    """The army screen. Since the 2026-10 UI there is no army button: Battle -> Edit Army."""
     if not go_home(bot):
         raise BotError("Not on the home village")
-    bot.tap_point("home.army")
+    bot.tap_point("home.attack")
+    if not bot.wait("attack_menu/find_match", 6, interval=0.2):
+        raise BotError("Battle menu did not open")
+    bot.tap_point("attack_menu.edit_army")
     if not bot.wait("army/my_army_title", 8, interval=0.25):
         raise BotError("Army screen did not open")
     bot.sleep(0.35)
@@ -40,7 +44,10 @@ def open_army(bot):
 
 def close_army(bot):
     bot.tap_point("army.close")
-    bot.sleep(0.3)
+    bot.sleep(0.4)
+    if bot.exists("attack_menu/find_match"):         # back in the Battle menu: close it too
+        bot.tap_point("attack_menu.close")
+        bot.sleep(0.4)
 
 
 def _active(frame, key, region=None):

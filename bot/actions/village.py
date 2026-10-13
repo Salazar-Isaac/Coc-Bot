@@ -134,7 +134,12 @@ def parse_menu(frame, cx):
 
 
 def close_menu(bot, point="home.safe"):
-    bot.tap_point(point, jitter=5)
+    """Close the builder / laboratory side panel (its X) - or tap an empty spot when it is not open
+    (the panel covers the right side: a tap there would hit one of its rows)."""
+    if bot.exists("build/close"):
+        bot.tap_point("build.close")
+    else:
+        bot.tap_point(point, jitter=5)
     bot.sleep(0.5)
 
 

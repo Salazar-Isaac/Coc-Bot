@@ -60,8 +60,8 @@ WEAPON_WORDS = ("giga", "weapon")
 MENU = (430, 118, 860, 590)          # builder menu panel around its counter: half width, top, width, height
 
 # where each village keeps its builder menu, its builder counter and an empty spot to tap
-MAIN = {"menu": "top.builders_menu", "counter": "top.builders", "safe": "home.safe"}
-BB = {"menu": "bb.builders_menu", "counter": "bb.builders", "safe": "bb.safe"}
+MAIN = {"menu": "top.builders_menu", "tab": "build.tab_builders", "counter": "top.builders", "safe": "home.safe"}
+BB = {"menu": "bb.builders_menu", "tab": "bb.build_tab_builders", "counter": "bb.builders", "safe": "bb.safe"}
 
 
 # every building name the menus can show: a name read with a slip ("ArchereTower") is matched to the
@@ -127,72 +127,115 @@ def _is_weapon(row):
 
 
 # --- reading the builder menu ------------------------------------------------------------------
+# Since the 2026-10 UI the builder and laboratory menus are one side panel on the right (the Build
+# button, bottom right), with tabs at its bottom. A row: name on the first line, the time on the
+# right of it, the price under the time (right-aligned, its resource icon RIGHT of it); "New" under
+# the name for a building not built yet. Upgrades in progress come first (no header), then
+# "Suggested upgrades" and "Other upgrades". Tapping a row opens its upgrade window directly.
+
+PANEL = (1410, 70, 505, 890)          # the list part of the side panel (above its tabs)
+NAME_X = (1475, 1530)                 # names start here (after the picture)
+PRICE_RIGHT = 1880                    # prices end here (their resource icon is right of them)
+
+
+def open_menu(bot, where):
+    """Open the side panel on this menu's tab. True if it is open."""
+    if bot.exists("build/close"):
+        bot.tap_point("build.close")                  # start from the top of the list
+        bot.sleep(0.6)
+    bot.tap_point(where["menu"])
+    if not bot.wait("build/close", 4, interval=0.2):
+        return False
+    bot.tap_point(where["tab"])
+    bot.sleep(0.9)
+    return True
+
 
 def _panel(bot, where):
-    cx = bot.layout.point(where["menu"])[0]
-    half, top, w, h = MENU
-    return (max(0, cx - space.s(half)), space.point(0, top)[1], space.s(w), space.s(h)), cx
+    return space.region(*PANEL), space.point(PANEL[0] + PANEL[2] // 2, 0)[0]
 
 
 def _is_cost(text):
-    return len(re.sub(r"\D", "", text)) >= 4 and not re.search(r"[A-Za-z]{3,}", text)
+    return len(re.sub(r"\D", "", text)) >= 3 and not re.search(r"[A-Za-z]", text)
 
 
-def _read_page(frame, region, cols, section):
-    """Rows with a price on one page of the open builder menu.
-    cols: [name column x, price column right edge] learned from a page that shows a header
-    (updated in place); section: the section the page starts in. Returns (rows, section at the end)."""
-    lines = sorted(vision.text_reader.read(frame, region), key=lambda t: (t[2][1], t[2][0]))
-    for t, c, b in lines:
-        if t.lower().replace(" ", "").rstrip(":").endswith(("progress", "upgrades")):
-            cols[0] = b[0] if cols[0] is None else min(cols[0], b[0])
-    if cols[0] is None:
-        return [], section
-    costs = [b for t, c, b in lines if _is_cost(t) and b[0] > cols[0] + space.s(150)]
-    if costs:
-        cols[1] = max(b[0] + b[2] for b in costs)
-    if cols[1] is None:
-        return [], section
-    left, right = cols
-    names, prices = [], []
-    for text, conf, box in lines:
-        low = text.lower().replace(" ", "")
-        x, y, w, h = box
-        if abs(x - left) < space.s(25) and low.rstrip(":").endswith(("progress", "upgrades")):
-            section = "progress" if "progress" in low else ("suggested" if "suggested" in low else "other")
-            continue
-        if _is_cost(text) and abs(x + w - right) < space.s(40):
-            exact = vision.digits.read(frame, (x - 4, y - 2, w + 8, h + 4))
-            digits = re.sub(r"\D", "", text)
-            cost = exact if exact and len(str(exact)) >= len(digits) else int(digits)
-            if cost >= 100 and section in ("suggested", "other"):
-                prices.append({"cost": cost, "box": box, "section": section})
-        elif conf > 0.5 and section in ("suggested", "other") and left - 10 <= x < right - space.s(120):
-            names.append((text, box, conf))
-    rows = []
-    for p in prices:
-        cy = p["box"][1] + p["box"][3] / 2
-        parts = sorted((n for n in names if abs(n[1][1] + n[1][3] / 2 - cy) < space.s(16) and n[1][0] < p["box"][0]),
-                       key=lambda n: n[1][0])
-        if not parts or p["box"][1] + p["box"][3] > region[1] + region[3] - space.s(30):
-            continue                                  # no name, or cut off at the bottom
-        if min(c for _, _, c in parts) < 0.8:
-            continue                                  # unsure what it is: never upgrade a guess
-        raw = " ".join(t for t, _, _ in parts)
-        is_new = bool(re.match(r"^\s*New\b", raw))
-        name = re.sub(r"^New\s*:?\s*", "", raw).strip()
-        nbox = parts[0][1]
-        rows.append({"name": name, "base": _base(name), "cost": p["cost"], "new": is_new,
-                     "res": village._icon_resource(frame, p["box"]), "red": village._is_red(frame, p["box"]),
-                     "section": p["section"], "tap": (nbox[0] + min(nbox[2], space.s(160)) // 2, nbox[1] + nbox[3] // 2)})
-    return rows, section
+def _resource_right(frame, box):
+    """The resource icon right of a price: gold / elixir / dark / gems (the panel itself is brown,
+    so its colour is not counted: only the icons' own colours)."""
+    x, y, w, h = box
+    patch = frame[max(0, y - 2):y + h + 2, x + w:x + w + space.s(30)]
+    if patch.size == 0:
+        return None
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
+    hue, sat, val = hsv[:, 0], hsv[:, 1], hsv[:, 2]
+    counts = {"elixir": ((hue >= 125) & (hue <= 170) & (sat > 80) & (val > 80)).sum(),
+              "gold": ((hue >= 20) & (hue <= 35) & (sat > 150) & (val > 180)).sum(),
+              "gems": ((hue >= 40) & (hue <= 95) & (sat > 100) & (val > 100)).sum() * 2.5}
+    best = max(counts, key=counts.get)
+    if counts[best] > 100:
+        return best
+    return "dark" if (val < 60).sum() > 150 else None
 
 
 def _moved(a, b):
-    """Did the menu list move between two pictures of it? The panel is see-through, so the village
-    behind it changes a little all the time (~5% of the pixels); a scroll changes 14-17%."""
+    """Did the list move between two pictures of it? (a scroll changes far more of it than the
+    small animations of the panel do)"""
     d = np.abs(a.astype(np.int16) - b.astype(np.int16)).max(axis=2)
     return float((d > 60).mean()) > 0.09
+
+
+def _read_page(frame, region, cols, section):
+    """Rows with a price on one page of the open panel (cols: kept for the callers, unused);
+    section: the section the page starts in. Returns (rows, section at the end)."""
+    lines = sorted(vision.text_reader.read(frame, region), key=lambda t: (t[2][1], t[2][0]))
+    sx = space.s(100) / 100
+    lo, hi = space.point(NAME_X[0], 0)[0], space.point(NAME_X[1], 0)[0]
+    right = space.point(PRICE_RIGHT, 0)[0]
+    names, prices, news, heads = [], [], [], []
+    for text, conf, box in lines:
+        x, y, w, h = box
+        low = re.sub(r"[^a-z]", "", text.lower())
+        if low.endswith("upgrades") and ("suggested" in low or "other" in low):
+            heads.append((y, "suggested" if "suggested" in low else "other"))
+        elif _is_cost(text) and abs(x + w - right) < 30 * sx:
+            exact = vision.digits.read(frame, (x - 4, y - 2, w + 8, h + 4))
+            digits = re.sub(r"\D", "", text)
+            cost = exact if exact and len(str(exact)) >= len(digits) else int(digits)
+            prices.append({"cost": cost, "box": box})
+        elif low == "new" and lo - 20 * sx <= x <= hi:
+            news.append(box)
+        elif conf > 0.5 and lo <= x <= hi:
+            names.append((text, box, conf))
+
+    def section_at(y):
+        sec = section
+        for hy, name in heads:
+            if hy < y:
+                sec = name
+        return sec
+
+    rows = []
+    for p in prices:
+        px, py, pw, ph = p["box"]
+        sec = section_at(py)
+        if sec not in ("suggested", "other"):
+            continue
+        if py + ph > region[1] + region[3] - 10 * sx:
+            continue                                  # cut off at the bottom
+        above = [n for n in names if py - 50 * sx <= n[1][1] < py - 5 * sx]
+        if not above:
+            continue                                  # its name is cut off at the top
+        text, nbox, conf = max(above, key=lambda n: n[1][1])
+        if conf < 0.8:
+            continue                                  # unsure what it is: never upgrade a guess
+        is_new = any(abs(b[1] - py) < 25 * sx for b in news)
+        rows.append({"name": text.strip(), "base": _base(text), "cost": p["cost"], "new": is_new,
+                     "res": _resource_right(frame, p["box"]), "red": village._is_red(frame, p["box"]),
+                     "section": sec,
+                     "tap": (nbox[0] + min(nbox[2], space.s(160)) // 2, nbox[1] + nbox[3] // 2)})
+    if heads:
+        section = heads[-1][1]
+    return rows, section
 
 
 def _scroll(bot, region, cx):
@@ -212,9 +255,8 @@ def scan(bot, where=MAIN, max_pages=14, enough=None):
     """Open a builder menu and read every upgradable item (scrolling through the list).
     Each row gets the page it is on. The menu is left open, scrolled to the end - or, when
     enough(rows) says so after a page, left on that page (its rows can be tapped right away)."""
-    village.close_menu(bot, where["safe"])           # a menu left open: tapping its button would close it
-    bot.tap_point(where["menu"])
-    bot.sleep(1.0)
+    if not open_menu(bot, where):
+        return []
     region, cx = _panel(bot, where)
     cols, section = [None, None], "progress"
     seen, out = set(), []
@@ -242,8 +284,8 @@ def _open_row(bot, item, where=MAIN, home=None):
     one with the closest price. True if tapped."""
     village.close_menu(bot, where["safe"])
     (home or go_home)(bot, 15)
-    bot.tap_point(where["menu"])
-    bot.sleep(1.0)
+    if not open_menu(bot, where):
+        return False
     region, cx = _panel(bot, where)
     cols, section = [None, None], "progress"
     for page in range(item["page"] + 4):
@@ -311,13 +353,16 @@ def _start(bot, item, where, home):
         village.close_menu(bot, where["safe"])
         return False
     bot.sleep(1.2)
-    up = bot.wait("building/upgrade_button", 4)
-    if not up:
-        log.info("%s: no Upgrade button", item["name"])
+    # the 2026-10 UI opens the upgrade window straight from the row; the older one first selected
+    # the building and showed an Upgrade button
+    key, m = bot.wait_any(["upgrade/confirm", "upgrade/close", "building/upgrade_button"], 5)
+    if key == "building/upgrade_button":
+        bot.tap_match(m)
+        bot.sleep(1.2)
+    elif key is None:
+        log.info("%s: its upgrade window did not open", item["name"])
         village.close_menu(bot, where["safe"])
         return False
-    bot.tap_match(up)
-    bot.sleep(1.2)
     ok = village._confirm(bot, item, "builders", home=None if home is go_home else home)
     village.close_menu(bot, where["safe"])
     return ok
@@ -414,15 +459,25 @@ def _build_new(bot, item, home):
         village.close_menu(bot, BB["safe"])
         return False
     bot.sleep(1.5)
-    # the arrow's tip (it can be half off the screen for a card at the right edge) sits on the
-    # card's top-right corner: the card is just below-left of it
-    tip = bot.wait("shop/new_arrow_tip", 6)
-    if not tip:
-        log.info("%s: the Shop did not point at it", item["name"])
-        bot.save_error("bb-new-arrow")
+    # older UI: the Shop opens with an arrow at the card; the arrow's tip (it can be half off the
+    # screen for a card at the right edge) sits on the card's top-right corner. The 2026-10 UI may
+    # put the building on the village straight away: then there is no Shop step.
+    tip, end = None, time.monotonic() + 6
+    while time.monotonic() < end:
+        f = bot.shot()
+        if states.placement(f)[0]:
+            break                                      # already waiting to be placed
+        tip = vision.find(f, "shop/new_arrow_tip") if vision.templates.has("shop/new_arrow_tip") else None
+        if tip:
+            break
+        control.sleep(0.4)
+    if tip:
+        bot.tap(tip.box[0] - space.s(40), tip.box[1] + tip.box[3] + space.s(52), jitter=3)
+    elif not states.placement(bot.shot())[0]:
+        log.info("%s: neither the Shop nor the building to place showed up", item["name"])
+        bot.save_error("bb-new-building")
         home(bot, 20)
         return False
-    bot.tap(tip.box[0] - space.s(40), tip.box[1] + tip.box[3] + space.s(52), jitter=3)
     tick = None
     end = time.monotonic() + 6
     last = None

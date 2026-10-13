@@ -6,8 +6,9 @@ exist before the bot can run its basic loop.
 
 CATALOG = [
     # key, screen, how to capture, required
-    ("home/attack_button", "Home", "The 'Attack!' button, bottom-left of the village", True),
-    ("home/settings_button", "Home", "The settings gear, bottom-right", True),
+    ("home/attack_button", "Home", "The trophy (cup) button on the left, under the profile picture - only in the "
+     "home village", True),
+    ("home/settings_button", "Home", "The dark elixir drop at the right end of the dark elixir bar", True),
     ("home/chat_button", "Home", "The chat button on the left edge", False),
     ("home/social_button", "Home", "The 'Social' button shown instead of chat when not in a clan", False),
     ("attack_menu/find_match", "Attack menu", "The words 'Find a Match' on the Battle card (not the cost)", True),
@@ -25,9 +26,10 @@ CATALOG = [
     ("chest/room", "Chest", "The wooden pillar on the right of the reward-chest room", False),
     ("chest/tap_text", "Chest", "The word 'Tap!' above a reward chest", False),
     ("chest/continue", "Chest", "The green 'Continue' after opening a chest", False),
-    ("settings/title", "Settings", "The 'Settings' title", True),
+    ("settings/title", "Settings", "The selected 'Settings' tab of the profile menu (profile picture, top left)", True),
     ("settings/switch_id", "Settings", "The blue switch-account button (two arrows)", True),
-    ("settings/close", "Settings", "The red X, top-right", True),
+    ("settings/close", "Settings", "The red X of the profile menu, top-right", True),
+    ("build/close", "Build panel", "The red X of the Build side panel (Build button, bottom right)", False),
     ("sid/switch_id_label", "Supercell ID", "The 'SWITCH ID' label in the account panel", True),
     ("sid/close", "Supercell ID", "The X, top-right of the account panel", True),
     ("load/loading", "Loading", "Something unique on the loading screen", False),

@@ -15,8 +15,8 @@ from .space import space
 DEFAULT_LAYOUT = {
     "points": {
         "home.attack": [105, 975],
-        "home.settings": [1855, 830],
-        "home.chat": [65, 490],
+        "home.settings": [85, 100],   # profile picture (top left): Settings is a tab of the profile menu since the 2026-10 UI
+        "home.chat": [85, 545],   # clan chat (shield with a speech bubble, left)
         "home.army": [65, 830],
         "home.safe": [1830, 420],          # home village: forest edge (NOT 330: that is the gems counter -> Shop)
         "bb.safe": [1640, 470],            # Builder Base: forest right of the island (NOT the top: the boat is there)
@@ -29,7 +29,7 @@ DEFAULT_LAYOUT = {
         "scout.next": [1775, 820],
         "scout.end_battle": [115, 848],
         "settings.switch_id": [1237, 228],
-        "settings.close": [1545, 118],
+        "settings.close": [1620, 122],
         "sid.close": [1866, 53],
         "sid.scroll_from": [1620, 1010],
         "sid.scroll_to": [1620, 610],
@@ -42,42 +42,50 @@ DEFAULT_LAYOUT = {
         "chat.scroll_to": [300, 760],
         "donate.close": [1660, 640],         # village right of the donate window (it moves up and down)
         "popup.close_x": [1615, 155],        # the X of big popups (daily reward, offers)
-        "top.builders_menu": [960, 50],      # builder counter -> upgrades list
+        "top.builders_menu": [1815, 975],   # Build button (bottom right) -> side panel, first tab = builders
         "army.recipes_arrow": [1140, 155],   # Saved Recipes drop-down arrow in the army screen
-        "home.boat": [450, 925],             # boat to the Builder Base (home village, zoomed out)
+        "home.boat": [420, 945],   # boat to the Builder Base (bottom left, by the 2x / shield buttons)
         "bb.boat": [1620, 120],              # boat back home (Builder Base, zoomed out; top right)
         "bb.attack": [105, 975],
-        "bb.builders_menu": [1080, 50],
-        "bb.lab_menu": [880, 50],
+        "bb.builders_menu": [1815, 975],
+        "bb.lab_menu": [1815, 975],
         "bb.army": [65, 830],                # Builder Base army button (left)
         "bb.army_clear": [1493, 575],        # red trash button in "Choose Army"
         "bb.army_close": [1600, 220],
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
         "request.cancel": [768, 722],        # Cancel of the request window
-        "top.lab_menu": [760, 50],           # laboratory counter -> research list
+        "profile.settings_tab": [1475, 127],   # the Settings tab of the profile menu
+        "attack_menu.edit_army": [190, 1030],   # Battle menu: Edit Army (the army screen; there is no army button)
+        "build.close": [1888, 34],   # X of the Build side panel
+        "build.tab_builders": [1468, 1010],   # Build panel tabs: builders
+        "build.tab_lab": [1597, 1010],   # Build panel tabs: laboratory (Army Upgrades)
+        "bb.build_tab_builders": [1530, 1010],   # Builder Base Build panel: builders
+        "bb.build_tab_lab": [1790, 1010],   # Builder Base Build panel: Star Laboratory
+        "bb.edit_army": [633, 852],   # Builder Base Battle window: Edit Army -> Choose Army
+        "top.lab_menu": [1815, 975],   # the same Build button; the laboratory is the panel's second tab
     },
     "regions": {
-        "home.gold": [1600, 28, 230, 44],
-        "home.elixir": [1600, 112, 230, 46],
-        "home.dark": [1680, 196, 150, 44],
-        "home.gems": [1700, 278, 140, 44],
-        "scout.gold": [78, 122, 220, 34],
-        "scout.elixir": [78, 170, 220, 34],
-        "scout.dark": [78, 217, 220, 34],
+        "home.gold": [1600, 28, 245, 40],
+        "home.elixir": [1600, 90, 245, 40],
+        "home.dark": [1680, 152, 165, 38],
+        "home.gems": [1700, 216, 145, 36],
+        "scout.gold": [78, 112, 230, 32],
+        "scout.elixir": [78, 160, 230, 32],
+        "scout.dark": [78, 208, 230, 32],
         "sid.list": [1345, 520, 560, 560],
         "sid.name_column": [1460, 520, 320, 560],
         "battle.troop_bar": [260, 915, 1660, 160],
-        "top.builders": [950, 32, 66, 40],   # "1/5" free builders
+        "top.builders": [1738, 845, 76, 50],   # "2/5" free builders, bottom right above the Build button
         "army.recipe_list": [865, 210, 550, 560],   # the Saved Recipes drop-down list
-        "bb.gold": [1600, 28, 230, 44],
-        "bb.elixir": [1600, 112, 230, 46],
-        "bb.stars": [75, 900, 100, 42],      # star bonus "4/8" on the Attack button
-        "bb.builders": [1075, 32, 70, 40],
-        "bb.lab": [875, 32, 70, 40],
-        "home.player_name": [115, 14, 250, 32],      # in-game name next to the level badge
+        "bb.gold": [1600, 28, 245, 40],
+        "bb.elixir": [1600, 90, 245, 40],
+        "bb.stars": [70, 846, 110, 46],   # star bonus "0/9" above the Battle button
+        "bb.builders": [1738, 845, 76, 50],
+        "bb.lab": [1815, 845, 80, 50],
+        "home.player_name": [150, 66, 320, 40],   # in-game name next to the Town Hall picture
         "army.request_timer": [1688, 830, 112, 36],   # "10m" under the gem price while on cooldown
         "bb.reward_gold": [1140, 650, 150, 45],
-        "top.lab": [752, 32, 66, 40],        # "0/1" free laboratory
+        "top.lab": [1815, 845, 80, 50],   # "1/2" free laboratory (goblin icon), next to the builders
     },
 }
 

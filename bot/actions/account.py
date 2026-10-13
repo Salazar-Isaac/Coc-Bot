@@ -101,9 +101,13 @@ def open_switcher(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
     for attempt in range(2):                      # a tap during an animation can be lost: tap again
+        # since the 2026-10 UI Settings is a tab of the profile menu (the profile picture, top left);
+        # the menu opens on the tab used last
         bot.tap_point("home.settings")
-        if bot.wait("settings/title", 4, interval=0.15):
-            break
+        if bot.wait_any(["settings/title", "settings/close"], 4, interval=0.15)[0]:
+            if bot.exists("settings/title") or (bot.tap_point("profile.settings_tab") or
+                                                bot.wait("settings/title", 3, interval=0.15)):
+                break
         if not go_home(bot, 10):
             raise BotError("Not on the home village")
     else:

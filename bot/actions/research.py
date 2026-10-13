@@ -15,8 +15,10 @@ from . import timers, village
 log = logging.getLogger("bot")
 
 # like upgrades.MAIN / upgrades.BB: the menu button, its counter and an empty spot to tap
-HOME = {"counter": "top.lab", "menu": "top.lab_menu", "safe": "home.safe", "label": "Laboratory"}
-BUILDER = {"counter": "bb.lab", "menu": "bb.lab_menu", "safe": "bb.safe", "label": "Star Laboratory"}
+HOME = {"counter": "top.lab", "menu": "top.lab_menu", "tab": "build.tab_lab", "safe": "home.safe",
+        "label": "Laboratory"}
+BUILDER = {"counter": "bb.lab", "menu": "bb.lab_menu", "tab": "bb.build_tab_lab", "safe": "bb.safe",
+           "label": "Star Laboratory"}
 
 
 def _norm(name):

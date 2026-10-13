@@ -29,23 +29,19 @@ def parse_time(text):
     return sum(int(n) * _UNITS[u] for n, u in parts)
 
 
-def progress_times(frame, cx):
-    """Times of the rows under "... in progress" in an open builder / lab menu (counter at x=cx)."""
-    region = (max(0, cx - space.s(430)), space.point(0, 118)[1], space.s(860), space.s(590))
-    lines = sorted(vision.text_reader.read(frame, region), key=lambda t: (t[2][1], t[2][0]))
-    inside, out = False, []
+def progress_times(frame, cx=None):
+    """Times of the upgrades in progress at the top of the open builder / lab side panel (above its
+    "Suggested upgrades" / "Other upgrades"; since the 2026-10 UI they have no header of their own)."""
+    from .upgrades import PANEL
+    lines = sorted(vision.text_reader.read(frame, space.region(*PANEL)), key=lambda t: (t[2][1], t[2][0]))
+    out = []
     for text, conf, box in lines:
         low = text.lower().replace(" ", "").rstrip(":")
-        if low.endswith("progress"):
-            inside = True
-            continue
         if low.endswith("upgrades") or low.endswith("research"):
-            inside = False
-            continue
-        if inside:
-            secs = parse_time(text)
-            if secs:
-                out.append(secs)
+            break                                       # the upgradable rows start here
+        secs = parse_time(text)
+        if secs:
+            out.append(secs)
     return out
 
 
@@ -55,10 +51,9 @@ def _timers(bot):
 
 def note_busy(bot, account, kind, where):
     """Everything of this kind is busy: open its menu, read when the first one is done, remember it."""
-    bot.tap_point(where["menu"])
-    bot.sleep(1.0)
-    times = progress_times(bot.shot(), bot.layout.point(where["menu"])[0])
+    from .upgrades import open_menu
     from .village import close_menu
+    times = progress_times(bot.shot()) if open_menu(bot, where) else []
     close_menu(bot, where["safe"])
     t = _timers(bot).setdefault(account["name"], {})
     if times:

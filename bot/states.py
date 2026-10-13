@@ -46,7 +46,7 @@ STATES = [
     ("loading", ["load/loading"]),
 ]
 
-CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close"]
+CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close", "build/close"]   # build: the Build side panel
 # Buttons worth tapping wherever they appear when the screen is not recognised.
 ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "popup/continue_green",
                     "battle/confirm_okay",

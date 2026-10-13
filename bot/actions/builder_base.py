@@ -98,7 +98,12 @@ def _find_boat(bot, here):
             control.sleep(0.6)
         m, sc = vision.find_scaled(bot.shot(), "boat/icon")
         if m:
-            return type(m)(m.x, int(m.y + 80 * sc), m.score, m.box)    # the boat is under its icon
+            # the boat is under its icon; near the bottom the button bar covers the boat: tap just under
+            # the icon then (the bubble itself is the boat's too)
+            y = int(m.y + 80 * sc)
+            if y > space.point(0, 930)[1]:
+                y = int(m.y + 45 * sc)
+            return type(m)(m.x, y, m.score, m.box)
     return None
 
 
@@ -591,7 +596,10 @@ def set_army(bot, choice):
     if not choice or choice == "keep":
         return None
     wanted = AUTO_ORDER if choice == "auto" else [choice] + [u for u in AUTO_ORDER if u != choice]
-    bot.tap_point("bb.army")
+    # since the 2026-10 UI: Battle -> "Edit Army" in the Start Attack window -> Choose Army
+    bot.tap_point("bb.attack")
+    if bot.wait("bb/find_now", 5, interval=0.25):
+        bot.tap_point("bb.edit_army")
     if not bot.wait("bb/army_title", 5, interval=0.25):
         log.warning("Builder Base army screen did not open")
         go_home_bb(bot, 15)
