@@ -130,7 +130,12 @@ def request_round(bot, state):
             requested_at[acc["name"]] = time.time()
             _learn(state, "request_secs", time.monotonic() - started)
             if bot.request_cooldown:
+                old = state.get("request_cooldown")
+                if old and abs(bot.request_cooldown - old) > 30:
+                    log.info("The clan's request cooldown is now %dm %ds (was %dm): the rounds follow it",
+                             bot.request_cooldown // 60, bot.request_cooldown % 60, old // 60)
                 state["request_cooldown"] = bot.request_cooldown
+                cooldown = bot.request_cooldown            # this round already uses the new time
         if acc.get("_no_clan"):
             state.setdefault("no_clan", {})[acc["name"]] = time.time()
             config.save_state(state)

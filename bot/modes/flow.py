@@ -78,7 +78,9 @@ def _run_once(bot, ctx, key):
         main = _main_account(bot)
         bot.status(account=main["name"], action="Donating", progress="")
         log.info("== Donate")
-        donation_cycle(bot, main, ctx.state)
+        result = donation_cycle(bot, main, ctx.state)
+        if result == "low" and not any(BY_KEY[k].key in ("attack_all", "loot_current") for k in ctx.keys):
+            raise StopRun("Main's elixir is low: Donate only is done (Loot + Donate loots it back)")
     elif key == "loot_current":
         _loot_current(bot, ctx)
 

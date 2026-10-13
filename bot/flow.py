@@ -43,11 +43,12 @@ STEPS = [
 ]
 BY_KEY = {s.key: s for s in STEPS}
 
-# Upgrading and researching never happens on the Main or the Looters (Buggu01, Omi ji): those
-# accounts loot and donate, they keep their resources for that.
+# Upgrading and researching never happens on accounts 1-2 (Buggu01 = Main, Omi ji) - nor on any
+# account with the Main / Looter role: those accounts loot and donate, they keep their resources.
 LOOTERS = ("main", "loot", "both")
 UPGRADERS = ("both", "feeder")
 NO_UPGRADE_ROLES = ("main", "loot")
+NO_UPGRADE_POSITIONS = (1, 2)
 UPGRADE_STEPS = ("home_upgrade", "bb_upgrade", "home_research", "bb_research")
 
 
@@ -59,7 +60,8 @@ class Option:
     description: str
     icon: str
     steps: tuple          # the flow it runs
-    roles: dict           # which accounts each step gets (by role on the Accounts list), set when chosen
+    roles: dict           # which accounts each step gets, set when chosen: roles on the Accounts list, or
+    #                       a position list ("1-2") as text
 
 
 _UP = ("both",)           # default accounts for upgrades: the "Loot + request" ones (3-15 here)
@@ -74,8 +76,8 @@ OPTIONS = [
            "swords", ("attack_all", "bb_attack"), {"attack_all": LOOTERS, "bb_attack": LOOTERS}),
     Option("donate_only", "Donate", "Donate only", "The others request, the Main donates while it has elixir",
            "gift", ("donate",), {}),
-    Option("loot_donate", "Donate", "Loot + Donate", "Main and Looters loot; the others request; the Main donates",
-           "gift", ("donate", "attack_all"), {"attack_all": ("main", "loot")}),
+    Option("loot_donate", "Donate", "Loot + Donate", "Accounts 1-2 (Main, Omi ji) loot; the others request; Main donates",
+           "gift", ("donate", "attack_all"), {"attack_all": "1-2"}),
     Option("home_upgrade", "Upgrade", "Home loot + upgrade", "Upgrade, loot until full, upgrade again (village)",
            "hammer", ("home_upgrade", "attack_all", "home_upgrade"), {"attack_all": LOOTERS, "home_upgrade": _UP}),
     Option("bb_upgrade", "Upgrade", "Builder loot + upgrade", "Upgrade, loot, upgrade again on the Builder Base",
@@ -123,8 +125,9 @@ PRESETS = [(o.title, list(o.steps), o.roles) for o in OPTIONS]
 
 def preset_accounts(roles_by_step, accounts):
     """{step: "1-2"}: the positions of the accounts with those roles (Use on)."""
-    return {key: positions_spec([i + 1 for i, a in enumerate(accounts)
-                                 if a.get("enabled", True) and a.get("role") in roles])
+    return {key: roles if isinstance(roles, str) else
+            positions_spec([i + 1 for i, a in enumerate(accounts) if a.get("enabled", True) and a.get("role") in roles
+                            and not (key in UPGRADE_STEPS and i + 1 in NO_UPGRADE_POSITIONS)])
             for key, roles in roles_by_step.items()}
 
 
@@ -214,9 +217,11 @@ def step_accounts(spec, accounts, step=None):
     """The accounts a step works on: the positions in `spec`, in list order, skipping accounts whose
     "Use" is off or whose role is Skip - and for upgrades / research the Main and the Looters,
     always. Returns [(position, account)]."""
-    skip = ("skip",) + (NO_UPGRADE_ROLES if step in UPGRADE_STEPS else ())
+    upgrade = step in UPGRADE_STEPS
+    skip = ("skip",) + (NO_UPGRADE_ROLES if upgrade else ())
     return [(p, accounts[p - 1]) for p in parse_positions(spec, len(accounts))
-            if accounts[p - 1].get("enabled", True) and accounts[p - 1].get("role") not in skip]
+            if accounts[p - 1].get("enabled", True) and accounts[p - 1].get("role") not in skip
+            and not (upgrade and p in NO_UPGRADE_POSITIONS)]
 
 
 def describe_accounts(spec, accounts, limit=4, step=None):
