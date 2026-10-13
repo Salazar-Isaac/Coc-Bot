@@ -43,21 +43,64 @@ STEPS = [
 ]
 BY_KEY = {s.key: s for s in STEPS}
 
-# one-click flows (the window shows them as presets): title, steps, and which accounts (by their role on
-# the Accounts list) each step gets - e.g. in Loot + Donate only the Main and the Looters loot, the
-# others request troops (Donate uses the roles: Looter, Loot + request and Feeder request)
+# Upgrading and researching never happens on the Main or the Looters (Buggu01, Omi ji): those
+# accounts loot and donate, they keep their resources for that.
 LOOTERS = ("main", "loot", "both")
-PRESETS = [
-    ("Loot all", ["attack_all"], {"attack_all": LOOTERS}),
-    ("Loot + Upgrade", ["home_upgrade", "attack_all", "home_upgrade"],
-     {"attack_all": LOOTERS, "home_upgrade": ("both",)}),
-    ("Loot + Donate", ["donate", "attack_all"], {"attack_all": ("main", "loot")}),
-    ("Builder Base", ["bb_upgrade", "bb_attack", "bb_upgrade"], {"bb_attack": LOOTERS, "bb_upgrade": ("both",)}),
-    ("Everything", ["home_upgrade", "attack_all", "home_upgrade", "home_research",
-                    "bb_upgrade", "bb_attack", "bb_upgrade", "bb_research"],
-     {"attack_all": LOOTERS, "home_upgrade": ("both",), "home_research": ("both",),
-      "bb_attack": LOOTERS, "bb_upgrade": ("both",), "bb_research": ("both",)}),
+UPGRADERS = ("both", "feeder")
+NO_UPGRADE_ROLES = ("main", "loot")
+UPGRADE_STEPS = ("home_upgrade", "bb_upgrade", "home_research", "bb_research")
+
+
+@dataclass(frozen=True)
+class Option:
+    key: str
+    group: str            # "Loot", "Donate", "Upgrade"
+    title: str
+    description: str
+    icon: str
+    steps: tuple          # the flow it runs
+    roles: dict           # which accounts each step gets (by role on the Accounts list), set when chosen
+
+
+_UP = ("both",)           # default accounts for upgrades: the "Loot + request" ones (3-15 here)
+OPTIONS = [
+    Option("loot_all", "Loot", "Loot all accounts", "Each account until its storages are full, then the next",
+           "swords", ("attack_all",), {"attack_all": LOOTERS}),
+    Option("loot_current", "Loot", "Loot current account", "Keeps attacking on one account, even when it is full",
+           "crosshair", ("loot_current",), {}),
+    Option("bb_loot", "Loot", "Builder Base loot", "Builder Base attacks on each account, no home attacks",
+           "boat", ("bb_attack",), {"bb_attack": LOOTERS}),
+    Option("home_bb_loot", "Loot", "Home + Builder loot", "Each account loots its village, then its Builder Base",
+           "swords", ("attack_all", "bb_attack"), {"attack_all": LOOTERS, "bb_attack": LOOTERS}),
+    Option("donate_only", "Donate", "Donate only", "The others request, the Main donates while it has elixir",
+           "gift", ("donate",), {}),
+    Option("loot_donate", "Donate", "Loot + Donate", "Main and Looters loot; the others request; the Main donates",
+           "gift", ("donate", "attack_all"), {"attack_all": ("main", "loot")}),
+    Option("home_upgrade", "Upgrade", "Home loot + upgrade", "Upgrade, loot until full, upgrade again (village)",
+           "hammer", ("home_upgrade", "attack_all", "home_upgrade"), {"attack_all": LOOTERS, "home_upgrade": _UP}),
+    Option("bb_upgrade", "Upgrade", "Builder loot + upgrade", "Upgrade, loot, upgrade again on the Builder Base",
+           "hammer", ("bb_upgrade", "bb_attack", "bb_upgrade"), {"bb_attack": LOOTERS, "bb_upgrade": _UP}),
+    Option("all_upgrade", "Upgrade", "Both loot + upgrade", "Village and Builder Base: upgrade, loot, upgrade",
+           "hammer", ("home_upgrade", "attack_all", "home_upgrade", "bb_upgrade", "bb_attack", "bb_upgrade"),
+           {"attack_all": LOOTERS, "home_upgrade": _UP, "bb_attack": LOOTERS, "bb_upgrade": _UP}),
+    Option("upgrade_only", "Upgrade", "Upgrade only", "Free builders to work in both villages, no attacks",
+           "hammer", ("home_upgrade", "bb_upgrade"), {"home_upgrade": _UP, "bb_upgrade": _UP}),
 ]
+OPTION = {o.key: o for o in OPTIONS}
+DEFAULT_OPTION = "loot_all"
+
+
+def option_flow(key, research=None):
+    """The steps an option runs; research={"home": True, "builder": True} adds Laboratory / Star
+    Laboratory research after that village's last upgrade step."""
+    opt = OPTION.get(key) or OPTION[DEFAULT_OPTION]
+    steps = list(opt.steps)
+    research = research or {}
+    for up, rs, village in (("bb_upgrade", "bb_research", "builder"), ("home_upgrade", "home_research", "home")):
+        if research.get(village) and up in steps:
+            last = len(steps) - 1 - steps[::-1].index(up)
+            steps.insert(last + 1, rs)
+    return steps
 
 
 def positions_spec(positions):
@@ -73,6 +116,9 @@ def positions_spec(positions):
     if run:
         out.append(f"{run[0]}-{run[-1]}" if len(run) > 1 else str(run[0]))
     return ", ".join(out)
+
+
+PRESETS = [(o.title, list(o.steps), o.roles) for o in OPTIONS]
 
 
 def preset_accounts(roles_by_step, accounts):
@@ -164,16 +210,18 @@ def spec_ok(spec):
                                             for p in re.split(r"[,;]+", spec) if p.strip())
 
 
-def step_accounts(spec, accounts):
+def step_accounts(spec, accounts, step=None):
     """The accounts a step works on: the positions in `spec`, in list order, skipping accounts whose
-    "Use" is off or whose role is Skip. Returns [(position, account)]."""
+    "Use" is off or whose role is Skip - and for upgrades / research the Main and the Looters,
+    always. Returns [(position, account)]."""
+    skip = ("skip",) + (NO_UPGRADE_ROLES if step in UPGRADE_STEPS else ())
     return [(p, accounts[p - 1]) for p in parse_positions(spec, len(accounts))
-            if accounts[p - 1].get("enabled", True) and accounts[p - 1].get("role") != "skip"]
+            if accounts[p - 1].get("enabled", True) and accounts[p - 1].get("role") not in skip]
 
 
-def describe_accounts(spec, accounts, limit=4):
+def describe_accounts(spec, accounts, limit=4, step=None):
     """Short text for the window: "Buggu01, Omishrisha, Buggu02 … Buggu7 (15 accounts)"."""
-    picked = step_accounts(spec, accounts)
+    picked = step_accounts(spec, accounts, step)
     if not picked:
         return "No accounts" if accounts else "No accounts yet (add them in Accounts)"
     names = [a["name"] for _, a in picked]

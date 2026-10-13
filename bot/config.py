@@ -44,6 +44,8 @@ DEFAULT_SETTINGS = {
     # the functions in the order they run (keys of bot/flow.py STEPS; a key may appear more than once,
     # e.g. upgrade before and after looting) and each function's own settings
     "flow": ["attack_all"],
+    "option": "loot_all",                   # the option chosen in the window (bot/flow.py OPTIONS) -> "flow"
+    "research_too": {"home": False, "builder": False},   # upgrade options: also start lab research
     "steps": DEFAULT_STEPS,
     "loot": {
         "watch": {"gold": False, "elixir": True, "dark": False},

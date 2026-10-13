@@ -27,7 +27,7 @@ from bot.runner import Runner, missing_templates
 from gui import theme as T
 from gui.bridge import Bridge, Hotkeys, setup_logging
 from gui.components import Banner, Button, Pill, label
-from gui.flow_panel import FlowPanel
+from gui.options_panel import OptionsPanel
 from gui.logs_tab import LogsTab
 from gui.nav import AnimatedStack, Logo
 from gui.run_tab import Badged, LivePanel, RunControls, StatusPill
@@ -211,7 +211,7 @@ class MainWindow(QMainWindow):
         self.top = TopBar()
         self.controls = self.top.controls
         self.status_pill = self.top.status
-        self.flow_panel = FlowPanel()
+        self.flow_panel = OptionsPanel()                      # the ready-made options (no drag and drop)
         self.settings_panel = SettingsPanel()
         self.live = LivePanel()
         self.templates_tab = TemplatesTab()
@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
         self.splitter.setSizes([max(320, total - bottom), bottom])
 
     def resizeEvent(self, e):
-        self.flow_panel.setFixedWidth(420 if self.width() >= 1700 else 392)
+        self.flow_panel.setFixedWidth(540 if self.width() >= 1700 else 480)
         super().resizeEvent(e)
 
     def _warm_up(self, i=0):
@@ -492,8 +492,7 @@ class MainWindow(QMainWindow):
             self.go(TEMPLATES)
             return
         if not [k for k in self.settings.get("flow", []) if k in BY_KEY]:
-            self.toasts.show("info", "Add functions to the flow first", "Drag them from Functions into the Flow box "
-                             "(or double-click one), or pick a preset.", 7000)
+            self.toasts.show("info", "Pick what the bot should do", "Choose one of the options on the left.", 7000)
             self.go(MAIN)
             self.flow_panel.flash_flow()
             return

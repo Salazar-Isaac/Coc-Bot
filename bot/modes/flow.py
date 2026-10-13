@@ -32,7 +32,7 @@ class Ctx:
         self.bot, self.keys, self.state = bot, keys, state
         steps = bot.settings.get("steps", {})
         self.cfg = {k: steps.get(k, {}) for k in BY_KEY}
-        self.accounts = {k: [a["name"] for _, a in step_accounts(self.cfg[k].get("accounts", ""), bot.accounts)]
+        self.accounts = {k: [a["name"] for _, a in step_accounts(self.cfg[k].get("accounts", ""), bot.accounts, k)]
                          for k in BY_KEY}
         self.comeback = [k for k in COMEBACK if k in keys]
         self.away = False                              # True while visiting another account in between
@@ -118,7 +118,7 @@ def _run_accounts(bot, ctx, si, keys, sig, start_pos=0):
     """Each account (in list order) that any of these steps works on does them in flow order."""
     plan = {}
     for key in keys:
-        for pos, acc in step_accounts(ctx.cfg[key].get("accounts", ""), bot.accounts):
+        for pos, acc in step_accounts(ctx.cfg[key].get("accounts", ""), bot.accounts, key):
             plan.setdefault(pos, (acc, []))[1].append(key)
     order = sorted(plan)
     if not order:
