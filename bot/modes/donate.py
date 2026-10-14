@@ -183,11 +183,12 @@ def round_need(bot, state):
     return bot.settings["donate"].get("min_elixir_keep", 0) + state.get("round_elixir", 0)
 
 
-def donation_cycle(bot, main, state):
+def donation_cycle(bot, main, state, between=None):
     """The XpIncrease way, always starting on Main (you may have spent its elixir meanwhile):
       1. not enough elixir for a whole round -> "low" (time to loot);
       2. donate to requests that are still open, then check the elixir again;
       3. while it covers a whole round: every requesting account requests, Main donates.
+    between(): called before every request round (e.g. a freed builder is put to work first).
     Returns "low", "rounds" (round limit reached) or "idle" (nothing was donated)."""
     max_rounds = bot.settings["donate"].get("rounds", 0)
     if not _switch(bot, main, state):
@@ -210,6 +211,8 @@ def donation_cycle(bot, main, state):
         log.info("Donation round %d%s (Main's elixir %s; a round needs %s)", n,
                  f" of {max_rounds}" if max_rounds else "", f"{elixir:,}" if elixir is not None else "?",
                  f"{need:,}")
+        if between is not None:
+            between()
         request_round(bot, state)
         donated, elixir = donate_round(bot, main, state)
         if max_rounds and n >= max_rounds:

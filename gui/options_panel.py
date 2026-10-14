@@ -242,6 +242,8 @@ class OptionsPanel(QWidget):
                 continue
             th = a.get("th")
             c.addItem(f"#{i + 1}  {a.get('name', '?')}{f' · TH {th}' if th else ''}", i + 1)
+        if self._start > len(self._accounts) and self._accounts:
+            c.addItem("All accounts done: donating", self._start)     # "Upgrade, loot, donate" after its pass
         if c.count():
             idx = c.findData(self._start)
             if idx < 0:                                   # that account is off now: the next one after it

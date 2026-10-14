@@ -5,9 +5,8 @@ troops plus a new one attack a second, smaller base (stage 2). Each attack can e
 6 stars; the "Star Bonus" (the 4/8 counter on the Attack button) pays extra loot until the
 daily star bonus is used up. There is no "Next": every attack is one random base.
 
-Upgrades use the same builder menu as the main village. With "gear up for Builder Hall"
-on, the bot first upgrades the Builder Hall itself, then the defences the game needs
-before the next Builder Hall (Cannon, Archer Tower, Mortar first), then new buildings.
+Builder Base upgrades and Star Laboratory research are in actions/upgrades.py and
+actions/research.py (the "Builder Base upgrade" / "research" steps of the window's options).
 """
 
 import logging
@@ -30,13 +29,6 @@ TROOPS_BOX = (400, 435, 650, 60)   # the "Your troops" line in the Start Attack 
 
 class NoArmy(BotError):
     """The Builder Base army is empty ("Train an army before attacking!")."""
-
-# Builder-Hall-first priority: the Builder Hall, then NEW buildings (unlocks), then the
-# Cannon / Archer Tower / Mortar line (needed for Gear Up), then the rest (part of a name is enough).
-GEAR_UP_ORDER = ["Builder Hall", "__new__", "Cannon", "Archer Tower", "Mortar", "Double Cannon", "Multi Mortar",
-                 "Crusher", "Air Bombs", "Firecrackers", "Guard Post", "Roaster", "Giant Cannon",
-                 "Mega Tesla", "Lava Launcher", "Hidden Tesla", "Builder Barracks", "Elixir Storage",
-                 "Gold Storage", "Clock Tower", "Star Laboratory"]
 
 
 def is_builder_base(frame):
@@ -384,63 +376,6 @@ def full(bot, account, st):
     return bool(flags) and all(flags)
 
 
-def upgrade(bot, max_count=1):
-    """Builder Base upgrades with the gear-up priority. Returns the number started."""
-    from . import village
-    cfg = bot.settings.get("builder", {})
-    started = 0
-    for _ in range(max_count):
-        if not go_home_bb(bot, 15):
-            break
-        counter = vision.digits.read_fraction(bot.shot(), bot.layout.region("bb.builders"))
-        if not counter or counter[0] <= 0:
-            log.info("Builder Base: no free builder")
-            break
-        bot.tap_point("bb.builders_menu")
-        bot.sleep(1.0)
-        rows = village.parse_menu(bot.shot(), bot.layout.point("bb.builders_menu")[0])
-        st = status(bot)
-        res_now = {"gold": st.get("gold"), "elixir": st.get("elixir")}
-        skip = cfg.get("upgrade_skip", [])
-        prio = GEAR_UP_ORDER if cfg.get("gear_up", True) else []
-
-        def rank(r):
-            name = r["name"].lower().replace(" ", "")
-            for i, p in enumerate(prio):
-                if (p == "__new__" and r.get("new")) or (p != "__new__" and p.lower().replace(" ", "") in name):
-                    return i
-            return len(prio) + (0 if r["section"] == "suggested" else 1)
-
-        pick = None
-        for r in sorted(rows, key=rank):
-            have = res_now.get(r["res"])
-            if r["res"] not in ("gold", "elixir") or r["red"] or have is None or r["cost"] > have:
-                continue
-            if village._skipped(r["name"], skip):
-                continue
-            pick = dict(r, have=have)
-            break
-        if not pick:
-            log.info("Builder Base: no affordable upgrade (%d listed)", len(rows))
-            village.close_menu(bot, "bb.safe")
-            break
-        bot.tap(*pick["tap"], jitter=2)
-        bot.sleep(1.2)
-        up = bot.wait("building/upgrade_button", 4)
-        if not up:
-            village.close_menu(bot, "bb.safe")
-            break
-        bot.tap_match(up)
-        bot.sleep(1.2)
-        ok = village._confirm(bot, pick, "builders", home=go_home_bb)
-        village.close_menu(bot, "bb.safe")
-        if not ok:
-            break
-        started += 1
-        bot.stats["upgrades"] = bot.stats.get("upgrades", 0) + 1
-    return started
-
-
 def collect(bot):
     """Tap the Builder Base collector bubbles (gold mine, elixir collector, gem mine is left alone)."""
     f = bot.shot()
@@ -451,70 +386,6 @@ def collect(bot):
             if ms:
                 bot.tap_match(ms[0], jitter=2)
                 bot.sleep(0.6)
-
-
-def research(bot):
-    """Start one Star Laboratory research if it is free (Builder Base)."""
-    from . import village
-    if not go_home_bb(bot, 15):
-        return False
-    counter = vision.digits.read_fraction(bot.shot(), bot.layout.region("bb.lab"))
-    if not counter or counter[0] <= 0:
-        log.info("Builder Base: Star Laboratory busy")
-        return False
-    bot.tap_point("bb.lab_menu")
-    bot.sleep(1.0)
-    rows = village.parse_menu(bot.shot(), bot.layout.point("bb.lab_menu")[0])
-    st = status(bot)
-    skip = bot.settings.get("builder", {}).get("research_skip", [])
-    for r in rows:
-        have = st.get(r["res"])
-        if r["res"] in ("gold", "elixir") and not r["red"] and have and r["cost"] <= have \
-                and not village._skipped(r["name"], skip):
-            bot.tap(*r["tap"], jitter=2)
-            bot.sleep(1.5)
-            ok = village._confirm(bot, dict(r, have=have), "lab", home=go_home_bb)
-            go_home_bb(bot, 20)
-            if ok:
-                bot.stats["research"] = bot.stats.get("research", 0) + 1
-            return ok
-    log.info("Builder Base: no affordable research (%d listed)", len(rows))
-    village.close_menu(bot, "bb.safe")
-    return False
-
-
-def session(bot, account, plan=False):
-    """A Builder Base visit for this account: sail there, collect, attack until the Star Bonus is
-    done (and optionally keep going), stop early if storages are full or stop growing, upgrade,
-    research, sail back. Returns False if the account has no Builder Base.
-    plan=True ("Builder Base upgrades" mode): the Builder Base upgrade plan (upgrades.py) runs
-    before attacking, if there are resources already, and again after attacking."""
-    from . import upgrades
-    cfg = bot.settings.get("builder", {})
-    name = account.get("name", "?")
-    try:
-        travel(bot, "builder")
-    except BotError as e:
-        log.info("%s: %s. Skipping the Builder Base.", name, e)
-        go_home(bot)
-        return False
-    bot.status(action="Builder Base")
-    if cfg.get("collect", True):
-        collect(bot)
-    if plan:
-        upgrades.run_bb(bot, account, "before attacking")
-    attacks(bot, account)
-    if plan:
-        upgrades.run_bb(bot, account, "after attacking")
-    elif cfg.get("upgrade", False):
-        upgrade(bot, cfg.get("max_upgrades", 1))
-    if cfg.get("research", False):
-        research(bot)
-    try:
-        travel(bot, "main")
-    except BotError as e:
-        log.warning("%s: %s", name, e)
-    return True
 
 
 def attacks(bot, account):

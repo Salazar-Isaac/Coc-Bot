@@ -314,6 +314,27 @@ def _affordable(r, have):
 
 # --- main village ----------------------------------------------------------------------------------
 
+
+def refuse(bot, account, what):
+    """The last check before anything is upgraded or researched: never on accounts 1-2 (Main, Omi ji),
+    and never when the game shows a protected account's own in-game name (a switch that went wrong)."""
+    from ..flow import protected
+    from .account import read_player, same_name
+    if protected(account, bot.accounts):
+        log.warning("%s is account 1-2 / Main / Looter: no %s there, ever", account["name"], what)
+        return True
+    seen = read_player(bot)
+    own = account.get("player") or ""
+    for other in bot.accounts:
+        if other is account or not protected(other, bot.accounts):
+            continue
+        name = other.get("player") or ""
+        if seen and name and same_name(seen, name) and not (own and same_name(own, name)):
+            log.warning("The game shows %s's name '%s' instead of %s: no %s", other["name"], seen,
+                        account["name"], what)
+            return True
+    return False
+
 def list_groups(buildings):
     """The flow's own building list as plan groups (one building each, in its order) and whether
     the Town Hall is on it."""
@@ -378,6 +399,8 @@ def run(bot, account, when="", max_count=None, buildings=None):
     cfg = bot.settings.get("upgrades", {})
     if buildings is None and (not cfg.get("enabled", True) or not account.get("upgrade")):
         return 0
+    if refuse(bot, account, "upgrades"):
+        return 0
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
     if buildings is None:
         groups, town_hall = plan_groups(bot.settings), True
@@ -393,8 +416,6 @@ def run(bot, account, when="", max_count=None, buildings=None):
         if not counter or counter[0] <= 0:
             if started == 0:
                 log.info("%s: no free builder%s", account["name"], f" ({counter[0]}/{counter[1]})" if counter else "")
-            if counter:
-                timers.note_busy(bot, account, "builders", MAIN)
             break
         have = loot.home_resources(bot)               # fresh after each upgrade (never a guessed amount)
         if rows is None:
@@ -404,7 +425,6 @@ def run(bot, account, when="", max_count=None, buildings=None):
             log.info("%s: nothing in the upgrade plan is affordable now (%d upgradable items listed)",
                      account["name"], len(rows))
             village.close_menu(bot)
-            timers.clear(bot, account, "builders")
             break
         log.info("%s%s: upgrading %s (%s) for %s %s", account["name"], f" {when}" if when else "", item["name"],
                  item["group"], f"{item['cost']:,}", item["res"])
@@ -417,11 +437,18 @@ def run(bot, account, when="", max_count=None, buildings=None):
             rows = [r for r in rows if (r["base"], r["cost"]) != listed]
         else:
             if item.get("builders_busy"):             # only the Goblin Builder (gems) was "free"
-                timers.note_busy(bot, account, "builders", MAIN)
                 break
             fails += 1
             refused.add(item["base"])
             rows = None                               # read the menu again
+    go_home(bot)
+    # when the next builder is free again (the soonest upgrade in progress), so the bot can come back
+    # then - also while looting or donating on other accounts; nothing in progress: no reason to
+    counter = village.read_counter(bot, "builders")
+    if counter and counter[0] < counter[1]:
+        timers.note_busy(bot, account, "builders", MAIN)
+    else:
+        timers.clear(bot, account, "builders")
     go_home(bot)
     return started
 
@@ -529,6 +556,8 @@ def run_bb(bot, account, when="", max_count=None, plan=None, new_first=True):
     from .builder_base import go_home_bb, status
     cfg = bot.settings.get("upgrades", {})
     if plan is None and (not cfg.get("enabled", True) or not account.get("upgrade")):
+        return 0
+    if refuse(bot, account, "Builder Base upgrades"):
         return 0
     max_count = max_count if max_count is not None else cfg.get("max_per_visit", 5)
     plan = plan if plan is not None else cfg.get("bb_plan", BB_DEFAULT)

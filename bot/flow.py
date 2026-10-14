@@ -76,6 +76,10 @@ OPTIONS = [
            "swords", ("attack_all", "bb_attack"), {"attack_all": LOOTERS, "bb_attack": LOOTERS}),
     Option("donate_only", "Donate", "Donate only", "The others request, the Main donates while it has elixir",
            "gift", ("donate",), {}),
+    Option("upgrade_donate", "Donate", "Upgrade, loot, donate",
+           "Accounts 1-15 upgrade + loot; then Loot + Donate - a freed builder is put to work in between",
+           "gift", ("home_upgrade", "attack_all", "home_upgrade", "donate"),
+           {"attack_all": LOOTERS, "home_upgrade": _UP}),
     Option("loot_donate", "Donate", "Loot + Donate", "Accounts 1-2 (Main, Omi ji) loot; the others request; Main donates",
            "gift", ("donate", "attack_all"), {"attack_all": "1-2"}),
     Option("home_upgrade", "Upgrade", "Home loot + upgrade", "Upgrade, loot until full, upgrade again (village)",
@@ -103,6 +107,13 @@ def option_flow(key, research=None):
             last = len(steps) - 1 - steps[::-1].index(up)
             steps.insert(last + 1, rs)
     return steps
+
+
+def protected(account, accounts):
+    """True for an account that must never be upgraded or research: #1-2 of the Accounts list, or a
+    Main / Looter by role."""
+    pos = next((i + 1 for i, a in enumerate(accounts) if a is account or a.get("name") == account.get("name")), None)
+    return pos in NO_UPGRADE_POSITIONS or account.get("role") in NO_UPGRADE_ROLES
 
 
 def positions_spec(positions):

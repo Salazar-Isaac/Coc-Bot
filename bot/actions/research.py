@@ -47,6 +47,8 @@ def run(bot, account, wanted, builder=False):
     home = go_home_bb if builder else go_home
     if not home(bot, 15):
         return False
+    if upgrades.refuse(bot, account, "research"):
+        return False
     counter = vision.digits.read_fraction(bot.shot(), bot.layout.region(where["counter"]))
     if not counter or counter[0] <= 0:
         log.info("%s: %s busy%s", account["name"], where["label"], f" ({counter[0]}/{counter[1]})" if counter else "")

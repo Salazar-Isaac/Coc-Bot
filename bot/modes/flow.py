@@ -52,6 +52,8 @@ def run_flow(bot, state):
     if start > 1:
         log.info("Starting from account #%d (%s)", start,
                  bot.accounts[start - 1]["name"] if start <= len(bot.accounts) else "?")
+    if bot.settings.get("option") == "upgrade_donate":
+        return _upgrade_loot_donate(bot, ctx, start)
     n = 0
     while rounds == 0 or n < rounds:
         n += 1
@@ -63,6 +65,67 @@ def run_flow(bot, state):
                 _run_accounts(bot, ctx, part, start)
                 start = 1                              # only the first part of the first round skips
         _set_start(bot, 1)                             # a whole round done: the next one starts at #1
+
+
+def _upgrade_loot_donate(bot, ctx, start):
+    """"Upgrade, loot, donate": accounts 1-15 upgrade, loot until full and upgrade again (a builder
+    that frees up on another account meanwhile is put to work between two attacks); then the
+    Loot + Donate cycle for good: accounts 1-2 (Main, Omi ji) loot, the others request, Main donates.
+    When a builder frees up on an account, donating stops for a moment: the bot goes there,
+    upgrades, loots it full, upgrades again, and goes back to donating."""
+    pass_keys = [k for k in ctx.keys if k != "donate"]
+    if start <= max((p for p, _ in step_accounts(ctx.cfg["attack_all"].get("accounts", ""), bot.accounts,
+                                                 "attack_all")), default=0):
+        log.info("== Upgrade and loot every account")
+        _run_accounts(bot, ctx, pass_keys, start)
+    _set_start(bot, len(bot.accounts) + 1)              # a stop from here on: straight back to donating
+    main = _main_account(bot)
+    looters = step_accounts("1-2", bot.accounts)          # Main and Omi ji (by position)
+    hook = lambda: _visit_free_builders(bot, ctx)        # noqa: E731
+    log.info("== Loot + Donate (%s loot); a freed builder is put to work in between",
+             " and ".join(a["name"] for _, a in looters))
+    while True:
+        hook()
+        bot.status(account=main["name"], action="Donating", progress="")
+        result = donation_cycle(bot, main, ctx.state, between=hook)
+        for _, acc in looters:
+            hook()
+            if not with_recovery(bot, f"switch to {acc['name']}",
+                                 lambda a=acc: account_actions.switch_to(bot, a, ctx.state)):
+                continue
+            _to_village(bot, acc, "main")
+            bot.status(account=acc["name"], action="Looting", progress="")
+            with_recovery(bot, f"loot {acc['name']}", lambda a=acc: loot.loot_until_full(bot, a, between=hook))
+        if result == "idle":                             # no requests were possible: give the timers a minute
+            bot.sleep(60)
+
+
+def _visit_free_builders(bot, ctx):
+    """Donating / looting: an account whose builder is free again (time read from its builder menu) gets
+    its upgrade, is looted full and upgraded again, then the bot goes back to what it was doing.
+    Returns True if it visited one."""
+    if ctx.away:
+        return False
+    names = ctx.accounts.get("home_upgrade") or []
+    due = timers.due(bot, names, ["builders"])
+    if not due:
+        return False
+    ctx.away = True
+    try:
+        for name in dict.fromkeys(n for n, _ in due):
+            acc = next((a for a in bot.accounts if a["name"] == name), None)
+            if acc is None:
+                continue
+            log.info("%s: a builder is free again - upgrading, looting, upgrading, then back", name)
+            if not with_recovery(bot, f"switch to {name}", lambda a=acc: account_actions.switch_to(bot, a, ctx.state)):
+                timers.clear(bot, acc, "builders")        # do not try again and again
+                continue
+            _to_village(bot, acc, "main")
+            for key in ("home_upgrade", "attack_all", "home_upgrade"):
+                _run_step(bot, ctx, key, acc)
+    finally:
+        ctx.away = False
+    return True
 
 
 def _set_start(bot, pos):
