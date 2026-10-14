@@ -137,7 +137,7 @@ def attack_once(bot, account=None):
 
 def loot_until_full(bot, account, keep_going=False, between=None, max_attacks=None):
     """Attack until the account's watched storages are full.
-    Returns "full", "limit" (max attacks reached) or "stuck".
+    Returns "full", "limit" (max attacks reached), "stuck" or "no_army" (no E-Dragon + Clone army).
     keep_going ("Loot current"): attack on even when full, until the attack limit or Stop.
     between(): called before each attack (the flow may visit another account's builders)."""
     s = bot.settings["loot"]
@@ -171,31 +171,48 @@ def loot_until_full(bot, account, keep_going=False, between=None, max_attacks=No
         if between is not None and between():
             before = None                            # been away: the storages are read afresh
             continue
-        ensure_army(bot, account)                # only now: the account really is going to attack
+        if not ensure_army(bot, account):        # only now: the account really is going to attack
+            return "no_army"
         if attack_once(bot, account) is not None:
             attacks += 1
 
 
+UNIT_NAMES = {"edrag": "E-Dragon", "clone": "Clone"}
+
+
 def ensure_army(bot, account):
-    """Switch to the chosen Saved Recipe once per visit and check the army really has the units
-    you require (Loot page). Done right before attacking, never for a full account."""
+    """Before the first attack of a visit: the army must have the units you require (Attack settings,
+    default E-Dragon + Clone). The army trained now is kept if it has them; else your recipe ("loot"),
+    the recipe that worked on this account before, then every other saved recipe is tried, and the
+    one that works is remembered for this account. Returns False if no army of the account has them:
+    then it does not attack with a wrong army."""
     s = bot.settings["loot"]
-    name = s.get("army_recipe")
-    if not name or account.get("_army_checked") == name:
-        return
-    account["_army_checked"] = name
-    for attempt in range(2):
-        applied, missing = clan.use_recipe(bot, name, check=s.get("army_must_have", ["edrag", "clone"]))
-        if applied and not missing:
-            return
-        if not applied:
-            log.warning("%s has no saved recipe called '%s': attacking with its current army",
-                        account["name"], name)
-            return
-        if attempt == 0:
-            log.info("%s: army is missing %s after the recipe, trying once more", account["name"], ", ".join(missing))
-    log.warning("%s: recipe '%s' has no %s - edit that recipe in the game to include it. Attacking with it anyway.",
-                account["name"], name, " / ".join(missing))
+    check = list(s.get("army_must_have", ["edrag", "clone"]) or [])
+    name = s.get("army_recipe") or ""
+    if account.get("_army_checked") is not None:
+        return account["_army_checked"]
+    if not check:                                       # nothing required: just use the recipe, if one is named
+        if name:
+            clan.use_recipe(bot, name)
+        account["_army_checked"] = True
+        return True
+    want = " + ".join(UNIT_NAMES.get(u, u) for u in check)
+    ok, used, seen = clan.army_with(bot, check, preferred=(name, account.get("army_recipe")))
+    account["_army_checked"] = ok
+    if ok:
+        if used:
+            log.info("%s: army set to recipe '%s' (%s)", account["name"], used, want)
+            if used != account.get("army_recipe"):
+                account["army_recipe"] = used               # this account's recipe: tried first next time
+                config.save_accounts(bot.accounts)
+        else:
+            log.info("%s: the army is already %s", account["name"], want)
+        return True
+    log.warning("%s: no army with %s - none of its saved recipes (%s) has them. Save one in the game "
+                "(e.g. named '%s'); no attacks on this account meanwhile.", account["name"], want,
+                ", ".join(seen) or "none", name or "loot")
+    bot.save_error("no-army")
+    return False
 
 
 def _fmt(d):

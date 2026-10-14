@@ -597,6 +597,62 @@ def bot_army_region():
     return space.region(840, 300, 960, 420)      # troops + spells rows of the army screen
 
 
+def _recipe_rows(bot):
+    """Open the Saved Recipes list: [(name, (x, y) to tap)]."""
+    bot.tap_point("army.recipes_arrow")
+    bot.sleep(0.8)
+    frame = bot.shot()
+    return [(t.strip(), (x + w // 2, y + h // 2))
+            for t, c, (x, y, w, h) in vision.text_reader.read(frame, bot.layout.region("army.recipe_list")) if c > 0.5]
+
+
+def _apply_recipe(bot, target):
+    """Tap a recipe in the open list and accept the game's confirmation, if any."""
+    bot.tap(*target, jitter=4)
+    end = time.monotonic() + 2.5
+    while time.monotonic() < end:
+        f = bot.shot()
+        if vision.find(f, "army/use_recipe_title") or vision.find(f, "battle/confirm_okay"):
+            m = vision.find(f, "battle/confirm_okay")
+            if m:
+                bot.tap_match(m)
+                bot.sleep(0.7)
+                break
+        bot.sleep(0.25)
+    bot.sleep(0.6)
+
+
+def army_with(bot, check, preferred=()):
+    """Get an army with every unit in `check` (e.g. E-Dragon + Clone) in the army screen:
+      1. the army trained now already has them -> kept;
+      2. else the Saved Recipes in `preferred` order (the one you named, the one that worked on this
+         account before), then every other saved recipe, until one has them.
+    Returns (ok, recipe name used or None, recipes seen)."""
+    from .account import same_name
+    open_army(bot)
+    seen = []
+    try:
+        if not army_has(bot.shot(), check):
+            return True, None, seen
+        rows = _recipe_rows(bot)
+        seen = [n for n, _ in rows]
+        order = [r for p in preferred if p for r in rows if same_name(r[0], p) or r[0].lower() == p.lower()]
+        order += [r for r in rows if r not in order]
+        for i, (name, target) in enumerate(order):
+            if i:
+                rows_now = dict(_recipe_rows(bot))          # the list closes after a recipe is used
+                target = rows_now.get(name, target)
+            _apply_recipe(bot, target)
+            missing = army_has(bot.shot(), check)
+            if not missing:
+                return True, name, seen
+            log.debug("Recipe '%s' has no %s", name, ", ".join(missing))
+        return False, None, seen
+    finally:
+        close_army(bot)
+        go_home(bot)
+
+
 def use_recipe(bot, name, check=()):
     """Switch the army to the Saved Recipe called `name` (e.g. your E-Dragon + Clone "loot"
     recipe). Any confirmation the game asks (Clan Castle troops present, a request still open,
