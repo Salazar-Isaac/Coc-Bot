@@ -136,11 +136,17 @@ def parse_menu(frame, cx):
 def close_menu(bot, point="home.safe"):
     """Close the builder / laboratory side panel (its X) - or tap an empty spot when it is not open
     (the panel covers the right side: a tap there would hit one of its rows)."""
-    if bot.exists("build/close"):
+    from ..states import dismiss_tutorial
+    for _ in range(3):
+        if not bot.exists("build/close"):
+            break
+        if dismiss_tutorial(bot):
+            continue
         bot.tap_point("build.close")
-    else:
-        bot.tap_point(point, jitter=5)
-    bot.sleep(0.5)
+        bot.sleep(0.6)
+    bot.sleep(0.3)
+    # (no tap on an "empty" spot when the panel is closed: on some villages that spot is a wall,
+    # and a selected building does not get in the way of anything the bot does next)
 
 
 def _norm(text):
@@ -153,6 +159,20 @@ def _skipped(name, skip):
 
 
 # --- confirming an upgrade / research ----------------------------------------------------------
+
+TIME_BOX = (1500, 930, 260, 80)      # "Upgrade time 9d" (under its title) at the bottom right of the window
+
+
+def upgrade_time(frame):
+    """Seconds an upgrade / research takes, read from its window (None if unreadable)."""
+    from . import panel, timers
+    for b in panel._detect(frame, space.region(*TIME_BOX)):
+        text, _ = vision.text_reader.read_line(frame, (b[0] - 8, b[1] - 6, b[2] + 16, b[3] + 12))
+        secs = timers.parse_time(text)
+        if secs:
+            return secs
+    return None
+
 
 BUSY_POPUP = (900, 260, 730, 330)    # "Hey Chief! ... all your Builders are busy" (Goblin Builder for gems)
 
@@ -207,6 +227,7 @@ def _confirm(bot, item, which, home=None):
                  f"{have:,}")
         _close_offer(bot)
         return False
+    item["duration"] = upgrade_time(bot.frame)
     bot.tap_match(m)
     bot.sleep(1.5)
     tapped = bot.shot()                           # what the game showed after Confirm (kept if refused)

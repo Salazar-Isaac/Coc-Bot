@@ -63,12 +63,21 @@ class Bot:
         """Wait until one of the templates appears. Returns (key, match) or (None, None)."""
         keys = [k for k in ([keys] if isinstance(keys, str) else keys) if vision.templates.has(k)]
         end = time.monotonic() + timeout
+        tutorials = 0
         while True:
             frame = self.shot()
             for k in keys:
                 m = vision.find(frame, k)
                 if m:
                     return k, m
+            # a tutorial of the game (new UI) dims the screen: what we wait for is there but grey
+            if tutorials < 3 and vision.templates.has("popup/speech_corner") and \
+                    "popup/speech_corner" not in keys:
+                from ..states import dismiss_tutorial
+                if dismiss_tutorial(self, frame):
+                    tutorials += 1
+                    end = max(end, time.monotonic() + 3)
+                    continue
             if time.monotonic() >= end:
                 return None, None
             control.sleep(interval)

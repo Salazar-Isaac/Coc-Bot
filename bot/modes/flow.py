@@ -123,6 +123,8 @@ def _visit_free_builders(bot, ctx):
             _to_village(bot, acc, "main")
             for key in ("home_upgrade", "attack_all", "home_upgrade"):
                 _run_step(bot, ctx, key, acc)
+            for n, k in timers.due(bot, [name], ["builders"]):    # never twice in a row for nothing
+                timers.clear(bot, acc, k)
     finally:
         ctx.away = False
     return True
@@ -307,6 +309,9 @@ def _comeback(bot, ctx, here):
         else:
             for key in todo:
                 timers.clear(bot, other, COMEBACK[key])   # do not try again and again
+        for key in todo:                               # still "due" after the visit (nothing could be
+            for n, k in timers.due(bot, [name], [COMEBACK[key]]):     # started, or unreadable): do not loop
+                timers.clear(bot, other, k)
         _on(bot, ctx, here)                            # back (an error here is retried by the looting)
         bot.status(account=here["name"], action=BY_KEY["attack_all"].title)
     finally:

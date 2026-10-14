@@ -51,9 +51,9 @@ def _timers(bot):
 
 def note_busy(bot, account, kind, where):
     """Everything of this kind is busy: open its menu, read when the first one is done, remember it."""
-    from .upgrades import open_menu
+    from .panel import open_menu, read_page
     from .village import close_menu
-    times = progress_times(bot.shot()) if open_menu(bot, where) else []
+    times = read_page(bot.shot(), want_name=lambda r: False)[1] if open_menu(bot, where) else []
     close_menu(bot, where["safe"])
     t = _timers(bot).setdefault(account["name"], {})
     if times:

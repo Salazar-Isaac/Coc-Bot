@@ -56,7 +56,8 @@ DEFAULT_LAYOUT = {
         "request.cancel": [768, 722],        # Cancel of the request window
         "profile.settings_tab": [1475, 127],   # the Settings tab of the profile menu
         "attack_menu.edit_army": [190, 1030],   # Battle menu: Edit Army (the army screen; there is no army button)
-        "build.close": [1888, 34],   # X of the Build side panel
+        "build.close": [1888, 34],
+        "build.filter": [1460, 34],   # the panel's filter / sorting button (top left of the panel)   # X of the Build side panel
         "build.tab_builders": [1468, 1010],   # Build panel tabs: builders
         "build.tab_lab": [1597, 1010],   # Build panel tabs: laboratory (Army Upgrades)
         "bb.build_tab_builders": [1530, 1010],   # Builder Base Build panel: builders

@@ -25,7 +25,7 @@ STATES = [
     ("chat", ["chat/close"]),                     # clan chat open over the village
     ("bb_army", ["bb/army_title"]),               # Builder Base "Choose Army": close with its X
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
-    ("home", ["home/attack_button", "home/settings_button"]),
+    ("home", ["home/attack_button"]),             # the trophy button (left): only in the home village, undimmed
     ("daily", ["popup/daily_title"]),
     ("reward_popup", ["popup/hoggy_title"]),        # Hoggy Bank rewards etc.: Continue
     ("shield_info", ["popup/shield_title"]),       # Magic Shield info: Continue only, NEVER "Remove"
@@ -241,14 +241,41 @@ def cancel_placement(bot, frame=None):
     return False
 
 
+ALL_KEYS = set()          # states that need all their pictures to match
+
+
 def detect(frame):
     for name, keys in STATES:
         if name == "reload" and dialog_box(frame) is not None:
             return "reload"                      # the village behind those dialogs is not dimmed
-        for k in keys:
-            if vision.templates.has(k) and vision.find(frame, k):
+        have = [k for k in keys if vision.templates.has(k)]
+        if name in ALL_KEYS:
+            if have and all(vision.find(frame, k) for k in have):
+                return name
+            continue
+        for k in have:
+            if vision.find(frame, k):
                 return name
     return "unknown"
+
+
+def tutorial_bubble(frame):
+    """A character's speech bubble (the new-UI tutorials: "Settings has moved...", "Easily view
+    Battle Logs..."): the match of its top-left ornament, or None."""
+    if not vision.templates.has("popup/speech_corner"):
+        return None
+    return vision.find(frame, "popup/speech_corner", any_brightness=True)
+
+
+def dismiss_tutorial(bot, frame=None):
+    """Tap inside a tutorial speech bubble to close it. True if there was one."""
+    m = tutorial_bubble(bot.shot() if frame is None else frame)
+    if not m:
+        return False
+    bot.tap(m.x + space.s(180), m.y + space.s(60), jitter=4)
+    log.info("Closed a tutorial message of the game")
+    control.sleep(0.8)
+    return True
 
 
 def _close_any_popup(bot, frame):
@@ -320,6 +347,9 @@ def go_home(bot, timeout=60.0):
             last = state
         if bot.reloaded and state not in ("home", "reload"):
             loaded_after = bot.reload_at            # the game is loading again after that tap
+        if state == "home" and tutorial_bubble(frame):
+            dismiss_tutorial(bot, frame)             # a tutorial over the village: close it first
+            continue
         if state == "home":
             if bot.reloaded:
                 # right after the tap the old picture is still there: wait until it really reloaded
@@ -411,7 +441,8 @@ def go_home(bot, timeout=60.0):
             else:
                 bot.tap_point("popup.close_x", jitter=2)
         elif state == "dialog":
-            bot.tap(*space.center(1300, 300), jitter=10)     # next line of the conversation
+            if not dismiss_tutorial(bot, frame):
+                bot.tap(*space.center(1300, 300), jitter=10)     # next line of the conversation
             control.sleep(0.4)
             continue
         elif state == "reload":
