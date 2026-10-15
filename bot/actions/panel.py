@@ -54,53 +54,42 @@ def _yellow(frame, box):
     return float(((hsv[:, 0] >= 18) & (hsv[:, 0] <= 35) & (hsv[:, 1] > 130) & (hsv[:, 2] > 170)).mean()) > 0.3
 
 
+# the filter popup (left of the panel) always opens at the same place: its buttons
+FILTER_LABEL = (805, 500, 150, 48)        # "Sorting"
+FILTER_BUTTONS = {"costmin": (1042, 553, 208, 74), "costmax": (812, 553, 208, 74),
+                  "gold": (812, 186, 208, 74), "elixir": (1042, 186, 208, 74), "dark": (1270, 186, 208, 74),
+                  "army": (812, 328, 208, 74), "defense": (1042, 328, 208, 74), "hero": (1270, 328, 208, 74),
+                  "resource": (812, 415, 208, 74), "new": (1042, 415, 208, 74)}
+
+
 def ensure_sorted(bot, where, account=None):
-    """Make the open panel list "Cost Min" (cheapest first) and nothing filtered out. Checked once
-    per account visit and tab (the game keeps the setting). Returns True if the list is sorted."""
+    """Make the open panel list "Cost Min" (cheapest first) with no filter on. The game forgets it when
+    an account is loaded, so it is checked once per account visit (a second each: the popup's buttons
+    are always at the same place, their colour tells which are on). Returns True if sorted."""
     account = account if account is not None else (bot.current_acc or {})
     key = "_sorted_" + where["tab"]
     if account.get(key) is not None:
         return account[key]
     bot.tap_point("build.filter")
-    bot.sleep(0.9)
+    bot.sleep(0.8)
     f = bot.shot()
-    found = vision.text_reader.read(f, space.region(*POPUP))
-    words = {re.sub(r"[^a-z]", "", t.lower()): b for t, c, b in found}
-    cm = words.get("costmin")
-    if cm is None:
-        log.info("The %s list has no Cost Min sorting: reading all of it", where["tab"].split(".")[-1])
-        bot.tap_point("build.filter")                       # close whatever opened
+    text, _ = vision.text_reader.read_line(f, space.region(*FILTER_LABEL))
+    if "sort" not in text.lower():
+        log.info("The %s list has no sorting popup: reading all of it", where["tab"].split(".")[-1])
+        bot.tap_point("build.filter")
         bot.sleep(0.5)
         account[key] = False
         return False
-
-    def button(b):
-        return (b[0] - space.s(40), b[1] - space.s(16), b[2] + space.s(80), b[3] + space.s(32))
-
-    changed = False
-    if not _yellow(f, button(cm)):
-        bot.tap(cm[0] + cm[2] // 2, cm[1] + cm[3] // 2, jitter=2)
-        changed = True
-    # nothing else may be selected: a resource or type filter would hide upgrades
-    for word in ("costmax", "army", "defense", "hero", "resource", "new"):
-        b = words.get(word)
-        if b is not None and word != "resource" and _yellow(f, button(b)):
-            bot.tap(b[0] + b[2] // 2, b[1] + b[3] // 2, jitter=2)
-            changed = True
-    title = words.get("resource")                          # the resource icons sit under their title
-    cols = [words[w] for w in ("army", "defense", "hero") if w in words]
-    if title is not None and cols:
-        row_y = title[1] + space.s(72)
-        for c in cols:
-            box = (c[0] - space.s(40), row_y - space.s(20), c[2] + space.s(80), space.s(50))
-            if _yellow(f, box):
-                bot.tap(c[0] + c[2] // 2, row_y + space.s(5), jitter=2)
-                changed = True
-    if changed:
-        bot.sleep(0.5)
+    taps = [name for name, box in FILTER_BUTTONS.items()
+            if (name == "costmin") != _yellow(f, space.region(*box))]   # Cost Min on, everything else off
+    for name in taps:
+        x, y, w, h = space.region(*FILTER_BUTTONS[name])
+        bot.tap(x + w // 2, y + h // 2, jitter=2)
+        bot.sleep(0.35)
+    if taps:
         log.info("Builder list sorted by cost (cheapest first)")
     bot.tap_point("build.filter")                          # close the filter popup
-    bot.sleep(0.7)
+    bot.sleep(0.6)
     account[key] = True
     return True
 
@@ -212,22 +201,37 @@ def _scroll(bot, check=True, up=False):
 
 
 # ----------------------------------------------------------------------------- whole list
-def scan(bot, where, have, need=("gold", "elixir"), full=False, account=None, max_pages=16, stop_when=None):
+AT = {"page": None}                     # the page of the open panel on screen now (for a direct tap)
+
+
+def scan(bot, where, have, need=("gold", "elixir"), full=False, account=None, max_pages=16, stop_when=None,
+         start_page=0, want=None):
     """Read the panel's list from the top. With the list sorted cheapest first, reading stops once
     every resource in `need` has shown a price the account cannot pay (all later ones cost more).
     full=True reads to the end and every row's name (for "is anything of the plan still listed?").
     stop_when(rows so far): True ends the reading early (the best possible choice is found).
+    start_page: jump that many pages down without reading (the wanted row is known to be further
+    down); want(row): which rows get their name read.
     Returns dict(rows, progress, complete, sorted)."""
+    AT["page"] = None
     if not open_menu(bot, where):
         return {"rows": [], "progress": [], "complete": False, "sorted": False}
     is_sorted = ensure_sorted(bot, where, account)
     done = {r: False for r in need}
     seen, out, progress = set(), [], []
-    want = (lambda r: r["res"] in RESOURCES) if full else None
+    if want is None and full:
+        want = lambda r: r["res"] in RESOURCES             # noqa: E731
     complete = False
-    for page in range(max_pages):
+    progress = read_page(bot.shot(), lambda r: False)[1] if start_page else []
+    for _ in range(start_page if is_sorted else 0):
+        _scroll(bot, check=False)
+    if start_page and is_sorted:
+        bot.sleep(0.3)
+    first = start_page if is_sorted else 0
+    for page in range(first, first + max_pages):
         control.checkpoint()
         rows, prog = read_page(bot.shot(), want)
+        AT["page"] = page
         if page == 0:
             progress = prog
         for r in rows:
@@ -246,12 +250,19 @@ def scan(bot, where, have, need=("gold", "elixir"), full=False, account=None, ma
         if not _scroll(bot):
             complete = True
             break
-    return {"rows": out, "progress": progress, "complete": complete, "sorted": is_sorted}
+        AT["page"] = None
+    return {"rows": out, "progress": progress, "complete": complete, "sorted": is_sorted, "first": first}
 
 
 def goto_row(bot, where, item, account=None):
     """Open the panel, go to the page the row was seen on and tap it (found again by its name, the
-    closest price of that name). True if tapped."""
+    closest price of that name). True if tapped. A row on the page shown right now is tapped directly."""
+    if AT["page"] is not None and AT["page"] == item.get("page") and item.get("tap") \
+            and vision.find(bot.shot(), "build/close"):
+        AT["page"] = None
+        bot.tap(*item["tap"], jitter=2)
+        return True
+    AT["page"] = None
     if not open_menu(bot, where):
         return False
     ensure_sorted(bot, where, account)

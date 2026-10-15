@@ -422,15 +422,21 @@ def _learn_listed(bot, account, kind, rows, whole=True, started=()):
     for r in rows:
         if r.get("base") and r.get("cost") and r.get("res") in ("gold", "elixir", "dark"):
             cur = bases.get(r["base"])
-            if whole and cur is not None:
-                bases[r["base"]] = [min(cur[0], r["cost"]), r["res"]]
-            else:
-                bases[r["base"]] = [r["cost"], r["res"]]
+            if whole and cur is not None and cur[0] <= r["cost"]:
+                continue                                     # keep the cheapest of that building
+            bases[r["base"]] = [r["cost"], r["res"], r.get("page", 0)]
     for b in started:
         bases.pop(b, None)
     slot[kind] = {"t": time.time() if whole or old is None else old["t"], "th": account.get("th"), "bases": bases}
     from .. import config
     config.save_state(bot.state)
+
+
+KEEP_GOLD = 300_000      # gold never spent on upgrades: searching bases costs gold (Find a Match, Next)
+
+
+def cfg_keep_gold(bot):
+    return (bot.settings.get("steps", {}).get("home_upgrade", {}) or {}).get("keep_gold", KEEP_GOLD)
 
 
 def _start_row(bot, item, where, home):
@@ -486,36 +492,58 @@ def run(bot, account, when="", max_count=None, buildings=None):
         timers.note_busy(bot, account, "builders", MAIN)  # when the next one is free (read from the list)
         return 0
     have = loot.home_resources(bot)
+    keep = int(cfg_keep_gold(bot))                       # gold kept for searching bases to loot
+    if have.get("gold") is not None:
+        have["gold"] = max(0, have["gold"] - keep)
     listed = _listed(bot, account, "builders")
     learn = listed is None                               # read the whole list once a day: what is left on it
     best_possible = 0
     if listed is not None:
         # the plan's buildings still on the list, and which of them the account can pay now
         on_plan = {b: v for b, v in listed.items() if _group_of({"base": b}, groups) is not None}
-        payable = [_group_of({"base": b}, groups) for b, (cost, res) in on_plan.items()
+        payable = [_group_of({"base": b}, groups) for b, (cost, res, *_) in on_plan.items()
                    if have.get(res) is not None and have[res] >= cost]
         th_ok = town_hall and not on_plan and any(
             (b == _base(TOWN_HALL) or _is_weapon({"name": b})) and have.get(res) is not None and have[res] >= cost
-            for b, (cost, res) in listed.items())
+            for b, (cost, res, *_) in listed.items())
         if not payable and not th_ok:
             panel.remember(bot, account, "builders", None)   # nothing to do here until it is richer
             if not on_plan and not (town_hall and _base(TOWN_HALL) in listed):
                 log.info("%s: everything on the upgrade plan is maxed or being upgraded", account["name"])
             else:
                 cheapest = min(on_plan.items(), key=lambda kv: kv[1][0], default=None)
-                log.info("%s: nothing on the upgrade plan is affordable (cheapest: %s, %s %s) - list not opened",
-                         account["name"], *(cheapest and (cheapest[0], f"{cheapest[1][0]:,}", cheapest[1][1])
-                                            or ("?", "?", "")))
+                log.info("%s: nothing on the upgrade plan is affordable (cheapest: %s, %s %s; %s gold kept for "
+                         "searching) - list not opened", account["name"],
+                         *(cheapest and (cheapest[0], f"{cheapest[1][0]:,}", cheapest[1][1]) or ("?", "?", "")),
+                         f"{keep:,}")
             return 0
         best_possible = min(payable) if payable else None
+        # where the row to start with was on the list (sorted by cost): jump there without reading
+        target = [v for b, v in on_plan.items()                    # every plan building it can pay: with
+                  if have.get(v[1]) is not None and have[v[1]] >= v[0]]   # several free builders, more are needed
+        start_page = max(0, min((v[2] if len(v) > 2 else 0) for v in target) - 1) if target else 0
+        plan_prices = {(v[1], v[0]) for v in on_plan.values()}
+    else:
+        start_page, plan_prices = 0, None
 
-    def found_best(rows):                                # sorted cheapest first: the first affordable row of
-        return best_possible is not None and any(       # the plan's top group still listed is the choice
-            not r.get("new") and _group_of(r, groups) == best_possible and _affordable(r, have) for r in rows)
+    def found_best(rows):                                # sorted cheapest first: enough affordable plan rows
+        ok = [r for r in rows if not r.get("new") and _group_of(r, groups) is not None and _affordable(r, have)]
+        return best_possible is not None and len(ok) >= free and             any(_group_of(r, groups) == best_possible for r in ok)   # (one per free builder, incl. the top group)
+
+    def want(r):                                         # read a name only where it can matter
+        if r["red"] or r["res"] not in ("gold", "elixir", "dark") or not r["cost"]:
+            return False
+        if have.get(r["res"]) is None or r["cost"] > have[r["res"]]:
+            return False
+        return plan_prices is None or (r["res"], r["cost"]) in plan_prices or r["new"]
 
     t0 = time.monotonic()
     scan_have = dict(have)
-    data = panel.scan(bot, MAIN, have, full=learn, stop_when=None if learn else found_best)
+    data = panel.scan(bot, MAIN, have, full=learn, stop_when=None if learn else found_best,
+                      start_page=0 if learn else start_page, want=None if learn else want)
+    if not learn and start_page and not any(_group_of(r, groups) == best_possible for r in data["rows"]):
+        log.info("%s: not where it was on the list: reading it from the top", account["name"])
+        data = panel.scan(bot, MAIN, have, stop_when=found_best, want=want)
     rows = [r for r in data["rows"] if r.get("base")]
     if learn and data["complete"]:
         _learn_listed(bot, account, "builders", rows)
@@ -557,13 +585,14 @@ def run(bot, account, when="", max_count=None, buildings=None):
     go_home(bot)
     if not learn:                                       # prices seen now replace the remembered ones; what
         seen = {r["base"] for r in rows}                 # it could pay but is not on the list any more is gone
-        reached = {}                                     # (only what the reading really went past)
-        for r in data["rows"]:
+        lo, hi = {}, {}                                  # (only inside the prices really read: a scan
+        for r in data["rows"]:                           # that jumped down skipped the cheap ones)
             if r.get("cost") and r.get("res"):
-                reached[r["res"]] = max(reached.get(r["res"], 0), r["cost"])
-        gone = [b for b, (cost, res) in (listed or {}).items()
+                lo[r["res"]] = min(lo.get(r["res"], r["cost"]), r["cost"])
+                hi[r["res"]] = max(hi.get(r["res"], 0), r["cost"])
+        gone = [b for b, (cost, res, *_) in (listed or {}).items()
                 if b not in seen and scan_have.get(res) is not None and scan_have[res] >= cost
-                and cost < reached.get(res, 0)]
+                and lo.get(res, cost + 1) <= cost < hi.get(res, 0) and (res, cost) in (plan_prices or set())]
         _learn_listed(bot, account, "builders", rows, whole=False, started=gone)
     busy = total - free
     panel.remember(bot, account, "builders", panel.next_free_in(data["progress"], started_secs) if busy else None)

@@ -638,19 +638,24 @@ class HomeUpgradeSettings(_ListStep):
                          HOME_BUILDINGS, "Add a building…", "Nothing in the list: no upgrades are started.",
                          DEFAULT_HOME_BUILDINGS, STEP_COLORS["home_upgrade"], parent)
         self.max_per_visit = Spin(1, 10)
+        self.keep_gold = BigSpin(maximum=5_000_000, step=50_000)
         self.who.add(divider())
         self.who.add(SettingRow("Upgrades per visit", "One per free builder, up to this many", self.max_per_visit,
                                 110))
+        self.who.add(SettingRow("Keep gold for searching", "Never spent on upgrades: finding a base to loot costs "
+                                "gold", self.keep_gold, 150))
         self.who.add(gems_note())
-        self._connect(self.max_per_visit)
+        self._connect(self.max_per_visit, self.keep_gold)
 
     def load(self, settings, accounts):
         super().load(settings, accounts)
         self.max_per_visit.setValue(int(step_cfg(settings, self.key).get("max_per_visit", 5) or 5))
+        self.keep_gold.setValue(int(step_cfg(settings, self.key).get("keep_gold", 300000) or 0))
 
     def apply(self, settings, accounts):
         super().apply(settings, accounts)
         step_out(settings, self.key)["max_per_visit"] = self.max_per_visit.value()
+        step_out(settings, self.key)["keep_gold"] = self.keep_gold.value()
 
 
 class BBUpgradeSettings(_ListStep):

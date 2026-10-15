@@ -65,9 +65,40 @@ def loot_is_good(settings, loot, account=None):
     return all(checks) if settings["loot"]["min_loot_rule"] == "all" else any(checks)
 
 
+SEARCH_GOLD = 5_000       # less gold than this: no search (Find a Match / Next cost gold; never gems)
+
+
+class NoGold(BotError):
+    """Too little gold to search for a base."""
+
+
+def collect_gold(bot):
+    """Tap the full gold collectors' bubbles (and the elixir / dark ones) on the village (zoomed out:
+    the bubbles' pictures are taken that way)."""
+    bot.device.zoom_out()
+    control.sleep(0.5)
+    f = bot.shot()
+    full = (0, 0, f.shape[1], f.shape[0])
+    tapped = 0
+    for key in ("village/bubble_gold", "village/bubble_elixir", "village/bubble_dark"):
+        if vision.templates.has(key):
+            for m in vision.find_all(f, key, region=full)[:2]:
+                bot.tap_match(m, jitter=2)
+                bot.sleep(0.5)
+                tapped += 1
+    return tapped
+
+
 def start_search(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
+    gold = bot.read_number("home.gold")
+    if gold is not None and gold < SEARCH_GOLD:
+        if collect_gold(bot):
+            bot.sleep(1.0)
+            gold = bot.read_number("home.gold")
+        if gold is not None and gold < SEARCH_GOLD:
+            raise NoGold(f"only {gold:,} gold: not enough to search a base")
     if bot.settings["loot"].get("zoom_out", True):
         bot.device.zoom_out()
         control.sleep(0.3)
@@ -100,7 +131,13 @@ def search(bot, account=None):
     """Press Next until a base meets the loot minimum. Returns the loot dict or None."""
     max_searches = bot.settings["loot"]["max_searches"]
     for n in range(1, max_searches + 1):
-        if not bot.wait("scout/next", timeout=30):
+        key, _ = bot.wait_any(["scout/next", "scout/end_battle"], timeout=30)
+        if key == "scout/end_battle" and not bot.wait("scout/next", timeout=4):
+            # a base is shown but no Next: the gold for the next search is not there -> attack this one
+            loot = stable_loot(bot)
+            log.info("Search %d: %s -> attack (no gold left for Next)", n, _fmt(loot))
+            return loot
+        if key is None:
             bot.save_error("no-scout")
             raise BotError("Scouting screen did not appear")
         loot = stable_loot(bot)
@@ -137,7 +174,8 @@ def attack_once(bot, account=None):
 
 def loot_until_full(bot, account, keep_going=False, between=None, max_attacks=None):
     """Attack until the account's watched storages are full.
-    Returns "full", "limit" (max attacks reached), "stuck" or "no_army" (no E-Dragon + Clone army).
+    Returns "full", "limit" (max attacks reached), "stuck", "no_army" (no E-Dragon + Clone army) or
+    "no_gold" (too little gold to search, even after collecting it).
     keep_going ("Loot current"): attack on even when full, until the attack limit or Stop.
     between(): called before each attack (the flow may visit another account's builders)."""
     s = bot.settings["loot"]
@@ -173,8 +211,12 @@ def loot_until_full(bot, account, keep_going=False, between=None, max_attacks=No
             continue
         if not ensure_army(bot, account):        # only now: the account really is going to attack
             return "no_army"
-        if attack_once(bot, account) is not None:
-            attacks += 1
+        try:
+            if attack_once(bot, account) is not None:
+                attacks += 1
+        except NoGold as e:
+            log.warning("%s: %s - not looted now", account["name"], e)
+            return "no_gold"
 
 
 UNIT_NAMES = {"edrag": "E-Dragon", "clone": "Clone"}

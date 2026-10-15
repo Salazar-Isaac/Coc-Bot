@@ -191,7 +191,8 @@ DEFAULT_STEPS = {
                      "max_attacks": 0},       # account "" = the one open now; max_attacks 0 = until stopped
     "donate": {},                             # settings["donate"] and the roles on the Accounts list
     "bb_attack": {"accounts": "1-15"},        # army, battle time, limits: settings["builder"]
-    "home_upgrade": {"accounts": "3-15", "buildings": list(DEFAULT_HOME_BUILDINGS), "max_per_visit": 5},
+    "home_upgrade": {"accounts": "3-15", "buildings": list(DEFAULT_HOME_BUILDINGS), "max_per_visit": 5,
+                     "keep_gold": 300000},                 # gold never spent: searching bases costs gold
     "bb_upgrade": {"accounts": "3-15", "buildings": ["Cannon", "Archer Tower", "Mortar"], "new_first": True},
     "home_research": {"accounts": "3-15", "research": []},
     "bb_research": {"accounts": "3-15", "research": []},

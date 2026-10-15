@@ -231,6 +231,9 @@ def _confirm(bot, item, which, home=None):
     bot.tap_match(m)
     bot.sleep(1.5)
     tapped = bot.shot()                           # what the game showed after Confirm (kept if refused)
+    if vision.templates.has("build/close") and vision.find(tapped, "build/close"):
+        bot.tap_point("build.close")              # the side panel stays open: close it (no waiting)
+        bot.sleep(0.6)
     (home or go_home)(bot, 10)
     if home is not None:                          # Builder Base: read its own resource bar
         from . import builder_base

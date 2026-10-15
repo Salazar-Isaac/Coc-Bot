@@ -258,8 +258,8 @@ def _run_step(bot, ctx, key, acc):
                 _on(bot, ctx, acc), loot.loot_until_full(bot, acc, between=lambda: _comeback(bot, ctx, acc)))[1])
             if result is None:
                 return
-            if result == "no_army":
-                return                                 # (logged): no attacks with a wrong army
+            if result in ("no_army", "no_gold"):
+                return                                 # (logged): no army / no gold to search
             log.info("%s: %s", name, {"full": "storages full", "stuck": "storages full (stopped growing)",
                                       "limit": "attack limit reached"}[result])
             if when_full(bot, acc) == "next":
