@@ -6,8 +6,7 @@ exist before the bot can run its basic loop.
 
 CATALOG = [
     # key, screen, how to capture, required
-    ("home/attack_button", "Home", "The trophy (cup) button on the left, under the profile picture - only in the "
-     "home village", True),
+    ("home/attack_button", "Home", "The Build button (hammer), bottom right", True),
     ("home/settings_button", "Home", "The dark elixir drop at the right end of the dark elixir bar", True),
     ("home/chat_button", "Home", "The chat button on the left edge", False),
     ("home/social_button", "Home", "The 'Social' button shown instead of chat when not in a clan", False),

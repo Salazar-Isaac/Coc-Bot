@@ -25,7 +25,9 @@ STATES = [
     ("chat", ["chat/close"]),                     # clan chat open over the village
     ("bb_army", ["bb/army_title"]),               # Builder Base "Choose Army": close with its X
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
-    ("home", ["home/attack_button"]),             # the trophy button (left): only in the home village, undimmed
+    # the Build button (not in battles) and the dark elixir drop (not in the Builder Base), both undimmed
+    # (the button under the profile picture is a trophy or a league badge, depending on the account)
+    ("home", ["home/attack_button", "home/settings_button"]),
     ("daily", ["popup/daily_title"]),
     ("reward_popup", ["popup/hoggy_title"]),        # Hoggy Bank rewards etc.: Continue
     ("shield_info", ["popup/shield_title"]),       # Magic Shield info: Continue only, NEVER "Remove"
@@ -241,7 +243,7 @@ def cancel_placement(bot, frame=None):
     return False
 
 
-ALL_KEYS = set()          # states that need all their pictures to match
+ALL_KEYS = {"home"}       # states that need all their pictures to match
 
 
 def detect(frame):
