@@ -18,7 +18,7 @@ from gui.logs_tab import LogView
 # "This run" counters: key, label. Attacks / searches / Builder Base attacks are always listed, the others
 # once they are above 0.
 STATS = [("attacks", "Attacks"), ("searches", "Searches"), ("bb_attacks", "BB attacks"), ("donated", "Donated"),
-         ("upgrades", "Upgrades"), ("research", "Research")]
+         ("upgrades", "Upgrades"), ("walls", "Walls"), ("research", "Research")]
 ALWAYS_STATS = ("attacks", "searches", "bb_attacks")
 
 

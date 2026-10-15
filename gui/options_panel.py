@@ -17,7 +17,7 @@ from gui.components import Card, ChoiceCard, FlowLayout, Pill, SettingRow, Toggl
 from gui.widgets import Combo
 
 SHORT = {"attack_all": "Loot", "loot_current": "Loot current", "donate": "Donate", "bb_attack": "Builder loot",
-         "home_upgrade": "Home upgrade", "bb_upgrade": "Builder upgrade", "home_research": "Lab research",
+         "home_upgrade": "Home upgrade", "walls": "Walls", "bb_upgrade": "Builder upgrade", "home_research": "Lab research",
          "bb_research": "Star Lab research"}
 
 GROUP_LOOK = {

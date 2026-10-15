@@ -34,6 +34,8 @@ STEPS = [
          "Attack on the Builder Base only (Star Bonus, then until full)", True, "builder"),
     Step("home_upgrade", "Home village upgrade", "hammer",
          "Put free builders on the buildings you choose, in your order", True, "home"),
+    Step("walls", "Wall upgrade", "blocks",
+         "The cheapest walls, many at once, with the account's gold and elixir", True, "home"),
     Step("bb_upgrade", "Builder Base upgrade", "hammer",
          "New buildings first, then your list, then the Builder Hall", True, "builder"),
     Step("home_research", "Home research", "flask",
@@ -49,7 +51,7 @@ LOOTERS = ("main", "loot", "both")
 UPGRADERS = ("both", "feeder")
 NO_UPGRADE_ROLES = ("main", "loot")
 NO_UPGRADE_POSITIONS = (1, 2)
-UPGRADE_STEPS = ("home_upgrade", "bb_upgrade", "home_research", "bb_research")
+UPGRADE_STEPS = ("home_upgrade", "walls", "bb_upgrade", "home_research", "bb_research")
 
 
 @dataclass(frozen=True)
@@ -84,6 +86,8 @@ OPTIONS = [
            "gift", ("donate", "attack_all"), {"attack_all": "1-2"}),
     Option("home_upgrade", "Upgrade", "Home loot + upgrade", "Upgrade, loot until full, upgrade again (village)",
            "hammer", ("home_upgrade", "attack_all", "home_upgrade"), {"attack_all": LOOTERS, "home_upgrade": _UP}),
+    Option("loot_walls", "Upgrade", "Loot + walls", "Walls with what it has, loot until full, walls again (village)",
+           "blocks", ("walls", "attack_all", "walls"), {"attack_all": LOOTERS, "walls": _UP}),
     Option("bb_upgrade", "Upgrade", "Builder loot + upgrade", "Upgrade, loot, upgrade again on the Builder Base",
            "hammer", ("bb_upgrade", "bb_attack", "bb_upgrade"), {"bb_attack": LOOTERS, "bb_upgrade": _UP}),
     Option("all_upgrade", "Upgrade", "Both loot + upgrade", "Village and Builder Base: upgrade, loot, upgrade",
@@ -193,6 +197,7 @@ DEFAULT_STEPS = {
     "bb_attack": {"accounts": "1-15"},        # army, battle time, limits: settings["builder"]
     "home_upgrade": {"accounts": "3-15", "buildings": list(DEFAULT_HOME_BUILDINGS), "max_per_visit": 5,
                      "keep_gold": 300000},                 # gold never spent: searching bases costs gold
+    "walls": {"accounts": "3-15", "keep_gold": 300000, "keep_elixir": 0},   # kept: searching bases costs gold
     "bb_upgrade": {"accounts": "3-15", "buildings": ["Cannon", "Archer Tower", "Mortar"], "new_first": True},
     "home_research": {"accounts": "3-15", "research": []},
     "bb_research": {"accounts": "3-15", "research": []},

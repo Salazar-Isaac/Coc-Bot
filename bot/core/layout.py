@@ -53,6 +53,7 @@ DEFAULT_LAYOUT = {
         "bb.army_clear": [1493, 575],        # red trash button in "Choose Army"
         "bb.army_close": [1600, 220],
         "dialog.cancel": [785, 668],         # orange Cancel of a two-button confirmation
+        "dialog.okay": [1133, 668],          # its green Okay (only after checking the dialog's title and text)
         "request.cancel": [768, 722],        # Cancel of the request window
         "profile.settings_tab": [1475, 127],   # the Settings tab of the profile menu
         "attack_menu.edit_army": [190, 1030],   # Battle menu: Edit Army (the army screen; there is no army button)

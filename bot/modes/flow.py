@@ -11,7 +11,7 @@ import logging
 
 from .. import config
 from ..actions import account as account_actions
-from ..actions import builder_base, loot, research, timers, upgrades
+from ..actions import builder_base, loot, research, timers, upgrades, walls
 from ..core.context import BotError
 from ..flow import BY_KEY, segments, step_accounts
 from ..states import go_home
@@ -268,6 +268,8 @@ def _run_step(bot, ctx, key, acc):
     elif key == "home_upgrade":
         with_recovery(bot, f"upgrades on {name}", lambda: upgrades.run(
             bot, acc, max_count=cfg.get("max_per_visit", 5), buildings=cfg.get("buildings") or []), attempts=2)
+    elif key == "walls":
+        with_recovery(bot, f"walls on {name}", lambda: walls.run(bot, acc), attempts=2)
     elif key == "home_research":
         with_recovery(bot, f"research on {name}", lambda: research.run(bot, acc, cfg.get("research") or []),
                       attempts=2)

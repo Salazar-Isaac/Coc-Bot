@@ -19,6 +19,8 @@ log = logging.getLogger("bot")
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
     ("exit_dialog", ["popup/exit_title"]),        # "Confirm Exit - quit the game?": ALWAYS Cancel, never Okay
+    ("wall_dialog", ["wall/dialog_title"]),       # "Upgrade Walls ... for 40000 Gold?" left open: Cancel (only
+    #                                               the wall upgrade itself presses its Okay, after checking it)
     ("maintenance", ["popup/maintenance"]),       # "Maintenance break" (news page): wait its estimated time
     ("live_replay", ["battle/live_replay"]),      # someone attacks this village right now: wait until it ends
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
@@ -428,8 +430,8 @@ def go_home(bot, timeout=60.0):
                 end = max(end, time.monotonic() + 20)  # the attack ends by itself: never tap into it
             control.sleep(3)
             continue
-        if state == "exit_dialog":
-            bot.tap_point("dialog.cancel")           # never quit the game
+        if state in ("exit_dialog", "wall_dialog"):
+            bot.tap_point("dialog.cancel")           # never quit the game / never pay for walls by accident
         elif state == "switcher":
             bot.tap_point("sid.close", jitter=2)
         elif state == "settings":

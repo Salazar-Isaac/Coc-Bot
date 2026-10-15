@@ -59,7 +59,8 @@ FILTER_LABEL = (805, 500, 150, 48)        # "Sorting"
 FILTER_BUTTONS = {"costmin": (1042, 553, 208, 74), "costmax": (812, 553, 208, 74),
                   "gold": (812, 186, 208, 74), "elixir": (1042, 186, 208, 74), "dark": (1270, 186, 208, 74),
                   "army": (812, 328, 208, 74), "defense": (1042, 328, 208, 74), "hero": (1270, 328, 208, 74),
-                  "resource": (812, 415, 208, 74), "new": (1042, 415, 208, 74)}
+                  "resource": (812, 415, 208, 74), "new": (1042, 415, 208, 74),
+                  "permanent": (1270, 415, 208, 74)}
 
 
 def ensure_sorted(bot, where, account=None):
@@ -130,6 +131,7 @@ def read_page(frame, want_name=None):
         if i in used:
             continue
         below = next((j for j in range(i + 1, len(right)) if 15 * sx <= right[j][1] - b[1] <= 45 * sx), None)
+        timeless = below is None
         if below is not None:
             used.add(below)
             price = right[below]
@@ -154,6 +156,7 @@ def read_page(frame, want_name=None):
         cost = None if red else vision.digits.read(frame, (px - 4, py - 2, pw + 8, ph + 4))
         new = any(abs(n[1] - py) < 25 * sx and n[2] < 75 * sx for n in names)   # the short "New" under the name
         row = {"cost": cost, "res": res, "red": red, "new": new, "name": None, "base": None,
+               "timeless": timeless,                        # a price with no time: walls (done at once)
                "tap": (name_box[0] + min(name_box[2], space.s(160)) // 2, name_box[1] + name_box[3] // 2),
                "y": py}
         if want_name is None:

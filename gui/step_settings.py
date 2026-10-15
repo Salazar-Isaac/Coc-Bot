@@ -21,7 +21,7 @@ from gui.widgets import BigSpin, Combo, Spin
 
 NIGHT = "#8c9bff"          # accent of the Builder Base
 STEP_COLORS = {"attack_all": T.GOLD, "loot_current": "#5cc8ff", "donate": T.ELIXIR_HI, "bb_attack": NIGHT,
-               "home_upgrade": T.GOLD_HI, "bb_upgrade": NIGHT, "home_research": T.GREEN, "bb_research": NIGHT}
+               "home_upgrade": T.GOLD_HI, "walls": T.ELIXIR_HI, "bb_upgrade": NIGHT, "home_research": T.GREEN, "bb_research": NIGHT}
 NAMES = T.RESOURCE_NAME
 TH_LEVELS = [str(t) for t in range(19, 10, -1)]
 LOOT_DEFAULTS = config.DEFAULT_SETTINGS["loot"]
@@ -658,6 +658,45 @@ class HomeUpgradeSettings(_ListStep):
         step_out(settings, self.key)["keep_gold"] = self.keep_gold.value()
 
 
+class WallsSettings(StepSettings):
+    key = "walls"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.who = Card("Accounts and resources", "The cheapest walls first, as many at once as the storages pay "
+                        "for (the game's Upgrade More): a batch with gold, a batch with elixir, then the next "
+                        "level. Walls take no builder.", icon="blocks", color=STEP_COLORS["walls"])
+        self.accounts_field = AccountsField()
+        self.accounts_field.step = self.key
+        self.who.add(self.accounts_field)
+        self.keep_gold = BigSpin(maximum=5_000_000, step=50_000)
+        self.keep_elixir = BigSpin(maximum=20_000_000, step=100_000)
+        self.who.add(divider())
+        self.who.add(SettingRow("Keep gold for searching", "Never spent on walls: finding a base to loot costs gold",
+                                self.keep_gold, 150))
+        self.who.add(SettingRow("Keep elixir", "Never spent on walls (0 = all of it may go into walls)",
+                                self.keep_elixir, 150))
+        b = Banner("<b>Never with gems.</b> Before Okay the total on the Upgrade button and the amount the game "
+                   "asks for are both checked against what may be spent.", "success")
+        b.icon.setPixmap(icons.pixmap("shield", T.GREEN, 18))
+        self.who.add(b)
+        self.cols.add(self.who, 0)
+        self._connect(self.accounts_field, self.keep_gold, self.keep_elixir)
+
+    def load(self, settings, accounts):
+        st = step_cfg(settings, self.key)
+        self.accounts_field.set_text(st.get("accounts", ""))
+        self.keep_gold.setValue(int(st.get("keep_gold", 300000) or 0))
+        self.keep_elixir.setValue(int(st.get("keep_elixir", 0) or 0))
+        self.set_accounts(accounts)
+
+    def apply(self, settings, accounts):
+        st = step_out(settings, self.key)
+        st["accounts"] = self.accounts_field.text()
+        st["keep_gold"] = self.keep_gold.value()
+        st["keep_elixir"] = self.keep_elixir.value()
+
+
 class BBUpgradeSettings(_ListStep):
     key = "bb_upgrade"
 
@@ -737,5 +776,6 @@ class GeneralSettings(StepSettings):
 
 
 BODIES = {"attack_all": AttackAllSettings, "base_choice": BaseChoiceSettings, "loot_current": LootCurrentSettings,
-          "bb_attack": BBAttackSettings, "home_upgrade": HomeUpgradeSettings, "bb_upgrade": BBUpgradeSettings,
+          "bb_attack": BBAttackSettings, "home_upgrade": HomeUpgradeSettings, "walls": WallsSettings,
+          "bb_upgrade": BBUpgradeSettings,
           "home_research": HomeResearchSettings, "bb_research": BBResearchSettings, "general": GeneralSettings}
