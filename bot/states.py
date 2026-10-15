@@ -29,7 +29,7 @@ STATES = [
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
     # the Build button (not in battles) and the dark elixir drop (not in the Builder Base), both undimmed
     # (the button under the profile picture is a trophy or a league badge, depending on the account)
-    ("home", ["home/attack_button", "home/settings_button"]),
+    ("home", ["home/build_button", "home/dark_drop"]),
     ("daily", ["popup/daily_title"]),
     ("reward_popup", ["popup/hoggy_title"]),        # Hoggy Bank rewards etc.: Continue
     ("shield_info", ["popup/shield_title"]),       # Magic Shield info: Continue only, NEVER "Remove"

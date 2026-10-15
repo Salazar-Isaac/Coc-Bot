@@ -1169,21 +1169,6 @@
     ],
     "threshold": 0.85
   },
-  "home/attack_button": {
-    "box": [
-      1758,
-      915,
-      116,
-      125
-    ],
-    "region": [
-      1690,
-      850,
-      230,
-      230
-    ],
-    "threshold": 0.85
-  },
   "home/boat": {
     "box": [
       390,
@@ -1214,6 +1199,21 @@
     ],
     "threshold": 0.8
   },
+  "home/build_button": {
+    "box": [
+      1758,
+      915,
+      116,
+      125
+    ],
+    "region": [
+      1690,
+      850,
+      230,
+      230
+    ],
+    "threshold": 0.85
+  },
   "home/chat_button": {
     "box": [
       32,
@@ -1229,7 +1229,7 @@
     ],
     "threshold": 0.85
   },
-  "home/settings_button": {
+  "home/dark_drop": {
     "box": [
       1858,
       153,

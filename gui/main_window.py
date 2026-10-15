@@ -651,7 +651,7 @@ class MainWindow(QMainWindow):
         if self.runner and self.runner.is_alive():
             return
         self.save()
-        missing = [k for k in ("home/attack_button", "home/settings_button", "settings/title",
+        missing = [k for k in ("home/build_button", "home/dark_drop", "settings/title",
                                "sid/switch_id_label") if not vision.templates.has(k)]
         if missing:
             self.toasts.show("warning", "Templates missing", "Capture first: " + ", ".join(missing), 8000)
