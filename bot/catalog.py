@@ -32,6 +32,8 @@ CATALOG = [
     ("sid/switch_id_label", "Supercell ID", "The 'SWITCH ID' label in the account panel", True),
     ("sid/close", "Supercell ID", "The X, top-right of the account panel", True),
     ("load/loading", "Loading", "Something unique on the loading screen", False),
+    ("popup/maintenance", "Popups", "'MAINTENANCE BREAK' at the top of the maintenance news page", False),
+    ("battle/live_replay", "Battle", "'Live Replay' (red) when someone attacks the village you open", False),
     ("popup/reload", "Popups", "'RELOAD GAME' on the 'Anyone there?' inactivity popup", False),
     ("popup/daily_title", "Popups", "'Daily Reward!' title", False),
     ("popup/daily_claim", "Popups", "The green 'Claim' button on the Daily Reward", False),

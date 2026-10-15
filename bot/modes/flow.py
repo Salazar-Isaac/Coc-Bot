@@ -226,8 +226,11 @@ def _run_accounts(bot, ctx, keys, start_pos=1):
 def _to_village(bot, acc, village):
     """Sail to the Builder Base / back home if needed. False if this account has no Builder Base."""
     try:
-        if builder_base.where(bot) == village:
+        here = builder_base.where(bot)
+        if here == village:
             return True
+        if here is None and village == "main" and go_home(bot, 60):
+            return True                               # an unknown screen over the home village
         if village == "builder":
             builder_base.travel(bot, "builder")
             if bot.settings.get("builder", {}).get("collect", True):

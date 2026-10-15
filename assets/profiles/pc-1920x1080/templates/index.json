@@ -209,6 +209,21 @@
     ],
     "threshold": 0.85
   },
+  "battle/live_replay": {
+    "box": [
+      1660,
+      860,
+      250,
+      56
+    ],
+    "region": [
+      1580,
+      800,
+      340,
+      160
+    ],
+    "threshold": 0.8
+  },
   "battle/surrender": {
     "box": [
       28,
@@ -1393,6 +1408,21 @@
       170
     ],
     "threshold": 0.85
+  },
+  "popup/maintenance": {
+    "box": [
+      779,
+      8,
+      365,
+      44
+    ],
+    "region": [
+      700,
+      0,
+      520,
+      80
+    ],
+    "threshold": 0.8
   },
   "popup/reload": {
     "box": [

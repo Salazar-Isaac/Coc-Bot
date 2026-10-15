@@ -19,6 +19,8 @@ log = logging.getLogger("bot")
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
     ("exit_dialog", ["popup/exit_title"]),        # "Confirm Exit - quit the game?": ALWAYS Cancel, never Okay
+    ("maintenance", ["popup/maintenance"]),       # "Maintenance break" (news page): wait its estimated time
+    ("live_replay", ["battle/live_replay"]),      # someone attacks this village right now: wait until it ends
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
     ("reload", ["popup/try_again", "popup/reload_device", "popup/reload", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
@@ -269,11 +271,36 @@ def tutorial_bubble(frame):
     return vision.find(frame, "popup/speech_corner", any_brightness=True)
 
 
+TUTORIAL_TAPS = [            # tutorials that wait for a button instead of a tap on the message
+    (("builder", "menu"), "top.builders_menu"),        # "Let's view the new Builder Menu!" -> Build button
+]
+
+
 def dismiss_tutorial(bot, frame=None):
-    """Tap inside a tutorial speech bubble to close it. True if there was one."""
-    m = tutorial_bubble(bot.shot() if frame is None else frame)
+    """Close a tutorial speech bubble of the game: tap the message, or - for the ones that point at a
+    button with an arrow (e.g. the new Builder Menu) - tap that button and close what it opens.
+    True if there was one."""
+    frame = bot.shot() if frame is None else frame
+    m = tutorial_bubble(frame)
     if not m:
         return False
+    x, y, w, h = m.box
+    text = " ".join(t for t, _, _ in vision.text_reader.read(frame, (x, y, space.s(430), space.s(170)))).lower()
+    for words, point in TUTORIAL_TAPS:
+        if all(wd in text for wd in words):
+            log.info("Game tutorial (%s): tapping the button it points at", " ".join(words))
+            bot.tap_point(point, jitter=3)
+            control.sleep(1.5)
+            for _ in range(5):                         # the tutorial may go on inside: tap its messages
+                b = tutorial_bubble(bot.shot())
+                if not b:
+                    break
+                bot.tap(b.x + space.s(180), b.y + space.s(60), jitter=4)
+                control.sleep(1.0)
+            if vision.templates.has("build/close") and vision.find(bot.shot(), "build/close"):
+                bot.tap_point("build.close")
+                control.sleep(0.6)
+            return True
     bot.tap(m.x + space.s(180), m.y + space.s(60), jitter=4)
     log.info("Closed a tutorial message of the game")
     control.sleep(0.8)
@@ -333,9 +360,32 @@ def surrender(bot, frame=None, blind=False):
     return bool(bot.tap_template("battle/confirm_okay", timeout=3))
 
 
+MAINTENANCE_TIME = (1650, 50, 250, 80)     # "Estimated time 39m" at the top right of the maintenance page
+LIVE_REPLAY_MAX = 300                     # an attack lasts 3 minutes at most (+ its results)
+
+
+def wait_maintenance(bot, frame):
+    """Supercell's maintenance break: nothing can be done until it is over. Wait the time it shows
+    (checking every minute), then restart the game."""
+    from .actions.timers import parse_time
+    secs = None
+    for text, _, _ in vision.text_reader.read(frame, space.region(*MAINTENANCE_TIME)):
+        secs = parse_time(text) or secs
+    secs = secs or 15 * 60
+    log.warning("The game is in a maintenance break (about %d min): waiting, then going on", secs // 60 + 1)
+    bot.status(action=f"Maintenance break - about {secs // 60 + 1} min", waiting=False)
+    until = time.monotonic() + secs + 60
+    while time.monotonic() < until:
+        control.sleep(60)
+        if not vision.find(bot.shot(), "popup/maintenance"):
+            break                                     # over (or the game shows something else now)
+    restart_game(bot)
+
+
 def go_home(bot, timeout=60.0):
     """Get back to the home village from wherever the game is. Returns True on success."""
     end = time.monotonic() + timeout
+    live_since = None
     unknown = 0
     chest_taps = 0
     last = None
@@ -366,6 +416,18 @@ def go_home(bot, timeout=60.0):
                 _close_any_popup(bot, frame)
         else:
             unknown = 0
+        if state == "maintenance":
+            wait_maintenance(bot, frame)
+            end = time.monotonic() + timeout
+            continue
+        if state == "live_replay":
+            if live_since is None:
+                live_since = time.monotonic()
+                log.info("Someone is attacking this village right now (live replay): waiting until it ends")
+            if time.monotonic() - live_since < LIVE_REPLAY_MAX:
+                end = max(end, time.monotonic() + 20)  # the attack ends by itself: never tap into it
+            control.sleep(3)
+            continue
         if state == "exit_dialog":
             bot.tap_point("dialog.cancel")           # never quit the game
         elif state == "switcher":
