@@ -159,7 +159,7 @@
     ]
   },
   "edrag_clone": {
-    "description": "E-Dragons all round the base, siege + heroes, then Clone on the dragons",
+    "description": "E-Dragons in 3 groups (left, top, right), a Clone on each group as it lands, then siege + heroes; other spells on the dragons' way",
     "offsets": [
       [
         0,
@@ -319,6 +319,7 @@
         "points": "ring",
         "type": "spell"
       }
-    ]
+    ],
+    "style": "clone_groups"
   }
 }

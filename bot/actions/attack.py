@@ -20,6 +20,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 
 import cv2
@@ -213,6 +214,12 @@ def read_count(frame, cx):
         v = vision.digits.read(frame, (cx - space.s(10), space.point(0, top)[1], space.s(62), space.s(32)))
         if v is not None and (best is None or len(str(v)) > len(str(best))):
             best = v
+    if best is None:            # the selected card is lighter: the game-font reader misses its white digits
+        text, conf = vision.text_reader.read_line(frame, (cx - space.s(12), space.point(0, 915)[1], space.s(70),
+                                                          space.s(34)))
+        m = re.match(r"\s*[x×]\s*(\d{1,3})\s*$", text.lower())
+        if m and conf > 0.6:
+            best = int(m.group(1))
     return best
 
 
@@ -349,6 +356,133 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
             queue = [p for p in (fixed(p) for p in _spread(spots, left)) if p is not None]
 
 
+CLONE_IN = 55          # a Clone goes this far inside a dragon group's spot: where the dragons fly to
+GROUP_SPREAD = 15      # the units of a group land within this many pixels of its spot (the old bot's offsets)
+
+
+def clone_card(frame, slots):
+    """X of the Clone spell's card on the troop bar (found by its picture, whatever its key), or None."""
+    if not vision.templates.has("battle/clone_card"):
+        return None
+    ms = [m for m in vision.find_all(frame, "battle/clone_card") if not slot_empty(frame, m.x)]
+    if not ms:
+        return None
+    m = max(ms, key=lambda m: m.score)
+    return min(slots, key=lambda c: abs(c - m.x)) if slots else m.x
+
+
+def _sides(plan, ring, centre):
+    """The spots of the dragon groups: the plan's spell spots (left, top and right of the map, like
+    the old bot), each moved to the nearest point of the deploy ring when the ring was found."""
+    pts = [space.center(x, y) for x, y in plan["points"].get("spells", [])] or \
+        [space.center(240, 525), space.center(913, 10), space.center(1708, 520)]
+    if not ring:
+        return pts
+    return [min(ring, key=lambda r: (r[0] - p[0]) ** 2 + (r[1] - p[1]) ** 2) for p in pts]
+
+
+def _toward(pt, centre, d):
+    x, y = pt
+    dx, dy = centre[0] - x, centre[1] - y
+    n = math.hypot(dx, dy) or 1.0
+    return int(x + dx / n * d), int(y + dy / n * d)
+
+
+def deploy_clone_groups(bot, plan, frame, slots, by_key, card_of, ring, centre):
+    """E-Dragons + Clone: the dragons go down in a few tight groups (one per side), each group in one
+    quick burst, and a Clone is cast on every group right after it lands - while the dragons are still
+    inside it (a Clone cast before the dragons, or seconds later somewhere else, copies nothing).
+    Returns the set of plan keys it deployed (the rest of the plan does the others)."""
+    clone_x = clone_card(frame, slots)
+    clone_key = next((k for k, x in by_key.items() if x == clone_x), None) if clone_x is not None else None
+    clones = (read_count(frame, clone_x) or 1) if clone_x is not None else 0
+    sides = _sides(plan, ring, centre)
+    done = set()
+    groups = []                                       # (spot, step, n)
+    for step in plan["steps"]:
+        if step_type(step) != "troop":
+            continue
+        cx = card_of(step)
+        if cx is None or slot_empty(frame, cx):
+            continue
+        n = read_count(frame, cx)
+        if not n:
+            continue
+        done.add((step.get("key") or "").lower())
+        k = len(sides)
+        for i, spot in enumerate(sides):
+            share = n // k + (1 if i < n % k else 0)
+            if share:
+                groups.append((spot, step, share))
+    if not groups:
+        return set()
+    log.info("Deploying %d group(s) of troops on %d side(s)%s", len(groups), len(sides),
+             f", a Clone on each ({clones} Clone spell(s), key {clone_key or '?'})" if clone_x is not None
+             else " (no Clone spell found on the troop bar)")
+    cast = 0
+    good = []
+    for spot, step, n in groups:
+        control.checkpoint()
+        if not select(bot, step, slots):
+            continue
+        cx = card_of(step)
+        spot = _land(bot, cx, spot, centre)            # the first unit shows the spot can be used
+        if spot is None:
+            log.info("No usable spot on this side (red area): its %d unit(s) go elsewhere", n)
+            continue
+        good.append(spot)
+        # the others along the ring at that spot (same distance from the base: no red area)
+        tx, ty = centre[1] - spot[1], spot[0] - centre[0]
+        d = math.hypot(tx, ty) or 1.0
+        for i in range(1, n):
+            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.s(GROUP_SPREAD)
+            bot.tap(int(spot[0] + tx / d * k), int(spot[1] + ty / d * k), jitter=2)
+            time.sleep(0.07)
+        if clone_x is not None and cast < clones:
+            time.sleep(0.15)
+            ok = select(bot, {"key": clone_key, "slot": slots.index(clone_x) + 1 if clone_x in slots else None},
+                        slots)
+            if ok:
+                bot.tap(*_toward(spot, centre, space.s(CLONE_IN)), jitter=2)
+                cast += 1
+                time.sleep(0.1)
+    # Clones left over (more Clones than groups): on the groups again, in the same order
+    while clone_x is not None and cast < clones and groups:
+        spot = groups[cast % len(groups)][0]
+        if not select(bot, {"key": clone_key, "slot": slots.index(clone_x) + 1 if clone_x in slots else None}, slots):
+            break
+        bot.tap(*_toward(spot, centre, space.s(CLONE_IN + 30)), jitter=2)
+        cast += 1
+        time.sleep(0.1)
+    if clone_key and cast:
+        done.add(clone_key)
+    bot.deploy_spots = good                           # where units really landed (for leftovers)
+    return done
+
+
+def _land(bot, cx, spot, centre, tries=4):
+    """Drop one unit of the selected card at `spot`; if it does not come out (red area, off the map),
+    the spot moves out (or in) and is tried again. Returns the spot that worked, or None."""
+    frame = bot.shot()
+    before = read_count(frame, cx)
+    p = spot
+    for _ in range(tries):
+        if deployzone.valid_spot(frame, *p):
+            bot.tap(*p, jitter=1)
+            for pause in (0.1, 0.12, 0.15):
+                time.sleep(pause)
+                frame = bot.shot()
+                now = read_count(frame, cx)
+                if slot_empty(frame, cx) or (before is not None and now is not None and now < before):
+                    return p
+                if before is None and now is not None:
+                    return p                          # (count not read before: it changed)
+            log.debug("deploy spot %s: nothing came out", p)
+        outward = deployzone.in_diamond(p[0], p[1], inset=-deployzone.MAP_GROW)
+        p = _nudge(p, centre, outward=outward, step=space.s(40))
+    return None
+
+
 def deploy(bot, plan):
     s = bot.settings["loot"]
     smart, verify = s.get("smart_deploy", True), s.get("count_troops", True)
@@ -384,9 +518,16 @@ def deploy(bot, plan):
         return min(ring, key=lambda r: (r[0] - pt[0]) ** 2 + (r[1] - pt[1]) ** 2)
 
     fixes = {}                                  # bad spot -> corrected spot, shared by all units
+    handled = set()
+    bot.deploy_spots = []
+    bot.deploy_started = time.monotonic()       # the battle clock starts here (not while reading the base)
+    if plan.get("style") == "clone_groups" and verify:
+        handled = deploy_clone_groups(bot, plan, frame, slots, by_key, card_of, ring, centre)
     for step in plan["steps"]:
         control.checkpoint()
         kind = step_type(step)
+        if (step.get("key") or "").lower() in handled:
+            continue
         cx = card_of(step)
         if by_key and cx is None:
             log.debug("Key %s is not on the troop bar: this army has no such unit", step.get("key"))
@@ -424,8 +565,8 @@ def deploy(bot, plan):
                 continue
             if not slot_empty(frame, cx) and read_count(frame, cx) and select(bot, step, slots):
                 log.debug("Dropping leftovers of %s", step.get("key") or step.get("slot"))
-                _drop(bot, cx, ring or plan_points(step), centre, fixes=fixes,
-                      reselect=lambda st=step: select(bot, st, slots))
+                _drop(bot, cx, getattr(bot, "deploy_spots", None) or ring or plan_points(step), centre,
+                      fixes=fixes, reselect=lambda st=step: select(bot, st, slots))
                 frame = bot.shot()
 
 

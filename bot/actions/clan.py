@@ -8,7 +8,9 @@ Screens (Google Play Games 1920x1080, all captured as templates):
   Clan chat     - opened from the chat button on the left; each open request has
                   a green Donate button (chat/donate_button).
   Donate window - "Donation Resource" (donate/window_title) with troop/spell icons;
-                  a usable icon is in colour, an unusable one is grey.
+                  a usable icon is in colour, an unusable one is grey. Each unit has a
+                  price in elixir / dark elixir - or in GEMS if the window's resource
+                  switch is on gems: then the bot donates nothing (gem_prices).
 """
 
 import logging
@@ -34,7 +36,8 @@ def open_army(bot):
     if not go_home(bot):
         raise BotError("Not on the home village")
     bot.tap_point("home.attack")
-    if not bot.wait("attack_menu/find_match", 6, interval=0.2):
+    if not bot.wait_any(["attack_menu/find_match", "attack_menu/edit_army"], 6, interval=0.2)[0]:
+        bot.save_error("no-battle-menu")
         raise BotError("Battle menu did not open")
     bot.tap_point("attack_menu.edit_army")
     if not bot.wait("army/my_army_title", 8, interval=0.25):
@@ -253,6 +256,20 @@ def _shifted(region, anchor):
     return max(0, int(ax + x - tx)), max(0, int(ay + y - ty)), int(w), int(h)
 
 
+def gem_prices(frame, dy):
+    """True if the open donate window charges GEMS: its 'Donation Resource' switch (elixir / dark elixir
+    or gems) is on gems, so the prices on the troops are green. Then nothing is donated - ever."""
+    x, y, w, h = _shifted((640, 490, 820, 30), dy)       # the price row of the first troop row
+    patch = frame[y:y + h, x:x + w]
+    if patch.size == 0:
+        return False
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
+    hue, sat, val = hsv[:, 0], hsv[:, 1], hsv[:, 2]
+    gem = int(((hue >= 40) & (hue <= 90) & (sat > 120) & (val > 120)).sum())
+    pink = int(((hue >= 135) & (hue <= 170) & (sat > 90) & (val > 90)).sum())
+    return gem > 150 and gem > pink                      # (elixir prices: under 50 green, hundreds pink)
+
+
 def _donated_strip(frame, dy=0):
     """The 'Donated Troops and Spells' row at the bottom of the donate window."""
     x, y, w, h = _shifted((640, 945, 820, 100), dy)
@@ -273,23 +290,60 @@ def _fraction(frame, box):
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
+# A custom request (the requester picked the troops: "Tap to choose requested reinforcements") has a
+# "Requested:" row of troop icons ("x10" Archer, "x3" Balloon ...) between its message and the Donate
+# button, so its name and message sit about 175 px higher than on a plain request.
+CUSTOM_LABEL = (-420, -190, 220, 36)       # "Requested:" (from the Donate button's centre)
+CUSTOM_ICON = (-415, -148, 83, 80)         # the first requested icon; the next ones 87 px to the right
+CUSTOM_STEP = 87
+ICON_TO_TILE = 1.25                        # a donate-window tile is drawn 1.25 x as big as the card icon
+TILE_MATCH = 0.75                          # (the right tile scores 0.82-0.92, others below 0.55; a GREY
+#                                            tile of the same troop about 0.7 - and it is checked for colour)
+
+
+def _card_box(button, dx, dy, w, h):
+    s = space.s
+    return (max(0, button.x + s(dx)), button.y + s(dy), s(w), s(h))
+
+
+def card_space(frame, button):
+    """The fill of a request card: {"troop": (have, max), "spell": ..., "siege": ...}."""
+    return {"troop": _fraction(frame, _card_box(button, -374, -16, 84, 32)),
+            "spell": _fraction(frame, _card_box(button, -236, -16, 64, 32)),
+            "siege": _fraction(frame, _card_box(button, -140, -16, 56, 32))}
+
+
+def _requested(frame, button):
+    """The icons of a custom request: [{"icon": picture (no count label, no level badge), "count"}]."""
+    out = []
+    x0, y0, w, h = _card_box(button, *CUSTOM_ICON)
+    for k in range(8):
+        x = x0 + space.s(CUSTOM_STEP * k)
+        icon = frame[y0:y0 + h, x:x + w]
+        if icon.size == 0 or icon.shape[1] < w or float(icon.reshape(-1, 3).std(0).max()) < 8:
+            break                                       # an empty slot: no more icons
+        best = ("", 0.0)
+        for bx, by, bw, bh in ((x, y0, space.s(52), space.s(30)), (x - 2, y0 - 2, space.s(60), space.s(34))):
+            text, conf = vision.text_reader.read_line(frame, (bx, by, bw, bh))
+            if conf > best[1]:
+                best = (text, conf)
+        m = re.search(r"[x×]\s*(\d{1,2})", best[0].lower())
+        crop = icon[int(h * 0.2):int(h * 0.78), int(w * 0.31):int(w * 0.96)].copy()
+        out.append({"icon": crop, "count": int(m.group(1)) if m else None, "slot": k})
+    return out
+
+
 def read_request(frame, button):
     """What a request card says, from its Donate button's position:
-    {"name", "message", "troop": (have, max), "spell": (...), "siege": (...)}."""
-    bx, by = button.x, button.y
-    s = space.s
-
-    def box(dx, dy, w, h):
-        return (max(0, bx + s(dx)), by + s(dy), s(w), s(h))
-    name, _ = vision.text_reader.read_line(frame, box(-420, -152, 380, 38))
-    msg, _ = vision.text_reader.read_line(frame, box(-432, -88, 470, 40))
-    return {
-        "name": name.strip(),
-        "message": msg.strip(),
-        "troop": _fraction(frame, box(-374, -16, 84, 32)),
-        "spell": _fraction(frame, box(-236, -16, 64, 32)),
-        "siege": _fraction(frame, box(-140, -16, 56, 32)),
-    }
+    {"name", "message", "troop": (have, max), "spell": (...), "siege": (...),
+     "wanted": [requested icons] (custom requests only)}."""
+    label, _ = vision.text_reader.read_line(frame, _card_box(button, *CUSTOM_LABEL))
+    custom = "request" in label.lower()
+    name, _ = vision.text_reader.read_line(frame, _card_box(button, -420, -329 if custom else -152, 380, 38))
+    msg, _ = vision.text_reader.read_line(frame, _card_box(button, -432, -258 if custom else -88, 470, 40))
+    out = {"name": name.strip(), "message": msg.strip(), "wanted": _requested(frame, button) if custom else []}
+    out.update(card_space(frame, button))
+    return out
 
 
 def _space_left(req):
@@ -438,6 +492,59 @@ def _find_fast(bot, frame, key, dy, cat):
     return None, frame
 
 
+def _find_tile(frame, icon, region):
+    """The donate-window tile that shows this card icon. Returns (match or None, score, grey) -
+    grey: the tile is there but not in colour (cannot be donated from this account)."""
+    x, y, w, h = [int(v) for v in region]
+    area = frame[y:y + h, x:x + w]
+    t = cv2.resize(icon, None, fx=ICON_TO_TILE, fy=ICON_TO_TILE)
+    if area.shape[0] < t.shape[0] or area.shape[1] < t.shape[1]:
+        return None, 0.0, False
+    r = cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED)
+    _, score, _, loc = cv2.minMaxLoc(r)
+    if score < TILE_MATCH:
+        return None, score, False
+    th, tw = t.shape[:2]
+    tile = area[loc[1]:loc[1] + th, loc[0]:loc[0] + tw]
+    sat = cv2.cvtColor(tile, cv2.COLOR_BGR2HSV)[:, :, 1].mean()
+    want = cv2.cvtColor(t, cv2.COLOR_BGR2HSV)[:, :, 1].mean()
+    m = vision.Match(x + loc[0] + tw // 2, y + loc[1] + th // 2, float(score), (x + loc[0], y + loc[1], tw, th))
+    return m, score, sat < want * 0.6
+
+
+def fill_custom(bot, wanted, dy, left, who="?"):
+    """A custom request's donate window is open: each requested troop / spell / siege machine is found by
+    its picture (whatever it is - it need not be on your Donate list) and tapped exactly as many times as
+    requested. The game lists the requested ones first. Returns the number of units donated."""
+    frame = bot.shot()
+    region = _shifted((630, 375, 840, 525), dy)            # the troop rows and the spell row
+    spell_top = _shifted(ROWS["spell"], dy)[1]
+    taps, done = 0, []
+    for w in wanted:
+        m, score, grey = _find_tile(frame, w["icon"], region)
+        label = f"#{w['slot'] + 1} (x{w['count'] or '?'})"
+        if m is None or grey:
+            log.info("%s asked for item %s: %s", who, label, "only in grey (not donatable from this account)"
+                     if grey else f"not in the donate window (best match {score:.2f})")
+            continue
+        cat = "spell" if m.y >= spell_top else "troop"
+        n = w["count"] or 1
+        if cat == "spell" and left.get("spell") is not None:
+            n = min(n, left["spell"])
+        if n <= 0:
+            continue
+        bot.tap_burst(m, n, 0.12)
+        taps += n
+        done.append(f"{label} {n} tap(s) ({cat})")
+        time.sleep(0.25)
+        frame = bot.shot()
+        if _window_dy(frame) is None:
+            break                                       # the request is full: the window closed itself
+    if done:
+        log.info("%s: requested items donated: %s", who, ", ".join(done))
+    return taps
+
+
 def fill_fast(bot, items, dy, big, left=None):
     """Donate window is open: tap each item in one quick burst (like XpIncrease). With the free
     space of the request known, exactly the taps that fit are made (troop space comes in steps of
@@ -465,7 +572,9 @@ def fill_fast(bot, items, dy, big, left=None):
                 continue
         m, frame = _find_fast(bot, frame, key, dy, cat)
         if not m:
+            log.debug("donate %s: not available (grey, not trained or not found)", item.get("name"))
             continue
+        log.debug("donate %s: %d tap(s)", item.get("name"), n)
         bot.tap_burst(m, n, 0.25 if cat == "siege" else 0.05)
         taps += n
         if free is not None:
@@ -494,6 +603,7 @@ def donate_all(bot, settings, max_requests=60):
     total, handled = 0, 0
     page, empty_pages = 0, 0
     tried, skipped, done_names, retries, visits = set(), set(), set(), {}, {}
+    saved_zero = False
     try:
         while handled < max_requests and empty_pages < 3:
             frame = bot.shot()
@@ -525,10 +635,12 @@ def donate_all(bot, settings, max_requests=60):
                 handled -= 1
                 continue
             order, left, asked = plan(req, items)
-            log.info("Request from %s%s - space left: troops %s, spells %s, siege %s", who,
-                     f' ("{req["message"]}")' if req["message"] else "",
+            wanted = req.get("wanted") or []
+            custom = (" - custom request: " + ", ".join(f"x{w['count'] or '?'}" for w in wanted)) if wanted else ""
+            log.info("Request from %s%s%s - space left: troops %s, spells %s, siege %s", who,
+                     f' ("{req["message"]}")' if req["message"] else "", custom,
                      *(("?" if left[c] is None else left[c]) for c in ("troop", "spell", "siege")))
-            if not order:
+            if not order and not wanted:
                 log.info("Nothing to give %s: request full or nothing fits", who)
                 done_names.add(ident)
                 continue
@@ -538,6 +650,7 @@ def donate_all(bot, settings, max_requests=60):
             # the chat may have moved while reading (a filled request disappears): re-find the button
             now = [m for m in donate_buttons(bot.shot()) if abs(m.y - b.y) < 14]
             if not now:
+                log.debug("The chat moved while reading %s's request: reading it again", who)
                 tried.discard((page, b.y // 12))
                 handled -= 1
                 bot.sleep(0.6)
@@ -552,15 +665,34 @@ def donate_all(bot, settings, max_requests=60):
                     tried.discard((page, b.y // 12))
                 continue
             visits[ident] = visits.get(ident, 0) + 1
-            if settings["donate"].get("method", "fast") == "fast":
+            n = 0
+            g = bot.shot()
+            if gem_prices(g, _window_dy(g) or 0):
+                log.error("The donate window charges GEMS ('Donation Resource' is set to gems in the game): "
+                          "nothing is donated. Set it back to elixir in the game.")
+                bot.save_error("donate-gem-prices", g)
+                bot.tap_point("donate.close")
+                bot.sleep(0.6)
+                break
+            if wanted:                                 # a custom request: what it asks for first
+                n = fill_custom(bot, wanted, _window_dy(g) or 0, left, who)
                 g = bot.shot()
+                if _window_dy(g) is None:
+                    order = []                         # that filled it (the window closed itself)
+                else:                                  # then the room left, with your usual items
+                    left = _space_left(card_space(g, now[0]))
+                    order = [i for i in order if left.get(i["category"]) != 0]
+            if order and settings["donate"].get("method", "fast") == "fast":
                 dy = _window_dy(g) or 0
                 big = is_big_request(g, dy, settings)
-                n = fill_fast(bot, order, dy, big, left)
+                n += fill_fast(bot, order, dy, big, left)
                 if big:
                     log.info("%s: big request (Super Wizard available)", who)
-            else:
-                n = fill_request(bot, order, left)
+            elif order:
+                n += fill_request(bot, order, left)
+            if not n and any(left.get(c) for c in ("troop", "spell", "siege")) and not saved_zero:
+                saved_zero = True                      # the first request with room that got nothing:
+                bot.save_error("donate-nothing", g)    # keep a picture of its donate window
             if not n:
                 done_names.add(ident)                  # nothing more fits / nothing available
             else:

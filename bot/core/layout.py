@@ -85,6 +85,7 @@ DEFAULT_LAYOUT = {
         "bb.builders": [1738, 845, 76, 50],
         "bb.lab": [1815, 845, 80, 50],
         "home.player_name": [150, 66, 320, 40],   # in-game name next to the Town Hall picture
+        "home.clan_name": [150, 98, 240, 34],     # its clan's name under it
         "army.request_timer": [1688, 830, 112, 36],   # "10m" under the gem price while on cooldown
         "bb.reward_gold": [1140, 650, 150, 45],
         "top.lab": [1815, 845, 80, 50],   # "1/2" free laboratory (goblin icon), next to the builders

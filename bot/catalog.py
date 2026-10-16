@@ -11,6 +11,8 @@ CATALOG = [
     ("home/chat_button", "Home", "The chat button on the left edge", False),
     ("home/social_button", "Home", "The 'Social' button shown instead of chat when not in a clan", False),
     ("attack_menu/find_match", "Attack menu", "The words 'Find a Match' on the Battle card (not the cost)", True),
+    ("attack_menu/edit_army", "Attack menu", "The words 'Edit Army' on the green button, bottom left", False),
+    ("battle/clone_card", "Battle", "The Clone spell's bottle on its troop-bar card (not its count)", False),
     ("army/my_army_title", "Army", "The 'My Army' tab title", True),
     ("army/attack_button", "Army (after Find a Match)", "The green 'Attack!' button", True),
     ("army/close", "Army", "The red X, top-right", True),

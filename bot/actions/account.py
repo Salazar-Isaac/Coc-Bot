@@ -159,6 +159,15 @@ def read_player(bot, frame=None):
     return text.strip() if text and conf > 0.6 else ""
 
 
+def read_clan(bot, frame=None):
+    """The name of the clan the account is in, under its player name ("" if none or unreadable)."""
+    frame = bot.shot() if frame is None else frame
+    if "home.clan_name" not in bot.layout.regions:
+        return ""
+    text, conf = vision.text_reader.read_line(frame, bot.layout.region("home.clan_name"))
+    return text.strip() if text and conf > 0.7 and len(text.strip()) >= 3 else ""
+
+
 def on_account(bot, account, check_name=False):
     """True if the bot switched to this account in this run (and, with check_name - after the game
     reloaded - its in-game name still matches). In-game names are not unique (several accounts can
@@ -259,12 +268,21 @@ def switch_to(bot, account, state=None):
         config.save_state(state)
     if not go_home(bot, timeout=90):
         raise BotError(f"'{name}' did not finish loading")
-    player = read_player(bot)
-    if player and account.get("player") and not same_name(player, account["player"]):
-        log.warning("%s shows the name '%s' (was '%s' last time)", name, player, account["player"])
+    frame = bot.shot()
+    player = read_player(bot, frame)
+    old = account.get("player") or ""
+    if player and old and normalise(old).startswith(normalise(player)) and len(player) < len(old):
+        player = ""                                   # a cut-off read ("Buggu" for "Buggu4"): keep the old one
+    if player and old and not same_name(player, old):
+        log.warning("%s shows the name '%s' (was '%s' last time)", name, player, old)
     bot.current_account, bot.current_acc = name, account
     if player:
         account["player"] = player                    # in-game name, as shown in clan chat
+    clan_name = read_clan(bot, frame)
+    if clan_name:
+        if account.get("clan") and not same_name(clan_name, account["clan"]):
+            log.info("%s is now in the clan '%s' (was '%s')", name, clan_name, account["clan"])
+        account["clan"] = clan_name
     log.info("Now on %s (Town Hall %s) in %.0f s", name, account.get("th") or "?", time.monotonic() - started)
     return True
 

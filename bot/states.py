@@ -41,7 +41,7 @@ STATES = [
     ("switcher", ["sid/switch_id_label"]),
     ("settings", ["settings/title"]),
     ("army", ["army/my_army_title"]),
-    ("attack_menu", ["attack_menu/find_match"]),
+    ("attack_menu", ["attack_menu/find_match", "attack_menu/edit_army"]),   # (Battle card grey: no army)
     ("remove_dialog", ["army/remove_title"]),      # "Remove troops?" -> Cancel when lost
     ("request_window", ["request/title"]),         # request window -> Cancel when lost
     ("results", ["results/claim_reward", "results/return_home"]),

@@ -179,6 +179,21 @@
     ],
     "threshold": 0.85
   },
+  "attack_menu/edit_army": {
+    "box": [
+      145,
+      1012,
+      148,
+      40
+    ],
+    "region": [
+      40,
+      960,
+      330,
+      120
+    ],
+    "threshold": 0.8
+  },
   "attack_menu/find_match": {
     "box": [
       105,
@@ -193,6 +208,21 @@
       164
     ],
     "threshold": 0.85
+  },
+  "battle/clone_card": {
+    "box": [
+      1075,
+      950,
+      70,
+      75
+    ],
+    "region": [
+      0,
+      880,
+      1920,
+      200
+    ],
+    "threshold": 0.8
   },
   "battle/confirm_okay": {
     "box": [
