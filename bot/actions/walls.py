@@ -1,16 +1,19 @@
-"""Wall upgrades: many walls at once, paid with gold and with elixir.
+"""Wall upgrades: many walls at once, paid with gold and with elixir - only while a builder is free.
 
 The Build panel (sorted "Cost Min") lists the walls per level, priced per wall and without a time
-("Wall x 216 - 20,000": walls are upgraded at once and take no builder). Tapping that row selects a
-wall of that level (the camera goes to it) and shows its buttons left of the panel. "Upgrade More"
-turns them into Remove Wall (-1) / Add Wall (+10) / Add Wall (+1) / Upgrade (gold) / Upgrade (elixir),
-the Upgrade buttons showing the total price of the walls selected. Then the game asks "Upgrade
-Walls - Do you really want to upgrade the selected Walls for 40000 Gold?" - Okay.
+("Wall x 216 - 20,000"). Tapping that row selects a wall of that level (the camera goes to it) and
+shows its buttons under it: Info / Select Row / Upgrade More / Upgrade (gold) / Upgrade (elixir).
+"Upgrade More" turns them into Remove Wall (-1) / Add Wall (+10) / Add Wall (+1) / Upgrade / Upgrade -
+the same five places - and the Upgrade buttons then show the total price of the walls selected. The
+game asks "Upgrade Walls - Do you really want to upgrade the selected Walls for 40000 Gold?" - Okay.
+
+The buttons are see-through (the village shows through them), so they are found by their LABELS,
+read once per visit ("Upgrade More", "Upgrade"); their prices with the game-font digit reader.
 
 So as many walls of the cheapest level as the gold allows (above the gold kept for searching bases)
-go in one batch paid with gold, as many as the elixir allows in one paid with elixir; then the next
-level, until neither pays for one more wall. Before Okay the total on the button and the amount in
-the game's question are both checked against what may be spent. Gems are never involved.
+go in one batch paid with gold, as many as the elixir allows in one paid with elixir (the fuller one
+first); then the next level, until neither pays for one more wall. Before Okay the total on the button
+and the amount in the game's question are both checked against what may be spent. Gems never.
 """
 
 import logging
@@ -26,12 +29,11 @@ from . import loot, panel, upgrades, village
 log = logging.getLogger("bot")
 
 MAIN = upgrades.MAIN
-TITLE = (440, 745, 540, 55)            # "Wall (Level 4) x 11" over the wall's buttons (Build panel open)
+LABELS = (250, 860, 1150, 90)          # where the labels of a selected wall's buttons are (either bar size)
 DIALOG_LINE = (680, 494, 560, 44)      # "... Walls for 40000 Gold?" (2nd line of the question, centred)
 RESOURCES = ("gold", "elixir")         # walls are never paid with dark elixir (or gems)
 MAX_BATCHES = 12                       # per visit (one batch per level and resource)
 TAP_GAP = 0.18                         # between two "Add Wall" taps (faster ones get lost)
-REMOVE_LEFT = 314                      # "Remove Wall" (-1) is this far left of the "+1" wall
 
 
 def cfg(bot):
@@ -52,9 +54,20 @@ def _count(name):
     return int(m.group(1)) if m else None
 
 
+DIGIT_LIKE = str.maketrans("silo|zbg", "51101269")     # what the text reader makes of game-font digits
+
+
 def _level(title):
-    m = re.search(r"lev\w*\W*(\d+)", (title or "").lower())
-    return int(m.group(1)) if m else None
+    """'Wall (Level 16)' -> 16 (also from 'LeveI s' = 5, 'Leveli6' = 16)."""
+    m = re.search(r"leve[l1i|]\W*([0-9silo|zbg]{1,2})", (title or "").lower())
+    return int(m.group(1).translate(DIGIT_LIKE)) if m else None
+
+
+def _multi(title):
+    """True once Upgrade More took: 'Wall (Level 5)x 1' (read as 'x 1', "x'l", 'x l' ...)."""
+    low = (title or "").lower()
+    m = re.search(r"leve[l1i|]\W*[0-9silo|zbg]{1,2}", low)
+    return bool(re.search(r"[x×]\s*\W?\s*[0-9li|]", low[m.end():] if m else low))
 
 
 # ----------------------------------------------------------------------------- the panel row
@@ -84,18 +97,47 @@ def cheapest_row(bot, money, account, start_page=0):
 
 
 # ----------------------------------------------------------------------------- the wall buttons
-def _prices(frame, key):
-    """The Upgrade buttons of the selected walls: [(match, total price, resource)]."""
-    out = []
-    for m in vision.find_all(frame, key):
-        x, y, w, h = m.box
-        total = vision.digits.read(frame, (x - space.s(14), y - space.s(28), w + space.s(28), space.s(30)))
-        out.append((m, total, _resource(frame, (x - space.s(14), y - space.s(28), w + space.s(28), space.s(28)))))
-    return out
+def read_bar(frame):
+    """The selected wall's buttons, found by their labels: {"slots": [x of the 5 places], "y": tap y,
+    "label_y", "more": x of Upgrade More or None, "ups": [x of the Upgrade buttons]} - or None."""
+    region = space.region(*LABELS)
+    found = []
+    for b in panel._detect(frame, region):
+        text = panel._line(frame, b).strip().lower()
+        if len(re.sub(r"[^a-z]", "", text)) >= 2:          # (the +10 / +1 / hammer icons are no labels)
+            found.append((b[0] + b[2] // 2, b[1], text))
+    buttons = []
+    for cx, y, text in sorted(found):
+        if buttons and abs(buttons[-1]["x"] - cx) < space.s(45):
+            buttons[-1]["text"] += " " + text                  # a two-line label ("Upgrade / More")
+            buttons[-1]["y"] = min(buttons[-1]["y"], y)
+        else:
+            buttons.append({"x": cx, "y": y, "text": text})
+    if len(buttons) < 3:
+        return None
+    more = next((b["x"] for b in buttons if "more" in b["text"]), None)
+    up = [b for b in buttons if ("upgr" in b["text"] or "grade" in b["text"]) and "more" not in b["text"]]
+    ups, up_y = [b["x"] for b in up], {b["x"]: b["y"] for b in up}
+    label_y = min(b["y"] for b in buttons)
+    return {"slots": [b["x"] for b in buttons], "texts": [b["text"] for b in buttons], "label_y": label_y,
+            "y": label_y - space.s(24), "more": more, "ups": ups, "up_y": up_y,
+            "title": (int(sum(b["x"] for b in buttons) / len(buttons)) - space.s(250), label_y - space.s(142),
+                      space.s(500), space.s(50))}
+
+
+def _title(bot, bar):
+    text, _ = vision.text_reader.read_line(bot.shot(), bar["title"])
+    return text.strip()
+
+
+def _price(frame, bar, x):
+    """The total on an Upgrade button (its price is above the hammer, 66 px over its label) and its resource."""
+    box = (x - space.s(65), bar["up_y"].get(x, bar["label_y"]) - space.s(84), space.s(130), space.s(36))
+    return vision.digits.read(frame, box), _resource(frame, box)
 
 
 def _resource(frame, box):
-    """Gold coin or elixir drop next to a price on a wall button (the button itself is beige)."""
+    """Gold coin or elixir drop next to a price on a wall button."""
     import cv2
     x, y, w, h = [int(v) for v in box]
     patch = frame[max(0, y):y + h, max(0, x):x + w]
@@ -105,22 +147,30 @@ def _resource(frame, box):
     hue, sat, val = hsv[:, 0], hsv[:, 1], hsv[:, 2]
     gold = ((hue >= 18) & (hue <= 35) & (sat > 150) & (val > 170)).sum()
     elixir = ((hue >= 125) & (hue <= 170) & (sat > 80) & (val > 80)).sum()
-    if max(gold, elixir) < 25:
-        return None
+    if max(gold, elixir) < 25 or min(gold, elixir) > max(gold, elixir) * 0.6:
+        return None                                       # unclear (the village shows through)
     return "gold" if gold > elixir else "elixir"
 
 
-def _total(bot, res, key="wall/upgrade"):
-    for m, total, r in _prices(bot.shot(), key):
-        if r == res:
-            return m, total
-    return None, None
+def _upgrade_buttons(frame, bar):
+    """{resource: x} of the Upgrade buttons: with two, gold is the left one and elixir the right one."""
+    ups = sorted(bar["ups"])
+    if len(ups) >= 2:
+        return {"gold": ups[0], "elixir": ups[1]}
+    out = {}
+    for x in ups:
+        res = _price(frame, bar, x)[1]
+        if res:
+            out[res] = x
+    return out
 
 
 def _okay(bot, res, total, money):
     """The game's "Upgrade Walls ... for 40000 Gold?" is open: Okay only if it names this resource and
     exactly this total, within what may be spent. True if the walls were paid."""
     if not bot.wait("wall/dialog_title", 4, interval=0.2):
+        log.info("Walls: the 'Upgrade Walls' question did not come")
+        bot.save_error("walls-no-question")
         return False
     text, _ = vision.text_reader.read_line(bot.frame, space.region(*DIALOG_LINE))
     low = text.lower().replace(" ", "")
@@ -140,61 +190,69 @@ def _okay(bot, res, total, money):
         bot.sleep(0.6)
         return False
     if not vision.find(bot.frame, "build/close"):      # something else popped up (never a gem offer: close it)
+        log.info("Walls: something else came up after Okay (kept as walls-after-okay)")
         bot.save_error("walls-after-okay")
         village._close_offer(bot)
         return False
     return True
 
 
-def _single(bot, row, res, money):
-    """Only one wall of that level selected and no Upgrade More: its own Upgrade button."""
-    m, total = _total(bot, res, "wall/upgrade_one")
-    if m is None or not total or total > money:
-        return 0
-    bot.tap_match(m, jitter=2)
-    key, _ = bot.wait_any(["wall/dialog_title", "upgrade/confirm"], 4)
-    if key == "wall/dialog_title":
-        return 1 if _okay(bot, res, total, money) else 0
-    if key == "upgrade/confirm":                        # an upgrade window: its priced Confirm, never gems
-        c, price = village._priced_confirm(bot, bot.shot())
-        if c is None or price != total or price > money:
-            village._close_offer(bot)
-            return 0
-        bot.tap_match(c)
-        bot.sleep(1.5)
-        return 1 if not vision.find(bot.shot(), "upgrade/confirm") else 0
-    return 0
-
-
-def batch(bot, row, res, want, money):
+def batch(bot, row, res, want, money, bars):
     """Select `want` walls of the row's level and pay them with `res` (at most `money`). The panel
-    must be open with the row's page on screen (or it is found again). Returns how many were upgraded."""
+    must be open with the row's page on screen (or it is found again). bars: the button places read
+    this visit (filled on the first batch). Returns how many were upgraded."""
     if not panel.goto_row(bot, MAIN, row):
         log.info("Walls: the %s row is not in the list any more", row.get("name") or "wall")
         return 0
-    if not bot.wait("wall/upgrade_more", 4, interval=0.2) and not bot.exists("wall/upgrade_one"):
-        log.info("Walls: no wall buttons after tapping %s", row.get("name") or "the wall row")
-        bot.save_error("walls-no-buttons")
-        return 0
-    bot.sleep(0.3)                                     # the buttons slide in: let the title settle
-    title, _ = vision.text_reader.read_line(bot.shot(), space.region(*TITLE))
+    bot.sleep(1.2)                                     # the camera moves to the wall, the buttons slide in
+    bar = bars.get("normal")
+    title = _title(bot, bar) if bar else ""
     if "wall" not in title.lower().replace(" ", ""):
-        log.warning("Walls: '%s' was selected, not a wall: nothing done", title.strip())
+        bar = None
+        for _ in range(2):                             # read the buttons by their labels
+            bar = read_bar(bot.shot())
+            if bar and bar["more"]:
+                break
+            bot.sleep(0.8)
+        if not bar or not bar["more"] or len(bar["slots"]) < 4:
+            log.info("Walls: no 'Upgrade More' under the selected wall (labels read: %s)",
+                     ", ".join(bar["texts"]) if bar else "none")
+            bot.save_error("walls-no-buttons")
+            return 0
+        bars["normal"] = bar
+        title = _title(bot, bar)
+        log.debug("Wall buttons at %s (labels: %s), title '%s'", bar["slots"], ", ".join(bar["texts"]), title)
+    if "wall" not in title.lower().replace(" ", ""):
+        log.warning("Walls: '%s' was selected, not a wall: nothing done", title)
+        bot.save_error("walls-not-a-wall")
         return 0
     level = _level(title)
-    more = vision.find(bot.frame, "wall/upgrade_more")
-    if more is None:
-        return _single(bot, row, res, money)
-    bot.tap_match(more, jitter=2)
-    if not bot.wait("wall/add1", 3, interval=0.2):
-        log.info("Walls: Upgrade More did not open")
+    bot.tap(bar["more"], bar["y"], jitter=2)          # Upgrade More: the same 5 places get new buttons
+    end = time.monotonic() + 3
+    while time.monotonic() < end:                     # "Wall (Level 4) x 1" once it took
+        bot.sleep(0.4)
+        if _multi(_title(bot, bar)):
+            break
+    else:
+        log.info("Walls (level %s): Upgrade More did not take", level or "?")
+        bot.save_error("walls-no-multi")
         return 0
-    f = bot.shot()
-    add1 = vision.find(f, "wall/add1")
-    add10 = vision.find(f, "wall/add10")
-    m, per = _total(bot, res)
-    if m is None or not per:
-        log.info("Walls (level %s): no %s price to pay them with", level or "?", res)
+    slots = sorted(bar["slots"])
+    i = slots.index(bar["more"])
+    add1, add10 = bar["more"], slots[i - 1] if i >= 1 else None   # +10 where Select Row was, +1 where
+    remove = slots[i - 2] if i >= 2 else None                     # Upgrade More was, Remove where Info was
+    ups = _upgrade_buttons(bot.shot(), bar)
+    if res not in ups:
+        log.info("Walls (level %s): no Upgrade button priced in %s", level or "?", res)
+        return 0
+    x = ups[res]
+    per, seen = _price(bot.frame, bar, x)
+    if not per:
+        log.info("Walls (level %s): the price on the %s button could not be read", level or "?", res)
+        bot.save_error("walls-no-price")
+        return 0
+    if seen and seen != res:
+        log.info("Walls (level %s): the %s button looks like %s - not upgrading", level or "?", res, seen)
         return 0
     if per != row["cost"]:
         log.info("Walls (level %s): %s each now (the list said %s)", level or "?", f"{per:,}", f"{row['cost']:,}")
@@ -203,17 +261,16 @@ def batch(bot, row, res, want, money):
         return 0
     tens, ones = divmod(want - 1, 10)
     if tens and add10 is not None:
-        bot.tap(add10.x, add10.y, jitter=2, times=tens, interval=TAP_GAP)
+        bot.tap(add10, bar["y"], jitter=2, times=tens, interval=TAP_GAP)
     elif tens:
         ones += 10 * tens
     if ones:
-        bot.tap(add1.x, add1.y, jitter=2, times=ones, interval=TAP_GAP)
+        bot.tap(add1, bar["y"], jitter=2, times=ones, interval=TAP_GAP)
     # check the count by the total on the button (taps can get lost; there may be fewer walls)
-    remove = (add1.x - space.s(REMOVE_LEFT), add1.y)
     got, last = None, None
     for _ in range(4):
         bot.sleep(0.5)
-        _, total = _total(bot, res)
+        total = _price(bot.shot(), bar, x)[0]
         if not total:
             break
         got = total // per
@@ -221,35 +278,57 @@ def batch(bot, row, res, want, money):
             break                                       # done - or no more walls of this level to add
         last = got
         if got < want:
-            bot.tap(add1.x, add1.y, jitter=2, times=want - got, interval=TAP_GAP)
-        else:
-            bot.tap(*remove, jitter=2, times=got - want, interval=TAP_GAP)
-    m, total = _total(bot, res)
-    if m is None or not total or total > money or total % per:
+            bot.tap(add1, bar["y"], jitter=2, times=want - got, interval=TAP_GAP)
+        elif remove is not None:
+            bot.tap(remove, bar["y"], jitter=2, times=got - want, interval=TAP_GAP)
+    total = _price(bot.shot(), bar, x)[0]
+    if not total or total > money or total % per:
         log.info("Walls (level %s): the total %s is not what was chosen - not upgrading", level or "?",
                  f"{total:,}" if total else "?")
+        bot.save_error("walls-total")
         return 0
     got = total // per
     log.info("Walls (level %s): upgrading %d for %s %s (%s each)", level or "?", got, f"{total:,}", res, f"{per:,}")
-    bot.tap_match(m, jitter=2)
+    bot.tap(x, bar["y"], jitter=2)
     return got if _okay(bot, res, total, money) else 0
 
 
 # ----------------------------------------------------------------------------- one visit
+def free_builder(bot, account):
+    """Walls only while a builder is free: the builder counter (free / all) on the village."""
+    counter = village.read_counter(bot, "builders")
+    if not counter:
+        bot.sleep(1.0)
+        counter = village.read_counter(bot, "builders")
+    if not counter:
+        log.info("%s: the builders could not be read - no walls now", account["name"])
+        return False
+    if counter[0] <= 0:
+        log.info("%s: no free builder (%d/%d) - no walls now", account["name"], *counter)
+        return False
+    return True
+
+
 def run(bot, account, max_batches=MAX_BATCHES):
     """Put the account's gold and elixir (above what is kept) into walls, the cheapest level first,
-    many walls per batch. Returns the number of walls upgraded."""
+    many walls per batch - only while a builder is free. Returns the number of walls upgraded."""
     if not go_home(bot):
         return 0
     if upgrades.refuse(bot, account, "wall upgrades"):
+        return 0
+    if not free_builder(bot, account):
         return 0
     have = loot.home_resources(bot)
     money = budget(bot, have)
     if have.get("gold") is None and have.get("elixir") is None:
         log.info("%s: could not read the resources - no walls", account["name"])
         return 0
+    log.info("%s: walls with up to %s gold and %s elixir (has %s gold, %s elixir)", account["name"],
+             f"{money['gold']:,}", f"{money['elixir']:,}", f"{have.get('gold') or 0:,}", f"{have.get('elixir') or 0:,}")
     t0 = time.monotonic()
-    done, spent, failed, page = 0, {r: 0 for r in RESOURCES}, set(), 0
+    pages = (bot.state if bot.state is not None else {}).setdefault("wall_page", {})
+    page = max(0, int(pages.get(account["name"], 0)) - 1)   # where the walls were on the list last time
+    done, spent, failed, bars = 0, {r: 0 for r in RESOURCES}, set(), {}
     for _ in range(max_batches):
         control.checkpoint()
         if max(money.values()) <= 0:
@@ -262,6 +341,7 @@ def run(bot, account, max_batches=MAX_BATCHES):
                 log.info("%s: no wall the account can pay (gold %s, elixir %s to spend)", account["name"],
                          f"{money['gold']:,}", f"{money['elixir']:,}")
             break
+        pages[account["name"]] = row.get("page", 0)
         page = max(0, row.get("page", 0) - 1)
         per = row["cost"]
         payers = sorted((r for r in RESOURCES if money[r] >= per and (per, r) not in failed),
@@ -270,7 +350,7 @@ def run(bot, account, max_batches=MAX_BATCHES):
             break
         res = payers[0]
         left = _count(row.get("name")) or 10_000
-        n = batch(bot, row, res, min(left, money[res] // per), money[res])
+        n = batch(bot, row, res, min(left, money[res] // per), money[res], bars)
         if n:
             done += n
             money[res] -= n * per
@@ -278,14 +358,17 @@ def run(bot, account, max_batches=MAX_BATCHES):
             bot.stats["walls"] = bot.stats.get("walls", 0) + n
         else:
             failed.add((per, res))                     # not twice the same way this visit
+            bars.clear()                               # read the buttons afresh next time
             village.close_menu(bot, MAIN["safe"])
             go_home(bot, 15)
     village.close_menu(bot, MAIN["safe"])
     go_home(bot)
-    if done:
-        after = loot.home_resources(bot)
-        log.info("%s: %d walls upgraded in %.0f s (%s) - gold %s, elixir %s left", account["name"], done,
-                 time.monotonic() - t0, ", ".join(f"{v:,} {r}" for r, v in spent.items() if v),
-                 f"{after['gold']:,}" if after.get("gold") is not None else "?",
-                 f"{after['elixir']:,}" if after.get("elixir") is not None else "?")
+    if bot.state is not None:
+        from .. import config
+        config.save_state(bot.state)
+    after = loot.home_resources(bot)
+    log.info("%s: %d wall(s) upgraded in %.0f s%s - gold %s, elixir %s left", account["name"], done,
+             time.monotonic() - t0, f" ({', '.join(f'{v:,} {r}' for r, v in spent.items() if v)})" if done else "",
+             f"{after['gold']:,}" if after.get("gold") is not None else "?",
+             f"{after['elixir']:,}" if after.get("elixir") is not None else "?")
     return done
