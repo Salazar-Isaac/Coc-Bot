@@ -22,7 +22,10 @@ _UNITS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
 
 def parse_time(text):
     """Seconds in a game time like "2d 4h", "45m 10s", "3h" (None if it is not a time)."""
-    t = re.sub(r"[^0-9a-z]", "", (text or "").lower())    # read as "11H-26M", "7d19H", "3d 15h"
+    t = re.sub(r"[^0-9a-z|]", "", (text or "").lower())   # read as "11H-26M", "7d19H", "3d 15h"
+    # digits the text reader mistakes for letters: a unit always follows a number, so an "s" that does not
+    # is a 5 ("SH50M" = 5h 50m); "o" is a 0, "l" / "i" / "|" a 1
+    t = re.sub(r"(?<!\d)s", "5", t).translate(str.maketrans("oli|", "0111"))
     parts = re.findall(r"(\d+)([dhms])", t)
     if not parts or re.sub(r"\d+[dhms]", "", t):
         return None
@@ -49,13 +52,19 @@ def _timers(bot):
     return bot.state.setdefault("timers", {}) if bot.state is not None else {}
 
 
-def note_busy(bot, account, kind, where):
-    """Everything of this kind is busy: open its menu, read when the first one is done, remember it."""
+def read_busy(bot, where):
+    """Open the menu and read what is being upgraded (names and times left: the rows at its top)."""
     from .panel import open_menu, read_page
     from .village import close_menu
-    from .panel import note_builds
     times = read_page(bot.shot(), want_name=lambda r: False)[1] if open_menu(bot, where) else []
     close_menu(bot, where["safe"])
+    return times
+
+
+def note_busy(bot, account, kind, where):
+    """Everything of this kind is busy: open its menu, read when the first one is done, remember it."""
+    from .panel import note_builds
+    times = read_busy(bot, where)
     note_builds(bot, account, kind, times, free=0)
     t = _timers(bot).setdefault(account["name"], {})
     if times:

@@ -105,21 +105,6 @@ class Busy(int):
         return obj
 
 
-def _in_progress_row(frame, box):
-    """An upgrade in progress: its row has a progress bar (green, then dark) instead of the brown of the
-    other rows. (A row cut off at the bottom of the page also shows only its time: that one is brown.)"""
-    import cv2
-    x0 = space.point(PANEL[0] + 10, 0)[0]
-    y = box[1] + box[3] // 2
-    strip = frame[max(0, y - space.s(10)):y + space.s(10), x0:x0 + space.s(380)]
-    if strip.size == 0:
-        return False
-    hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
-    brown = float(((hsv[:, 0] >= 5) & (hsv[:, 0] <= 25) & (hsv[:, 1] > 70) & (hsv[:, 2] > 60)).mean())
-    green = float(((hsv[:, 0] >= 35) & (hsv[:, 0] <= 85) & (hsv[:, 1] > 90) & (hsv[:, 2] > 90)).mean())
-    return green > 0.03 or brown < 0.7
-
-
 def _detect(frame, region):
     x0, y0, w, h = region
     area = frame[y0:y0 + h, x0:x0 + w]
@@ -164,12 +149,12 @@ def read_page(frame, want_name=None):
             text = _line(frame, b)                           # with no time (walls), or FREE
             secs = timers.parse_time(text)
             if secs:
-                # in progress only at the top of the list (before any priced row) and with its progress bar
-                if not priced_above and _in_progress_row(frame, b):
-                    nb = min((n for n in boxes if abs((n[1] + n[3] / 2) - (b[1] + b[3] / 2)) < 18 * sx
-                              and n[0] + n[2] < b[0] - 40 * sx), key=lambda n: n[0], default=None)   # (no icon:
-                    #                                                     the name starts at the row's left)
-                    progress.append(Busy(secs, _line(frame, nb).strip() if nb else ""))
+                # an upgrade in progress: at the top of the list (before any priced row), and with no picture,
+                # so its name starts at the row's left edge (a row cut off at the page's bottom is neither)
+                nb = min((n for n in boxes if abs((n[1] + n[3] / 2) - (b[1] + b[3] / 2)) < 18 * sx
+                          and n[0] + n[2] < b[0] - 40 * sx), key=lambda n: n[0], default=None)
+                if not priced_above and nb is not None and nb[0] < lo - 25 * sx:
+                    progress.append(Busy(secs, _line(frame, nb).strip()))
                 continue
             if len(re.sub(r"\D", "", text)) < 3 or re.search(r"[A-Za-z]", text):
                 continue

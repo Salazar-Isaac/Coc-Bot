@@ -610,13 +610,19 @@ def run(bot, account, when="", max_count=None, buildings=None):
                 break
     village.close_menu(bot, MAIN["safe"])
     go_home(bot)
-    panel.note_builds(bot, account, "builders", data["progress"], started_list, free=free, total=total)
+    progress = data["progress"]
+    if started:                                          # read them all again: the new ones with their exact times
+        fresh = timers.read_busy(bot, MAIN)
+        go_home(bot)
+        if len(fresh) >= len(progress) + started:
+            progress, started_list = fresh, []
+    panel.note_builds(bot, account, "builders", progress, started_list, free=free, total=total)
     if free > 0:                                         # a builder had to stay free: look again soon
         log.info("%s: %d builder(s) still free - looked at again in %s", account["name"], free,
                  timers._fmt(IDLE_RETRY))
         panel.remember(bot, account, "builders", IDLE_RETRY)
     else:
-        panel.remember(bot, account, "builders", panel.next_free_in(data["progress"], [d for _, d in started_list]))
+        panel.remember(bot, account, "builders", panel.next_free_in(progress, [d for _, d in started_list]))
     return started
 
 
