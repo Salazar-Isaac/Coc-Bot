@@ -96,6 +96,30 @@ def ensure_sorted(bot, where, account=None):
 
 
 # ----------------------------------------------------------------------------- one page
+class Busy(int):
+    """Seconds an upgrade in progress still needs, with the name of what is being upgraded."""
+
+    def __new__(cls, secs, name=""):
+        obj = int.__new__(cls, secs)
+        obj.name = name
+        return obj
+
+
+def _in_progress_row(frame, box):
+    """An upgrade in progress: its row has a progress bar (green, then dark) instead of the brown of the
+    other rows. (A row cut off at the bottom of the page also shows only its time: that one is brown.)"""
+    import cv2
+    x0 = space.point(PANEL[0] + 10, 0)[0]
+    y = box[1] + box[3] // 2
+    strip = frame[max(0, y - space.s(10)):y + space.s(10), x0:x0 + space.s(380)]
+    if strip.size == 0:
+        return False
+    hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
+    brown = float(((hsv[:, 0] >= 5) & (hsv[:, 0] <= 25) & (hsv[:, 1] > 70) & (hsv[:, 2] > 60)).mean())
+    green = float(((hsv[:, 0] >= 35) & (hsv[:, 0] <= 85) & (hsv[:, 1] > 90) & (hsv[:, 2] > 90)).mean())
+    return green > 0.03 or brown < 0.7
+
+
 def _detect(frame, region):
     x0, y0, w, h = region
     area = frame[y0:y0 + h, x0:x0 + w]
@@ -128,6 +152,7 @@ def read_page(frame, want_name=None):
     names = [b for b in boxes if lo - 20 * sx <= b[0] <= hi]
     rows, progress, used = [], [], set()
     for i, b in enumerate(right):
+        priced_above = bool(rows)
         if i in used:
             continue
         below = next((j for j in range(i + 1, len(right)) if 15 * sx <= right[j][1] - b[1] <= 45 * sx), None)
@@ -139,7 +164,12 @@ def read_page(frame, want_name=None):
             text = _line(frame, b)                           # with no time (walls), or FREE
             secs = timers.parse_time(text)
             if secs:
-                progress.append(secs)
+                # in progress only at the top of the list (before any priced row) and with its progress bar
+                if not priced_above and _in_progress_row(frame, b):
+                    nb = min((n for n in boxes if abs((n[1] + n[3] / 2) - (b[1] + b[3] / 2)) < 18 * sx
+                              and n[0] + n[2] < b[0] - 40 * sx), key=lambda n: n[0], default=None)   # (no icon:
+                    #                                                     the name starts at the row's left)
+                    progress.append(Busy(secs, _line(frame, nb).strip() if nb else ""))
                 continue
             if len(re.sub(r"\D", "", text)) < 3 or re.search(r"[A-Za-z]", text):
                 continue
@@ -303,6 +333,24 @@ def next_free_in(progress, started):
     """Seconds until the next builder (lab) is free: the soonest upgrade in progress or just started."""
     times = [t for t in list(progress) + list(started) if t]
     return min(times) if times else None
+
+
+def note_builds(bot, account, kind, progress, started=(), free=None, total=None):
+    """Remember what this account's builders (or lab) are doing and when each one is done:
+    state["builds"][account][kind] = {"busy": [[name, ends_at], ...], "free": n, "total": n}. Logged."""
+    if bot.state is None:
+        return
+    from .upgrades import pretty
+    now = time.time()
+    busy = [[pretty(getattr(p, "name", "")), now + int(p)] for p in progress if p]
+    busy += [[pretty(name), now + int(secs)] for name, secs in started if secs]
+    busy.sort(key=lambda b: b[1])
+    slot = bot.state.setdefault("builds", {}).setdefault(account["name"], {})
+    slot[kind] = {"at": now, "busy": busy, "free": free, "total": total}
+    if busy:
+        log.info("%s %s: %s", account["name"], {"builders": "builders", "lab": "laboratory"}.get(kind, kind),
+                 ", ".join(f"{n} {timers._fmt(e - now)}" for n, e in busy)
+                 + (f" ({free} of {total} free)" if free is not None and total else ""))
 
 
 def remember(bot, account, kind, secs):

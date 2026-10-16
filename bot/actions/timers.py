@@ -53,8 +53,10 @@ def note_busy(bot, account, kind, where):
     """Everything of this kind is busy: open its menu, read when the first one is done, remember it."""
     from .panel import open_menu, read_page
     from .village import close_menu
+    from .panel import note_builds
     times = read_page(bot.shot(), want_name=lambda r: False)[1] if open_menu(bot, where) else []
     close_menu(bot, where["safe"])
+    note_builds(bot, account, kind, times, free=0)
     t = _timers(bot).setdefault(account["name"], {})
     if times:
         t[kind] = time.time() + min(times) + 20          # a little later: the game needs a moment
@@ -72,13 +74,25 @@ def clear(bot, account, kind):
         config.save_state(bot.state)
 
 
-def due(bot, names, kinds):
-    """[(name, kind)] whose builders / lab are free by now, earliest first."""
+def later(bot, account, kind, secs):
+    """Look at this account's builders / lab again in `secs` (a visit that could not be done)."""
+    _timers(bot).setdefault(account["name"], {})[kind] = time.time() + secs
+    if bot.state is not None:
+        config.save_state(bot.state)
+
+
+def due(bot, names, kinds, unknown=False):
+    """[(name, kind)] whose builders / lab are free by now, earliest first. unknown: an account whose
+    builders were never looked at (no time remembered) counts as due too - first."""
     now = time.time()
     out = []
     for name in names:
-        for kind, at in _timers(bot).get(name, {}).items():
-            if kind in kinds and at <= now:
+        t = _timers(bot).get(name, {})
+        for kind in kinds:
+            at = t.get(kind)
+            if at is None and unknown:
+                out.append((0, name, kind))
+            elif at is not None and at <= now:
                 out.append((at, name, kind))
     return [(n, k) for _, n, k in sorted(out)]
 

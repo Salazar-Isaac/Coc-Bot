@@ -107,24 +107,28 @@ def _visit_free_builders(bot, ctx):
     if ctx.away:
         return False
     names = ctx.accounts.get("home_upgrade") or []
-    due = timers.due(bot, names, ["builders"])
+    due = timers.due(bot, names, ["builders"], unknown=True)   # (never looked at: due as well)
     if not due:
         return False
     ctx.away = True
+    waiting = list(dict.fromkeys(n for n, _ in due))
+    if len(waiting) > 1:
+        log.info("Builders to look at on %d accounts (%s): %s now, the others between the next rounds",
+                 len(waiting), ", ".join(waiting), waiting[0])
     try:
-        for name in dict.fromkeys(n for n, _ in due):
+        for name in waiting[:1]:                       # one account between two donation rounds
             acc = next((a for a in bot.accounts if a["name"] == name), None)
             if acc is None:
                 continue
-            log.info("%s: a builder is free again - upgrading, looting, upgrading, then back", name)
+            log.info("%s: a builder is free (or not looked at yet) - upgrading, looting, upgrading, then back", name)
             if not with_recovery(bot, f"switch to {name}", lambda a=acc: account_actions.switch_to(bot, a, ctx.state)):
-                timers.clear(bot, acc, "builders")        # do not try again and again
+                timers.later(bot, acc, "builders", upgrades.IDLE_RETRY)   # not again and again: in an hour
                 continue
             _to_village(bot, acc, "main")
             for key in ("home_upgrade", "attack_all", "home_upgrade"):
                 _run_step(bot, ctx, key, acc)
-            for n, k in timers.due(bot, [name], ["builders"]):    # never twice in a row for nothing
-                timers.clear(bot, acc, k)
+            for n, k in timers.due(bot, [name], ["builders"], unknown=True):   # never twice in a row
+                timers.later(bot, acc, k, upgrades.IDLE_RETRY)                  # for nothing: in an hour
     finally:
         ctx.away = False
     return True
