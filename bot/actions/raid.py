@@ -151,8 +151,9 @@ def open_raid_map(bot, badge):
 
 
 def start_attack(bot):
-    """On the raid map: a district that can be attacked -> Attack -> "Attack Now?" Attack. Returns the
-    district's name once the battle has started, else None (no attack left / nothing to attack)."""
+    """On the raid map: a district that can be attacked -> Attack -> "Attack Now?" Attack. Returns
+    (district, "started") once the battle has started, (None, "none") when no district can be attacked
+    (no raid attack left), or (district, "failed") when the attack did not start."""
     for name, (x, y) in DISTRICTS:
         control.checkpoint()
         bot.tap(*space.center(x, y), jitter=4)
@@ -166,17 +167,23 @@ def start_attack(bot):
             control.sleep(0.6)
             continue
         x0, y0, w0, h0 = space.region(*BAR_ATTACK)
-        bot.tap(x0 + w0 // 2, y0 + h0 // 2, jitter=3)
-        key = _wait_any(bot, ["raid/attack_now_title", "raid/battle_starts", "battle/surrender"], 8)
-        if key == "raid/attack_now_title":
+        key = None
+        for _ in range(3):                               # a tap while the bar slides in is lost: again
+            bot.tap(x0 + w0 // 2, y0 + h0 // 2, jitter=3)
+            key = _wait_any(bot, ["raid/attack_now_title", "raid/battle_starts", "battle/surrender"], 5)
+            if key:
+                break
+        for _ in range(3):
+            if key != "raid/attack_now_title":
+                break
             bot.tap_template("raid/attack_go", timeout=3)
-            key = _wait_any(bot, ["raid/battle_starts", "battle/surrender"], 15)
+            key = _wait_any(bot, ["raid/battle_starts", "battle/surrender"], 8) or                 _wait_any(bot, ["raid/attack_now_title"], 1)
         if key in ("raid/battle_starts", "battle/surrender"):
-            return name
+            return name, "started"
         log.info("Raid: the attack on %s did not start", name)
         bot.save_error("raid-no-battle")
-        return None
-    return None
+        return name, "failed"
+    return None, "none"
 
 
 def restart(bot):
@@ -198,8 +205,8 @@ def run(bot, account, max_attacks=6):
     done = _done(bot)
     if done.get(account["name"]) == "done":
         return 0
-    made = 0
-    for _ in range(max_attacks + 1):
+    made, failed = 0, 0
+    for _ in range(max_attacks + 3):
         control.checkpoint()
         badge, left = find_airship(bot)
         if badge is None and left is None:
@@ -220,12 +227,19 @@ def run(bot, account, max_attacks=6):
             done[account["name"]] = "done"             # not tried again and again this weekend
             restart(bot)
             break
-        district = start_attack(bot)
-        if district is None:
+        district, status = start_attack(bot)
+        if status == "none":
             log.info("%s: nothing to attack on the raid map now", account["name"])
             restart(bot)
             done[account["name"]] = "done"
             break
+        if status == "failed":
+            restart(bot)                                 # try again (not counted as done)
+            failed += 1
+            if failed >= 2:
+                log.info("%s: raid attacks did not start twice - looked at again later", account["name"])
+                break
+            continue
         log.info("%s: raid attack on %s started - restarting the game to end it", account["name"], district)
         restart(bot)
         made += 1
