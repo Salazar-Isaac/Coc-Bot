@@ -11,7 +11,7 @@ import logging
 
 from .. import config
 from ..actions import account as account_actions
-from ..actions import builder_base, loot, research, timers, upgrades, walls
+from ..actions import builder_base, loot, raid, research, timers, upgrades, walls
 from ..core.context import BotError
 from ..flow import BY_KEY, segments, step_accounts
 from ..states import go_home
@@ -52,6 +52,10 @@ def run_flow(bot, state):
     if start > 1:
         log.info("Starting from account #%d (%s)", start,
                  bot.accounts[start - 1]["name"] if start <= len(bot.accounts) else "?")
+    if bot.settings.get("option") == "raid_weekend":
+        return _raid_weekends(bot, ctx)
+    if bot.settings.get("option") in ("upgrade_donate", "loot_donate"):
+        _raids(bot, ctx)                               # Raid Weekend on: raid attacks first, then donating
     if bot.settings.get("option") == "upgrade_donate":
         return _upgrade_loot_donate(bot, ctx, start)
     n = 0
@@ -86,6 +90,7 @@ def _upgrade_loot_donate(bot, ctx, start):
              " and ".join(a["name"] for _, a in looters))
     while True:
         hook()
+        _raids(bot, ctx)                               # a new Raid Weekend began: raid attacks first
         bot.status(account=main["name"], action="Donating", progress="")
         result = donation_cycle(bot, main, ctx.state, between=hook)
         for _, acc in looters:
@@ -132,6 +137,50 @@ def _visit_free_builders(bot, ctx):
     finally:
         ctx.away = False
     return True
+
+
+def _raid_list(bot, ctx):
+    spec = (ctx.cfg.get("raid") or {}).get("accounts", "")
+    return [a for _, a in step_accounts(spec, bot.accounts, "raid")]
+
+
+def _raids(bot, ctx):
+    """During Raid Weekend (when 'Raid Weekend with Loot + Donate' is on): the accounts that still have
+    raid attacks use them now. Returns raid attacks made."""
+    if not (ctx.cfg.get("raid") or {}).get("with_donate", True) or not raid.window()[0]:
+        return 0
+    accs = _raid_list(bot, ctx)
+    if not raid.pending(bot, [a["name"] for a in accs]):
+        return 0
+    return raid.raid_accounts(bot, accs, ctx.state, lambda a: _switch_main(bot, ctx, a))
+
+
+def _switch_main(bot, ctx, acc):
+    if not with_recovery(bot, f"switch to {acc['name']}", lambda: account_actions.switch_to(bot, acc, ctx.state)):
+        return False
+    _to_village(bot, acc, "main")
+    return True
+
+
+def _raid_weekends(bot, ctx):
+    """'Raid Weekend' option: raid attacks on every account during Raid Weekend; in between, it waits
+    for the next one (checking every 10 minutes)."""
+    while True:
+        active, start, end = raid.window()
+        if active:
+            raid.raid_accounts(bot, _raid_list(bot, ctx), ctx.state, lambda a: _switch_main(bot, ctx, a))
+            if not raid.pending(bot, [a["name"] for a in _raid_list(bot, ctx)]):
+                log.info("Raid Weekend: every account is done - waiting for the next one")
+                bot.status(action="Raid Weekend done - waiting for the next one")
+                bot.sleep(max(60, (end - raid.dt.datetime.now(raid.UTC)).total_seconds()))
+                continue
+        else:
+            wait = (start - raid.dt.datetime.now(raid.UTC)).total_seconds()
+            log.info("Next Raid Weekend in %dh %dm: waiting", wait // 3600, wait % 3600 // 60)
+            bot.status(action=f"Waiting for Raid Weekend ({int(wait // 3600)}h)")
+            bot.sleep(min(600, max(60, wait)))
+            continue
+        bot.sleep(600)
 
 
 def _set_start(bot, pos):

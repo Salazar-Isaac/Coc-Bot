@@ -38,6 +38,8 @@ STEPS = [
          "The cheapest walls, many at once, with the account's gold and elixir", True, "home"),
     Step("bb_upgrade", "Builder Base upgrade", "hammer",
          "New buildings first, then your list, then the Builder Hall", True, "builder"),
+    Step("raid", "Clan Capital raid", "castle",
+         "Raid Weekend only: each account starts its raid attacks, the game is restarted to end each one", True, "home"),
     Step("home_research", "Home research", "flask",
          "Start Laboratory research from your list when the lab is free", True, "home"),
     Step("bb_research", "Builder Base research", "flask",
@@ -93,6 +95,8 @@ OPTIONS = [
     Option("all_upgrade", "Upgrade", "Both loot + upgrade", "Village and Builder Base: upgrade, loot, upgrade",
            "hammer", ("home_upgrade", "attack_all", "home_upgrade", "bb_upgrade", "bb_attack", "bb_upgrade"),
            {"attack_all": LOOTERS, "home_upgrade": _UP, "bb_attack": LOOTERS, "bb_upgrade": _UP}),
+    Option("raid_weekend", "Raid", "Raid Weekend", "Clan Capital raids on every account, Friday to Monday; waits "
+           "for the next Raid Weekend in between", "castle", ("raid",), {"raid": ("main", "loot", "both", "feeder")}),
     Option("upgrade_only", "Upgrade", "Upgrade only", "Free builders to work in both villages, no attacks",
            "hammer", ("home_upgrade", "bb_upgrade"), {"home_upgrade": _UP, "bb_upgrade": _UP}),
 ]
@@ -199,6 +203,8 @@ DEFAULT_STEPS = {
                      "keep_gold": 300000},                 # gold never spent: searching bases costs gold
     "walls": {"accounts": "3-15", "keep_gold": 300000, "keep_elixir": 0},   # kept: searching bases costs gold
     "bb_upgrade": {"accounts": "3-15", "buildings": ["Cannon", "Archer Tower", "Mortar"], "new_first": True},
+    "raid": {"accounts": "", "attacks": 6, "with_donate": True},   # "" = every account; attacks: per account
+    #                                         per weekend; with_donate: Loot + Donate raids first on Raid Weekend
     "home_research": {"accounts": "3-15", "research": []},
     "bb_research": {"accounts": "3-15", "research": []},
 }

@@ -255,6 +255,14 @@ def detect(frame):
         if name == "reload" and dialog_box(frame) is not None:
             return "reload"                      # the village behind those dialogs is not dimmed
         have = [k for k in keys if vision.templates.has(k)]
+        if name == "home":
+            # the Build button (not in battles), and the dark elixir drop - or, for an account without dark
+            # elixir yet, the green + of the gems (both not in the Builder Base, which is checked before)
+            if vision.find(frame, "home/build_button") and (
+                    vision.find(frame, "home/dark_drop")
+                    or (vision.templates.has("home/gem_plus") and vision.find(frame, "home/gem_plus"))):
+                return name
+            continue
         if name in ALL_KEYS:
             if have and all(vision.find(frame, k) for k in have):
                 return name

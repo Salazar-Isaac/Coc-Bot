@@ -159,6 +159,18 @@ def read_player(bot, frame=None):
     return text.strip() if text and conf > 0.6 else ""
 
 
+def same_clan(a, b):
+    """Two readings of a clan name are the same clan: names shown cut off ('#White Devil...' / '#WhiteDevi')
+    and small misreadings ('OMCH' / 'OMCHI') still match; 'OMCHI' and '#White Devil' do not."""
+    x, y = re.sub(r"[^a-z0-9]", "", (a or "").lower()), re.sub(r"[^a-z0-9]", "", (b or "").lower())
+    if not x or not y:
+        return False
+    n = min(len(x), len(y))
+    if n < 3:
+        return x == y
+    return difflib.SequenceMatcher(None, x[:n], y[:n]).ratio() >= 0.8
+
+
 def read_clan(bot, frame=None):
     """The name of the clan the account is in, under its player name ("" if none or unreadable)."""
     frame = bot.shot() if frame is None else frame
@@ -280,9 +292,10 @@ def switch_to(bot, account, state=None):
         account["player"] = player                    # in-game name, as shown in clan chat
     clan_name = read_clan(bot, frame)
     if clan_name:
-        if account.get("clan") and not same_name(clan_name, account["clan"]):
+        if account.get("clan") and not same_clan(clan_name, account["clan"]):
             log.info("%s is now in the clan '%s' (was '%s')", name, clan_name, account["clan"])
         account["clan"] = clan_name
+        account["clan_at"] = time.time()
     log.info("Now on %s (Town Hall %s) in %.0f s", name, account.get("th") or "?", time.monotonic() - started)
     return True
 

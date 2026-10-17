@@ -1274,6 +1274,21 @@
     ],
     "threshold": 0.85
   },
+  "home/gem_plus": {
+    "box": [
+      1647,
+      150,
+      40,
+      40
+    ],
+    "region": [
+      1600,
+      120,
+      140,
+      230
+    ],
+    "threshold": 0.85
+  },
   "home/social_button": {
     "box": [
       22,
@@ -1543,6 +1558,156 @@
       280
     ],
     "threshold": 0.8
+  },
+  "raid/attack_go": {
+    "box": [
+      1405,
+      583,
+      150,
+      46
+    ],
+    "region": [
+      1300,
+      520,
+      360,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "raid/attack_now_title": {
+    "box": [
+      800,
+      195,
+      320,
+      50
+    ],
+    "region": [
+      600,
+      150,
+      720,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "raid/attacking_title": {
+    "box": [
+      835,
+      45,
+      255,
+      40
+    ],
+    "region": [
+      700,
+      20,
+      520,
+      100
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_starts": {
+    "box": [
+      868,
+      18,
+      185,
+      30
+    ],
+    "region": [
+      760,
+      0,
+      400,
+      80
+    ],
+    "threshold": 0.85
+  },
+  "raid/capital_title": {
+    "box": [
+      905,
+      45,
+      180,
+      36
+    ],
+    "region": [
+      780,
+      20,
+      360,
+      90
+    ],
+    "threshold": 0.85
+  },
+  "raid/district_bar": {
+    "box": [
+      858,
+      945,
+      155,
+      62
+    ],
+    "region": [
+      500,
+      860,
+      1000,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "raid/next_raid": {
+    "box": [
+      855,
+      925,
+      210,
+      46
+    ],
+    "region": [
+      700,
+      860,
+      520,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "raid/raid_info": {
+    "box": [
+      1770,
+      980,
+      90,
+      60
+    ],
+    "region": [
+      1700,
+      900,
+      220,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/raid_map": {
+    "box": [
+      1775,
+      975,
+      80,
+      70
+    ],
+    "region": [
+      1700,
+      900,
+      220,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/return_home": {
+    "box": [
+      40,
+      985,
+      135,
+      60
+    ],
+    "region": [
+      0,
+      900,
+      260,
+      180
+    ],
+    "threshold": 0.85
   },
   "request/send": {
     "box": [

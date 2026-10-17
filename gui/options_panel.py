@@ -18,12 +18,13 @@ from gui.widgets import Combo
 
 SHORT = {"attack_all": "Loot", "loot_current": "Loot current", "donate": "Donate", "bb_attack": "Builder loot",
          "home_upgrade": "Home upgrade", "walls": "Walls", "bb_upgrade": "Builder upgrade", "home_research": "Lab research",
-         "bb_research": "Star Lab research"}
+         "bb_research": "Star Lab research", "raid": "Capital raid"}
 
 GROUP_LOOK = {
     "Loot": (T.GOLD, "Loot"),
     "Donate": (T.ELIXIR_HI, "Donate"),
     "Upgrade": (T.GREEN, "Upgrade · accounts 1-2 (Main, Looter) are never upgraded"),
+    "Raid": ("#ff9f43", "Raid · Clan Capital, Friday to Monday"),
 }
 
 
@@ -100,7 +101,7 @@ class OptionsPanel(QWidget):
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         self.cards = {}
-        for name in ("Loot", "Donate", "Upgrade"):
+        for name in ("Loot", "Donate", "Upgrade", "Raid"):
             color, head = GROUP_LOOK[name]
             cap = label(head.upper(), "caption")
             cap.setContentsMargins(2, 8 if self.cards else 0, 0, 2)

@@ -21,7 +21,7 @@ from gui.widgets import BigSpin, Combo, Spin
 
 NIGHT = "#8c9bff"          # accent of the Builder Base
 STEP_COLORS = {"attack_all": T.GOLD, "loot_current": "#5cc8ff", "donate": T.ELIXIR_HI, "bb_attack": NIGHT,
-               "home_upgrade": T.GOLD_HI, "walls": T.ELIXIR_HI, "bb_upgrade": NIGHT, "home_research": T.GREEN, "bb_research": NIGHT}
+               "home_upgrade": T.GOLD_HI, "walls": T.ELIXIR_HI, "bb_upgrade": NIGHT, "raid": "#ff9f43", "home_research": T.GREEN, "bb_research": NIGHT}
 NAMES = T.RESOURCE_NAME
 TH_LEVELS = [str(t) for t in range(19, 10, -1)]
 LOOT_DEFAULTS = config.DEFAULT_SETTINGS["loot"]
@@ -697,6 +697,42 @@ class WallsSettings(StepSettings):
         st["keep_elixir"] = self.keep_elixir.value()
 
 
+class RaidSettings(StepSettings):
+    key = "raid"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.who = Card("Accounts", "Raid Weekend (Friday 12:30 to Monday 12:30, India time): each account opens the "
+                        "Clan Capital, starts a raid attack without placing troops, and the game is closed and opened "
+                        "again - that ends the attack at once. Again until its raid attacks are used. Outside the "
+                        "Raid Weekend the bot waits for the next one.", icon="castle", color=STEP_COLORS["raid"])
+        self.accounts_field = AccountsField()
+        self.accounts_field.step = self.key
+        self.who.add(self.accounts_field)
+        self.attacks = Spin(1, 6)
+        self.with_donate = Toggle()
+        self.who.add(divider())
+        self.who.add(SettingRow("Raid attacks per account", "Each account has 5 (6 with the bonus attack)",
+                                self.attacks, 110))
+        self.who.add(SettingRow("Also with Loot + Donate", "On Raid Weekend, Loot + Donate (and Upgrade, loot, "
+                                "donate) do the raid attacks first, then donate", self.with_donate))
+        self.cols.add(self.who, 0)
+        self._connect(self.accounts_field, self.attacks, self.with_donate)
+
+    def load(self, settings, accounts):
+        st = step_cfg(settings, self.key)
+        self.accounts_field.set_text(st.get("accounts", ""))
+        self.attacks.setValue(int(st.get("attacks", 6) or 6))
+        self.with_donate.setChecked(bool(st.get("with_donate", True)))
+        self.set_accounts(accounts)
+
+    def apply(self, settings, accounts):
+        st = step_out(settings, self.key)
+        st["accounts"] = self.accounts_field.text()
+        st["attacks"] = self.attacks.value()
+        st["with_donate"] = self.with_donate.isChecked()
+
+
 class BBUpgradeSettings(_ListStep):
     key = "bb_upgrade"
 
@@ -777,5 +813,5 @@ class GeneralSettings(StepSettings):
 
 BODIES = {"attack_all": AttackAllSettings, "base_choice": BaseChoiceSettings, "loot_current": LootCurrentSettings,
           "bb_attack": BBAttackSettings, "home_upgrade": HomeUpgradeSettings, "walls": WallsSettings,
-          "bb_upgrade": BBUpgradeSettings,
+          "bb_upgrade": BBUpgradeSettings, "raid": RaidSettings,
           "home_research": HomeResearchSettings, "bb_research": BBResearchSettings, "general": GeneralSettings}

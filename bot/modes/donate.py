@@ -71,12 +71,20 @@ def _requesters_in_turn(bot, state):
     return requesters[start:] + requesters[:start], requesters
 
 
-def _other_clan(bot, acc, main):
-    """True if this account is known to be in another clan than the Main (its requests never reach the
-    Main: e.g. Buggu8, Leader of '#White Devil'). The clan is read on the village after each switch."""
-    from ..actions.account import same_name
+CLAN_TRUST = 6 * 3600           # an account's clan, read when the bot was last on it, is trusted this long
+
+
+def _other_clan(bot, acc, main, fresh=False):
+    """True if this account is in another clan than the Main (its requests never reach the Main). The clan
+    is read on the village after each switch; before switching, a reading older than CLAN_TRUST is not
+    trusted (accounts are moved between clans), fresh=True: the account was just switched to."""
+    from ..actions.account import same_clan
     mine, theirs = main.get("clan"), acc.get("clan")
-    return bool(mine and theirs and not same_name(mine, theirs))
+    if not (mine and theirs):
+        return False
+    if not fresh and time.time() - acc.get("clan_at", 0) > CLAN_TRUST:
+        return False
+    return not same_clan(mine, theirs)
 
 
 def request_round(bot, state):
@@ -142,7 +150,7 @@ def request_round(bot, state):
         started = time.monotonic()
         tried += 1
         if _switch(bot, acc, state):
-            if _other_clan(bot, acc, main):            # its clan was just read: not the Main's
+            if _other_clan(bot, acc, main, fresh=True):    # its clan was just read: not the Main's
                 elsewhere.append(f"{name} ({acc.get('clan')})")
             else:
                 bot.request_cooldown = None
