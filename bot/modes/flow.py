@@ -61,6 +61,8 @@ def run_flow(bot, state):
     n = 0
     while rounds == 0 or n < rounds:
         n += 1
+        if n > 1 and bot.settings.get("option") == "loot_donate":
+            _raids(bot, ctx)                           # a new Raid Weekend began meanwhile: raid attacks first
         log.info("Round %d%s", n, f" of {rounds}" if rounds else "")
         for kind, part in segments(keys):
             if kind == "once":

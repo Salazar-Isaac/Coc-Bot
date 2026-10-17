@@ -203,8 +203,10 @@ def run(bot, account, max_attacks=6):
         log.info("%s: %d raid attack(s) left - starting one", account["name"], left)
         bot.status(account=account["name"], action=f"Raid attack {made + 1} ({left} left)")
         if not open_raid_map(bot, badge):
-            log.info("%s: the Clan Capital raid did not open (tutorial pending, or not in a clan?)", account["name"])
+            log.info("%s: the Clan Capital raid did not open (a game tutorial still pending?) - skipped this "
+                     "Raid Weekend", account["name"])
             bot.save_error("raid-no-map")
+            done[account["name"]] = "done"             # not tried again and again this weekend
             restart(bot)
             break
         district = start_attack(bot)
