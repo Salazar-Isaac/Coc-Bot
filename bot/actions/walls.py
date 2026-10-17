@@ -131,9 +131,40 @@ def _title(bot, bar):
 
 
 def _price(frame, bar, x):
-    """The total on an Upgrade button (its price is above the hammer, 66 px over its label) and its resource."""
+    """The price on an Upgrade button (above the hammers, 66 px over its label), read twice - with the
+    game-font digit reader and with the text reader (on a smaller screen the digit reader can drop
+    digits: "4 000 000" read as 40) - and its resource. Returns ([readings], resource)."""
     box = (x - space.s(65), bar["up_y"].get(x, bar["label_y"]) - space.s(84), space.s(130), space.s(36))
-    return vision.digits.read(frame, box), _resource(frame, box)
+    reads = []
+    v = vision.digits.read(frame, box)
+    if v:
+        reads.append(v)
+    text, conf = vision.text_reader.read_line(frame, (box[0], box[1], space.s(104), box[3]))   # (not the coin:
+    digits = re.sub(r"\D", "", text.translate(DIGIT_LIKE) if re.search(r"\d", text) else "")   # it reads as 0)
+    if digits and conf > 0.6:
+        reads.append(int(digits))
+    return reads, _resource(frame, box)
+
+
+def _vote(*readings):
+    """One price from several readings: the one most of them agree on; when they all differ, the
+    highest (a price read too low would select more walls than the storage pays for)."""
+    vals = [v for v in readings if v and v >= 1000]
+    if not vals:
+        return None
+    best = max(vals, key=lambda v: (vals.count(v), v))
+    return best
+
+
+def _blue(frame, bar, x):
+    """The blue Upgrade button pays with Wall Rings (a magic item): never used."""
+    import cv2
+    ly = bar["up_y"].get(x, bar["label_y"])
+    patch = frame[max(0, ly - space.s(50)):ly - space.s(5), max(0, x - space.s(45)):x + space.s(45)]
+    if patch.size == 0:
+        return False
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
+    return float(((hsv[:, 0] >= 95) & (hsv[:, 0] <= 125) & (hsv[:, 1] > 110) & (hsv[:, 2] > 110)).mean()) > 0.12
 
 
 def _resource(frame, box):
@@ -153,8 +184,9 @@ def _resource(frame, box):
 
 
 def _upgrade_buttons(frame, bar):
-    """{resource: x} of the Upgrade buttons: with two, gold is the left one and elixir the right one."""
-    ups = sorted(bar["ups"])
+    """{resource: x} of the resource Upgrade buttons: the blue one (Wall Rings) is left out; of the
+    others the left one is gold and the right one elixir (one alone: by the colour of its price)."""
+    ups = sorted(x for x in bar["ups"] if not _blue(frame, bar, x))
     if len(ups) >= 2:
         return {"gold": ups[0], "elixir": ups[1]}
     out = {}
@@ -165,24 +197,45 @@ def _upgrade_buttons(frame, bar):
     return out
 
 
+def _count_in(title):
+    """How many walls are selected: 'Wall (Level 16)x 6' -> 6 (also "x'l", 'x l' = 1), None if not read."""
+    low = (title or "").lower()
+    m = re.search(r"leve[l1i|]\W*[0-9silo|zbg]{1,2}", low)
+    m = re.search(r"[x×]\s*\W?\s*([0-9li|]{1,3})", low[m.end():] if m else low)
+    return int(m.group(1).translate(DIGIT_LIKE)) if m else None
+
+
+def _selected(bot, bar, tries=3):
+    for _ in range(tries):
+        n = _count_in(_title(bot, bar))
+        if n:
+            return n
+        bot.sleep(0.4)
+    return None
+
+
 def _okay(bot, res, total, money):
-    """The game's "Upgrade Walls ... for 40000 Gold?" is open: Okay only if it names this resource and
-    exactly this total, within what may be spent. True if the walls were paid."""
+    """The game's "Upgrade Walls ... for 40000 Gold?" is open: Okay only if it names this resource and an
+    amount within what may be spent (normally exactly the expected total). True if the walls were paid."""
     if not bot.wait("wall/dialog_title", 4, interval=0.2):
         log.info("Walls: the 'Upgrade Walls' question did not come")
         bot.save_error("walls-no-question")
+        village._close_offer(bot)                      # whatever came instead: closed, never accepted
         return False
     text, _ = vision.text_reader.read_line(bot.frame, space.region(*DIALOG_LINE))
     low = text.lower().replace(" ", "")
     m = re.search(r"for([\d,.]+)([a-z]+)", low)
     asked = int(re.sub(r"\D", "", m.group(1)) or 0) if m else None
     named = m and ("gold" if m.group(2).startswith("gol") else "elixir" if m.group(2).startswith("eli") else None)
-    if not m or named != res or asked != total or asked > money:
-        log.warning("Walls: the game asks '%s' - not what was chosen (%s %s): cancelled", text.strip(),
-                    f"{total:,}" if total else "?", res)
+    if not m or named != res or not asked or asked > money:
+        log.warning("Walls: the game asks '%s' - %s %s may be spent: cancelled", text.strip(),
+                    f"{money:,}", res)
         bot.tap_point("dialog.cancel")
         bot.sleep(0.6)
         return False
+    if asked != total:
+        log.info("Walls: the game asks %s %s (expected %s) - within what may be spent", f"{asked:,}", res,
+                 f"{total:,}")
     bot.tap_point("dialog.okay")
     bot.sleep(1.2)
     if vision.find(bot.shot(), "wall/dialog_title"):
@@ -200,7 +253,9 @@ def _okay(bot, res, total, money):
 def batch(bot, row, res, want, money, bars):
     """Select `want` walls of the row's level and pay them with `res` (at most `money`). The panel
     must be open with the row's page on screen (or it is found again). bars: the button places read
-    this visit (filled on the first batch). Returns how many were upgraded."""
+    this visit (filled on the first batch). Returns how many were upgraded.
+    The number selected is read from the title ('Wall (Level 16)x 6'), the price of one wall from the
+    list and the button (it must agree), so a misread price never selects more than the storage pays."""
     if not panel.goto_row(bot, MAIN, row):
         log.info("Walls: the %s row is not in the list any more", row.get("name") or "wall")
         return 0
@@ -227,7 +282,7 @@ def batch(bot, row, res, want, money, bars):
         bot.save_error("walls-not-a-wall")
         return 0
     level = _level(title)
-    bot.tap(bar["more"], bar["y"], jitter=2)          # Upgrade More: the same 5 places get new buttons
+    bot.tap(bar["more"], bar["y"], jitter=2)          # Upgrade More: the same places get new buttons
     end = time.monotonic() + 3
     while time.monotonic() < end:                     # "Wall (Level 4) x 1" once it took
         bot.sleep(0.4)
@@ -241,21 +296,24 @@ def batch(bot, row, res, want, money, bars):
     i = slots.index(bar["more"])
     add1, add10 = bar["more"], slots[i - 1] if i >= 1 else None   # +10 where Select Row was, +1 where
     remove = slots[i - 2] if i >= 2 else None                     # Upgrade More was, Remove where Info was
-    ups = _upgrade_buttons(bot.shot(), bar)
+    frame = bot.shot()
+    ups = _upgrade_buttons(frame, bar)
     if res not in ups:
         log.info("Walls (level %s): no Upgrade button priced in %s", level or "?", res)
         return 0
     x = ups[res]
-    per, seen = _price(bot.frame, bar, x)
-    if not per:
-        log.info("Walls (level %s): the price on the %s button could not be read", level or "?", res)
-        bot.save_error("walls-no-price")
-        return 0
+    reads, seen = _price(frame, bar, x)
     if seen and seen != res:
         log.info("Walls (level %s): the %s button looks like %s - not upgrading", level or "?", res, seen)
         return 0
-    if per != row["cost"]:
-        log.info("Walls (level %s): %s each now (the list said %s)", level or "?", f"{per:,}", f"{row['cost']:,}")
+    per = _vote(row["cost"], *reads)
+    if not per:
+        log.info("Walls (level %s): the price of one wall could not be read", level or "?")
+        bot.save_error("walls-no-price")
+        return 0
+    if per != row["cost"] or any(r != per for r in reads):
+        log.info("Walls (level %s): one wall costs %s (list %s, button read %s)", level or "?", f"{per:,}",
+                 f"{row['cost']:,}", ", ".join(f"{r:,}" for r in reads) or "-")
     want = min(want, money // per)
     if want < 1:
         return 0
@@ -266,28 +324,25 @@ def batch(bot, row, res, want, money, bars):
         ones += 10 * tens
     if ones:
         bot.tap(add1, bar["y"], jitter=2, times=ones, interval=TAP_GAP)
-    # check the count by the total on the button (taps can get lost; there may be fewer walls)
+    # the count in the title: taps can get lost, there may be fewer walls of this level
     got, last = None, None
-    for _ in range(4):
+    for _ in range(5):
         bot.sleep(0.5)
-        total = _price(bot.shot(), bar, x)[0]
-        if not total:
-            break
-        got = total // per
-        if got == want or got == last and got < want:
+        got = _selected(bot, bar)
+        if got is None or got == want or (got == last and got < want):
             break                                       # done - or no more walls of this level to add
         last = got
         if got < want:
             bot.tap(add1, bar["y"], jitter=2, times=want - got, interval=TAP_GAP)
         elif remove is not None:
             bot.tap(remove, bar["y"], jitter=2, times=got - want, interval=TAP_GAP)
-    total = _price(bot.shot(), bar, x)[0]
-    if not total or total > money or total % per:
-        log.info("Walls (level %s): the total %s is not what was chosen - not upgrading", level or "?",
-                 f"{total:,}" if total else "?")
-        bot.save_error("walls-total")
+    got = _selected(bot, bar)
+    if not got or got > want or got * per > money:
+        log.info("Walls (level %s): %s selected, %d wanted (%s %s may be spent) - not upgrading", level or "?",
+                 got if got else "? walls", want, f"{money:,}", res)
+        bot.save_error("walls-count")
         return 0
-    got = total // per
+    total = got * per
     log.info("Walls (level %s): upgrading %d for %s %s (%s each)", level or "?", got, f"{total:,}", res, f"{per:,}")
     bot.tap(x, bar["y"], jitter=2)
     return got if _okay(bot, res, total, money) else 0
