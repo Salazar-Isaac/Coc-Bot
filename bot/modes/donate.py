@@ -79,9 +79,10 @@ def _other_clan(bot, acc, main, fresh=False):
     is read on the village after each switch; before switching, a reading older than CLAN_TRUST is not
     trusted (accounts are moved between clans), fresh=True: the account was just switched to."""
     from ..actions.account import same_clan
-    mine, theirs = main.get("clan"), acc.get("clan")
+    mine = main.get("clan")
+    theirs = acc.get("_clan_now") if fresh else acc.get("clan")
     if not (mine and theirs):
-        return False
+        return False                                   # not read: nothing is decided
     if not fresh and time.time() - acc.get("clan_at", 0) > CLAN_TRUST:
         return False
     return not same_clan(mine, theirs)

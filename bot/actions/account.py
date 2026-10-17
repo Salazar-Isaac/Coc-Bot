@@ -168,7 +168,9 @@ def same_clan(a, b):
     n = min(len(x), len(y))
     if n < 3:
         return x == y
-    return difflib.SequenceMatcher(None, x[:n], y[:n]).ratio() >= 0.8
+    if n >= 4 and x[:4] == y[:4]:
+        return True                                   # 'whitedeyvi' / 'whitedervi': the same clan misread
+    return difflib.SequenceMatcher(None, x[:n], y[:n]).ratio() >= 0.7
 
 
 def read_clan(bot, frame=None):
@@ -291,6 +293,7 @@ def switch_to(bot, account, state=None):
     if player:
         account["player"] = player                    # in-game name, as shown in clan chat
     clan_name = read_clan(bot, frame)
+    account["_clan_now"] = clan_name                  # this visit's reading ("" = not read)
     if clan_name:
         if account.get("clan") and not same_clan(clan_name, account["clan"]):
             log.info("%s is now in the clan '%s' (was '%s')", name, clan_name, account["clan"])
