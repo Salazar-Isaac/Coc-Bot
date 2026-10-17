@@ -35,6 +35,7 @@ DISTRICTS = [("Barbarian Camp", (1135, 560)), ("Wizard Valley", (925, 660)), ("D
              ("Balloon Lagoon", (745, 820)), ("Builder's Workshop", (1065, 860)), ("Golem Quarry", (550, 955)),
              ("Goblin Mines", (1215, 990)), ("Skeleton Park", (870, 1000)), ("Capital Peak", (920, 390))]
 BAR_ATTACK = (1045, 960, 120, 35)  # the district bar's Attack button (red = can attack, grey = no attack left)
+NOTICE = (470, 220, 990, 120)      # the game's red notice at the top of the raid map
 
 
 def window(now=None):
@@ -150,6 +151,30 @@ def open_raid_map(bot, badge):
     return key == "raid/attacking_title"
 
 
+def _not_allowed(frame):
+    """The game's notice "Only members who were in the clan before the Raid Weekend began can attack!"
+    (an account that joined the clan during the weekend; Elders and up can attack anyway)."""
+    x, y, w, h = space.region(*NOTICE)
+    p = cv2.cvtColor(frame[y:y + h, x:x + w], cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(int)
+    if float((((p[:, 0] < 8) | (p[:, 0] > 172)) & (p[:, 1] > 170) & (p[:, 2] > 170)).mean()) < 0.02:
+        return False
+    text = re.sub(r"[^a-z]", "", " ".join(t for t, _, _ in vision.text_reader.read(frame, (x, y, w, h))).lower())
+    return "before" in text and "raid" in text or "onlymembers" in text
+
+
+def _wait_battle(bot, timeout):
+    """Wait for the raid battle; returns "battle", "not_allowed" or None."""
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        f = bot.shot()
+        if vision.find(f, "raid/battle_starts") or vision.find(f, "battle/surrender"):
+            return "battle"
+        if _not_allowed(f):
+            return "not_allowed"
+        control.sleep(0.4)
+    return None
+
+
 def start_attack(bot):
     """On the raid map: a district that can be attacked -> Attack -> "Attack Now?" Attack. Returns
     (district, "started") once the battle has started, (None, "none") when no district can be attacked
@@ -177,7 +202,10 @@ def start_attack(bot):
             if key != "raid/attack_now_title":
                 break
             bot.tap_template("raid/attack_go", timeout=3)
-            key = _wait_any(bot, ["raid/battle_starts", "battle/surrender"], 8) or                 _wait_any(bot, ["raid/attack_now_title"], 1)
+            got = _wait_battle(bot, 8)
+            if got == "not_allowed":
+                return name, "not_allowed"
+            key = "raid/battle_starts" if got == "battle" else _wait_any(bot, ["raid/attack_now_title"], 1)
         if key in ("raid/battle_starts", "battle/surrender"):
             return name, "started"
         log.info("Raid: the attack on %s did not start", name)
@@ -232,6 +260,12 @@ def run(bot, account, max_attacks=6):
             log.info("%s: nothing to attack on the raid map now", account["name"])
             restart(bot)
             done[account["name"]] = "done"
+            break
+        if status == "not_allowed":
+            log.info("%s: joined the clan after this Raid Weekend began - the game lets it raid only if promoted "
+                     "(Elder) or the clan is Invite Only; skipped this weekend", account["name"])
+            done[account["name"]] = "done"
+            restart(bot)
             break
         if status == "failed":
             restart(bot)                                 # try again (not counted as done)
