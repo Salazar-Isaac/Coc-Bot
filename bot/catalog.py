@@ -50,6 +50,7 @@ CATALOG = [
     ("building/upgrade_button", "Village", "The hammer 'Upgrade' button of a selected building", False),
     ("upgrade/confirm", "Upgrade", "The word 'Confirm' on the resource price button", False),
     ("upgrade/close", "Upgrade", "The red X of the upgrade window", False),
+    ("raid/airship", "Clan Capital", "The Clan Capital airship by the river (village zoomed out)", False),
     ("raid/next_raid", "Clan Capital", "'Next Raid' on the raid summary (airship by the river)", False),
     ("raid/return_home", "Clan Capital", "'Return Home' (bottom left of the Capital)", False),
     ("raid/attacking_title", "Clan Capital", "'Attacking Raid' title of the raid map", False),

@@ -90,15 +90,23 @@ def _badges(frame):
 
 def find_airship(bot):
     """Zoom out and bring the river into view: the airship's badge (x, y, w, h) and the raid attacks
-    left it shows - or (None, 0) when there is no badge (no raid attack left)."""
-    go_home(bot, 30)
-    bot.device.zoom_out()
-    control.sleep(0.6)
-    bot.swipe(space.center(900, 800), space.center(1100, 350), 700)
-    control.sleep(1.2)
-    f = bot.shot()
-    found = _badges(f)
+    left it shows - or (None, 0) when the airship has no badge (no raid attack left), or (None, None)
+    when the airship itself is not in view (nothing can be said)."""
+    for attempt in range(2):
+        go_home(bot, 30)
+        bot.device.zoom_out()
+        control.sleep(0.6)
+        bot.swipe(space.center(900, 800), space.center(1100, 350), 700)
+        control.sleep(1.2)
+        f = bot.shot()
+        found = _badges(f)
+        ship = vision.find(f, "raid/airship") if vision.templates.has("raid/airship") else True
+        if found or ship:
+            break
     if not found:
+        if not ship:
+            bot.save_error("raid-no-airship")
+            return None, None
         return None, 0
     x, y, w, h = max(found, key=lambda b: b[1])          # the lowest one: the airship is by the river
     text, conf = vision.text_reader.read_line(f, (x + space.s(4), y + space.s(2), w // 2, h - space.s(6)))
@@ -194,6 +202,9 @@ def run(bot, account, max_attacks=6):
     for _ in range(max_attacks + 1):
         control.checkpoint()
         badge, left = find_airship(bot)
+        if badge is None and left is None:
+            log.info("%s: the Clan Capital airship is not in view - raids looked at again later", account["name"])
+            break
         if badge is None:
             log.info("%s: no raid attack left this Raid Weekend", account["name"])
             done[account["name"]] = "done"
