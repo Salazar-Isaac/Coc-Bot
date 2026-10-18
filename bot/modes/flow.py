@@ -154,7 +154,7 @@ def _raids(bot, ctx):
     accs = _raid_list(bot, ctx)
     if not raid.pending(bot, [a["name"] for a in accs]):
         return 0
-    return raid.raid_accounts(bot, accs, ctx.state, lambda a: _switch_main(bot, ctx, a))
+    return raid.raid_accounts(bot, accs, ctx.state, lambda a: _switch_main(bot, ctx, a), _start_name(bot))
 
 
 def _switch_main(bot, ctx, acc):
@@ -164,13 +164,20 @@ def _switch_main(bot, ctx, acc):
     return True
 
 
+def _start_name(bot):
+    """The account "Start from account" names (None: from the top)."""
+    pos = int(bot.settings.get("start_from", 1) or 1)
+    return bot.accounts[pos - 1]["name"] if 1 < pos <= len(bot.accounts) else None
+
+
 def _raid_weekends(bot, ctx):
     """'Raid Weekend' option: raid attacks on every account during Raid Weekend; in between, it waits
     for the next one (checking every 10 minutes)."""
     while True:
         active, start, end = raid.window()
         if active:
-            raid.raid_accounts(bot, _raid_list(bot, ctx), ctx.state, lambda a: _switch_main(bot, ctx, a))
+            raid.raid_accounts(bot, _raid_list(bot, ctx), ctx.state, lambda a: _switch_main(bot, ctx, a),
+                               _start_name(bot))
             if not raid.pending(bot, [a["name"] for a in _raid_list(bot, ctx)]):
                 log.info("Raid Weekend: every account is done - waiting for the next one")
                 bot.status(action="Raid Weekend done - waiting for the next one")

@@ -91,23 +91,21 @@ def _badges(frame):
 
 def find_airship(bot):
     """Zoom out and bring the river into view: the airship's badge (x, y, w, h) and the raid attacks
-    left it shows - or (None, 0) when the airship has no badge (no raid attack left), or (None, None)
-    when the airship itself is not in view (nothing can be said)."""
+    left it shows, or (None, 0) when there is no badge (no raid attack left). The badge is found by its
+    colour and shape (the same in every village scenery - the airship itself looks different in each),
+    looked for twice before deciding there is none."""
+    found = []
     for attempt in range(2):
         go_home(bot, 30)
         bot.device.zoom_out()
         control.sleep(0.6)
-        bot.swipe(space.center(900, 800), space.center(1100, 350), 700)
+        bot.swipe(space.center(900, 800), space.center(1100, 350 + 120 * attempt), 700)
         control.sleep(1.2)
         f = bot.shot()
         found = _badges(f)
-        ship = vision.find(f, "raid/airship") if vision.templates.has("raid/airship") else True
-        if found or ship:
+        if found:
             break
     if not found:
-        if not ship:
-            bot.save_error("raid-no-airship")
-            return None, None
         return None, 0
     x, y, w, h = max(found, key=lambda b: b[1])          # the lowest one: the airship is by the river
     text, conf = vision.text_reader.read_line(f, (x + space.s(4), y + space.s(2), w // 2, h - space.s(6)))
@@ -237,9 +235,6 @@ def run(bot, account, max_attacks=6):
     for _ in range(max_attacks + 3):
         control.checkpoint()
         badge, left = find_airship(bot)
-        if badge is None and left is None:
-            log.info("%s: the Clan Capital airship is not in view - raids looked at again later", account["name"])
-            break
         if badge is None:
             log.info("%s: no raid attack left this Raid Weekend", account["name"])
             done[account["name"]] = "done"
@@ -287,11 +282,15 @@ def run(bot, account, max_attacks=6):
     return made
 
 
-def raid_accounts(bot, accounts, state, switch):
-    """Raid Weekend: every account that still has raid attacks uses them. switch(acc) opens an account."""
+def raid_accounts(bot, accounts, state, switch, start_from=None):
+    """Raid Weekend: every account that still has raid attacks uses them. switch(acc) opens an account.
+    start_from: the account to begin with (then the ones after it, then the ones before it)."""
     active, _, end = window()
     if not active:
         return 0
+    if start_from is not None:
+        i = next((k for k, a in enumerate(accounts) if a["name"] == start_from), 0)
+        accounts = accounts[i:] + accounts[:i]
     names = pending(bot, [a["name"] for a in accounts])
     if not names:
         return 0

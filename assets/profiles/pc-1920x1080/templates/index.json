@@ -1559,21 +1559,6 @@
     ],
     "threshold": 0.8
   },
-  "raid/airship": {
-    "box": [
-      625,
-      840,
-      110,
-      95
-    ],
-    "region": [
-      0,
-      300,
-      1500,
-      780
-    ],
-    "threshold": 0.7
-  },
   "raid/attack_go": {
     "box": [
       1405,
