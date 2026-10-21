@@ -230,6 +230,18 @@ def slot_empty(frame, cx):
     return cv2.cvtColor(card, cv2.COLOR_BGR2HSV)[:, :, 1].mean() < 25
 
 
+def event_lavaloon_slot(frame, slots):
+    """Find the event Lavaloon card by its distinctive x50 count.
+
+    Return its troop-bar slot index only when exactly one card has that count;
+    otherwise it is unsafe to guess which stack is the event troop.
+    """
+    matches = [i for i, cx in enumerate(slots) if not slot_empty(frame, cx) and read_count(frame, cx) == 50]
+    if len(matches) == 1:
+        return matches[0] + 1
+    return None
+
+
 def _card(frame, cx):
     y = space.point(0, 925)[1]
     return frame[y:y + space.s(130), max(0, cx - space.s(50)):cx + space.s(50)].astype(np.int16)
@@ -273,7 +285,7 @@ def _label(frame, cx):
     return frame[y:y + space.s(50), max(0, cx - space.s(12)):cx + space.s(54)].astype(np.int16)
 
 
-def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
+def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count_override=None):
     """Drop every unit on the card at cx, checking that each tap really deployed one.
 
     Units with a count (x15) are tracked by the count; a hero, a siege machine or
@@ -304,7 +316,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
         log.warning("No usable deploy spots left")
         return
     moves = {}
-    count = None if single else read_count(frame, cx)
+    count = None if single else (count_override if count_override is not None else read_count(frame, cx))
     by_count = count is not None
     left = count if by_count else 1
     queue = _spread(spots, left)
@@ -500,6 +512,12 @@ def deploy(bot, plan):
         n = step.get("slot")
         return slots[n - 1] if n and n <= len(slots) else None
 
+    event_slot = event_lavaloon_slot(frame, slots) if s.get("event_lavaloons", False) else None
+    event_cx = slots[event_slot - 1] if event_slot is not None else None
+    active_steps = [step for step in plan["steps"]
+                    if not (event_cx is not None and step_type(step) == "troop" and card_of(step) == event_cx)]
+    active_plan = dict(plan, steps=active_steps)
+
     ring = deployzone.deploy_line(frame) if smart else []
     if smart and len(ring) < 8:
         log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
@@ -522,8 +540,8 @@ def deploy(bot, plan):
     bot.deploy_spots = []
     bot.deploy_started = time.monotonic()       # the battle clock starts here (not while reading the base)
     if plan.get("style") == "clone_groups" and verify:
-        handled = deploy_clone_groups(bot, plan, frame, slots, by_key, card_of, ring, centre)
-    for step in plan["steps"]:
+        handled = deploy_clone_groups(bot, active_plan, frame, slots, by_key, card_of, ring, centre)
+    for step in active_steps:
         control.checkpoint()
         kind = step_type(step)
         if (step.get("key") or "").lower() in handled:
@@ -556,10 +574,37 @@ def deploy(bot, plan):
                   reselect=lambda st=step: select(bot, st, slots))
         time.sleep(0.1)
 
+    if s.get("event_lavaloons", False) and slots:
+        frame = bot.shot()
+        if event_slot is None:
+            log.warning("Event Lavaloon deployment skipped: no unique troop card showed x50")
+        else:
+            slot = event_slot
+            cx = slots[slot - 1]
+            event_count = read_count(frame, cx) if not slot_empty(frame, cx) else None
+            key = next((k for k, x in by_key.items() if x == cx), None)
+            step = {"key": key, "slot": slot, "type": "troop"}
+            if event_count and select(bot, step, slots):
+                log.info("Deploying all event Lavaloon troops from troop-bar slot %d", slot)
+                fallback = next((plan_points(st) for st in active_steps
+                                 if step_type(st) == "troop" and st.get("points")), [])
+                default_ring = [space.center(x, y) for x, y in DEFAULT_PLANS["edrag_spread"]["points"]["ring"]]
+                _drop(bot, cx, ring or fallback or default_ring, centre, fixes=fixes,
+                      reselect=lambda st=step: select(bot, st, slots), count_override=event_count)
+                remaining_frame = bot.shot()
+                if not slot_empty(remaining_frame, cx):
+                    remaining = read_count(remaining_frame, cx)
+                    if remaining is None:
+                        log.warning("Could not verify that all event Lavaloon troops were deployed")
+                    elif remaining:
+                        log.warning("%d event Lavaloon troop(s) remain undeployed", remaining)
+            else:
+                log.warning("Event Lavaloon deployment skipped: the x50 troop card is empty or unreadable")
+
     # any troop of the plan still showing a count on the bar -> drop the rest on the ring
     if verify and slots:
         frame = bot.shot()
-        for step in plan["steps"]:
+        for step in active_steps:
             cx = card_of(step)
             if step_type(step) != "troop" or cx is None:
                 continue

@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
         "shortcut_path": r"C:\Users\Amigo\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
                          r"\Google Play Games\Clash of Clans.lnk",
         "window_title": "Clash of Clans",
+        "background_input": True,
         "adb_path": "",
         "adb_serial": "127.0.0.1:5555",
     },
@@ -61,6 +62,7 @@ DEFAULT_SETTINGS = {
         "smart_deploy": True,               # find the red no-deploy area and drop troops just outside it
         "count_troops": True,               # read each troop count and tap exactly that many times
         "attack_plan": "edrag_spread",
+        "event_lavaloons": False,            # deploy every unit from the event's x50 troop card
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
         "roles": {"main": True, "loot": True, "both": True, "feeder": False},   # who "Loot all accounts" loots

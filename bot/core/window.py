@@ -1,4 +1,4 @@
-"""Win32 helpers: find, focus, launch and capture a window (used by the PC device)."""
+"""Win32 helpers: find, focus, launch, capture and send input to the PC game window."""
 
 import ctypes
 import os
@@ -95,6 +95,59 @@ class GameWindow:
     def focus(self):
         return bring_to_front(self.find())
 
+    @staticmethod
+    def _packed_point(x, y):
+        packed = (int(y) & 0xFFFF) << 16 | (int(x) & 0xFFFF)
+        return ctypes.c_int32(packed).value
+
+    def _input_target(self, x, y):
+        """Return the deepest child window at a client-area point and its client coordinates."""
+        hwnd = self.require()
+        screen_point = win32gui.ClientToScreen(hwnd, (int(x), int(y)))
+        target = hwnd
+        point = (int(x), int(y))
+        flags = (win32con.CWP_SKIPINVISIBLE | win32con.CWP_SKIPDISABLED |
+                 win32con.CWP_SKIPTRANSPARENT)
+        while True:
+            child = win32gui.ChildWindowFromPointEx(target, point, flags)
+            if child == target:
+                break
+            target = child
+            point = win32gui.ScreenToClient(target, screen_point)
+        return target, point, screen_point
+
+    def post_mouse(self, message, x, y, buttons=0):
+        """Post a client-coordinate mouse message without moving or clicking the system cursor."""
+        target, point, _ = self._input_target(x, y)
+        win32gui.PostMessage(target, message, buttons, self._packed_point(*point))
+
+    def post_mouse_wheel(self, x, y, delta):
+        """Post a wheel message to the game window; wheel coordinates are screen-relative."""
+        target, _, screen_point = self._input_target(x, y)
+        wparam = (int(delta) & 0xFFFF) << 16
+        win32gui.PostMessage(target, win32con.WM_MOUSEWHEEL, wparam,
+                             self._packed_point(*screen_point))
+
+    def post_key(self, key, key_up=False, point=None):
+        """Post a key message to the game window without changing foreground focus."""
+        target = self.require()
+        if point is not None:
+            target, _, _ = self._input_target(*point)
+        scan = win32api.MapVirtualKey(key, 0)
+        lparam = 1 | (scan << 16)
+        message = win32con.WM_KEYDOWN
+        if key_up:
+            lparam |= (1 << 30) | (1 << 31)
+            message = win32con.WM_KEYUP
+        win32gui.PostMessage(target, message, key, lparam)
+
+    def post_char(self, char, point=None):
+        """Post one UTF-16 character to the game window."""
+        target = self.require()
+        if point is not None:
+            target, _, _ = self._input_target(*point)
+        win32gui.PostMessage(target, win32con.WM_CHAR, char, 1)
+
     def capture(self):
         return capture_window(self.require())
 
@@ -133,4 +186,3 @@ def close_store_window():
     for hwnd in found:
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
     return len(found)
-

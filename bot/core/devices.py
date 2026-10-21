@@ -1,6 +1,6 @@
 """Device backends: where screenshots come from and where taps go.
 
-  PcDevice   Google Play Games on Windows (PrintWindow capture + real mouse/keyboard)
+  PcDevice   Google Play Games on Windows (PrintWindow capture + window or background input)
   AdbDevice  An Android emulator over ADB: BlueStacks, LDPlayer, MuMu, Nox, MEmu
 
 The bot works in "game space" (see space.py): the device image scaled uniformly
@@ -16,6 +16,7 @@ import time
 import cv2
 import numpy as np
 import win32api
+import win32con
 
 from .space import space
 from .window import GameWindow
@@ -147,7 +148,7 @@ class PcDevice(Device):
     kind = "pc"
     supports_keys = True
 
-    def __init__(self, shortcut_path="", title_prefix="Clash of Clans"):
+    def __init__(self, shortcut_path="", title_prefix="Clash of Clans", background_input=True):
         super().__init__()
         import pyautogui
         from pynput.keyboard import Controller, Key
@@ -157,12 +158,13 @@ class PcDevice(Device):
         self._pg = pyautogui
         self._kb = Controller()
         self._Key = Key
+        self.background_input = background_input
         self.window = GameWindow(title_prefix, shortcut_path)
         self._viewport = None        # (x, y, w, h) of the game inside the window's client area
         self._viewport_for = None    # client size it was measured for
 
     def describe(self):
-        return "Google Play Games (PC)"
+        return "Google Play Games (PC, background input)" if self.background_input else "Google Play Games (PC)"
 
     @staticmethod
     def find_viewport(img):
@@ -196,8 +198,16 @@ class PcDevice(Device):
         vx, vy = (self._viewport or (0, 0, 0, 0))[:2]
         return left + vx + x, top + vy + y
 
+    def _client(self, x, y):
+        vx, vy = (self._viewport or (0, 0, 0, 0))[:2]
+        return vx + x, vy + y
+
+    def _background_tap(self, x, y):
+        self.window.post_mouse(win32con.WM_LBUTTONDOWN, x, y, win32con.MK_LBUTTON)
+        self.window.post_mouse(win32con.WM_LBUTTONUP, x, y)
+
     def prepare(self):
-        if not self.window.is_foreground():
+        if not self.background_input and not self.window.is_foreground():
             self.window.focus()
 
     def _capture_native(self):
@@ -218,43 +228,109 @@ class PcDevice(Device):
         return img[y:y + vh, x:x + vw]
 
     def _tap_native(self, x, y):
-        self._pg.click(*self._screen(x, y))
+        if self.background_input:
+            self._background_tap(*self._client(x, y))
+        else:
+            self._pg.click(*self._screen(x, y))
 
     def _burst_native(self, x, y, n, interval):
-        self._pg.click(*self._screen(x, y), clicks=n, interval=interval)   # one call, like XpIncrease
+        if self.background_input:
+            for i in range(n):
+                if i:
+                    time.sleep(interval)
+                self._background_tap(*self._client(x, y))
+        else:
+            self._pg.click(*self._screen(x, y), clicks=n, interval=interval)   # one call, like XpIncrease
 
     def _swipe_native(self, x1, y1, x2, y2, ms):
-        self._pg.moveTo(*self._screen(x1, y1))
-        self._pg.mouseDown()
+        if not self.background_input:
+            self._pg.moveTo(*self._screen(x1, y1))
+            self._pg.mouseDown()
+        else:
+            start = self._client(x1, y1)
+            self.window.post_mouse(win32con.WM_LBUTTONDOWN, *start, win32con.MK_LBUTTON)
         try:
             time.sleep(0.08)
-            self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
+            if self.background_input:
+                end = self._client(x2, y2)
+                steps = max(1, int(ms / 15))
+                for i in range(1, steps + 1):
+                    x = round(start[0] + (end[0] - start[0]) * i / steps)
+                    y = round(start[1] + (end[1] - start[1]) * i / steps)
+                    self.window.post_mouse(win32con.WM_MOUSEMOVE, x, y, win32con.MK_LBUTTON)
+                    time.sleep(ms / 1000 / steps)
+            else:
+                self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
             time.sleep(0.08)
         finally:
-            self._pg.mouseUp()
+            if self.background_input:
+                self.window.post_mouse(win32con.WM_LBUTTONUP, *self._client(x2, y2))
+            else:
+                self._pg.mouseUp()
 
     def _drag_native(self, x1, y1, x2, y2, ms):
-        self._pg.moveTo(*self._screen(x1, y1))
-        self._pg.mouseDown()
+        if not self.background_input:
+            self._pg.moveTo(*self._screen(x1, y1))
+            self._pg.mouseDown()
+        else:
+            start = self._client(x1, y1)
+            self.window.post_mouse(win32con.WM_LBUTTONDOWN, *start, win32con.MK_LBUTTON)
         try:
-            self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
+            if self.background_input:
+                end = self._client(x2, y2)
+                steps = max(1, int(ms / 15))
+                for i in range(1, steps + 1):
+                    x = round(start[0] + (end[0] - start[0]) * i / steps)
+                    y = round(start[1] + (end[1] - start[1]) * i / steps)
+                    self.window.post_mouse(win32con.WM_MOUSEMOVE, x, y, win32con.MK_LBUTTON)
+                    time.sleep(ms / 1000 / steps)
+            else:
+                self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
         finally:
-            self._pg.mouseUp()
+            if self.background_input:
+                self.window.post_mouse(win32con.WM_LBUTTONUP, *self._client(x2, y2))
+            else:
+                self._pg.mouseUp()
 
     def _flick_native(self, x1, y1, x2, y2):
         # exactly XpIncrease (pyautogui's default 0.1 s pause between the steps): with shorter
         # gaps the game sees a tap, not a drag
-        self._pg.moveTo(*self._screen(x1, y1))
+        if not self.background_input:
+            self._pg.moveTo(*self._screen(x1, y1))
+        else:
+            start = self._client(x1, y1)
+            self.window.post_mouse(win32con.WM_MOUSEMOVE, *start)
         time.sleep(0.1)
-        self._pg.mouseDown()
+        if self.background_input:
+            self.window.post_mouse(win32con.WM_LBUTTONDOWN, *start, win32con.MK_LBUTTON)
+        else:
+            self._pg.mouseDown()
         try:
             time.sleep(0.1)
-            self._pg.moveTo(*self._screen(x2, y2))
+            if self.background_input:
+                self.window.post_mouse(win32con.WM_MOUSEMOVE, *self._client(x2, y2), win32con.MK_LBUTTON)
+            else:
+                self._pg.moveTo(*self._screen(x2, y2))
             time.sleep(0.1)
         finally:
-            self._pg.mouseUp()
+            if self.background_input:
+                self.window.post_mouse(win32con.WM_LBUTTONUP, *self._client(x2, y2))
+            else:
+                self._pg.mouseUp()
 
     def key(self, name):
+        if self.background_input:
+            if self._viewport is None:
+                self.native_size()
+            aliases = {"back": "BACK", "esc": "ESCAPE", "enter": "RETURN", "space": "SPACE",
+                       "backspace": "BACK"}
+            key = aliases.get(name.lower(), name.upper())
+            vk = ord(key.upper()) if len(key) == 1 else getattr(win32con, f"VK_{key}")
+            point = (self._viewport[0] + self._viewport[2] // 2,
+                     self._viewport[1] + self._viewport[3] // 2) if self._viewport else None
+            self.window.post_key(vk, point=point)
+            self.window.post_key(vk, key_up=True, point=point)
+            return True
         self.prepare()
         k = getattr(self._Key, name) if len(name) > 1 else name
         self._kb.press(k)
@@ -262,13 +338,29 @@ class PcDevice(Device):
         return True
 
     def type_text(self, text):
+        if self.background_input:
+            if self._viewport is None:
+                self.native_size()
+            point = (self._viewport[0] + self._viewport[2] // 2,
+                     self._viewport[1] + self._viewport[3] // 2) if self._viewport else None
+            encoded = text.encode("utf-16-le")
+            for i in range(0, len(encoded), 2):
+                self.window.post_char(int.from_bytes(encoded[i:i + 2], "little"), point=point)
+                time.sleep(0.1)
+            return True
         self.prepare()
         self._pg.write(text, interval=0.1)       # the game drops characters typed faster
         return True
 
     def zoom_out(self, steps=10):
-        self.prepare()
         w, h = self.native_size()
+        if self.background_input:
+            x, y = self._client(w // 2, h // 2)
+            for _ in range(steps):
+                self.window.post_mouse_wheel(x, y, -500)
+                time.sleep(0.03)
+            return
+        self.prepare()
         self._pg.moveTo(*self._screen(w // 2, h // 2))
         for _ in range(steps):
             self._pg.scroll(-500)
@@ -536,4 +628,5 @@ def make_device(settings):
     d = settings["device"]
     if d["type"] == "adb":
         return AdbDevice(d.get("adb_serial", ""), d.get("adb_path", ""))
-    return PcDevice(d.get("shortcut_path", ""), d.get("window_title", "Clash of Clans"))
+    return PcDevice(d.get("shortcut_path", ""), d.get("window_title", "Clash of Clans"),
+                    d.get("background_input", True))

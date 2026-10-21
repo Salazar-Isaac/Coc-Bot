@@ -45,6 +45,11 @@ starts the game it closes the Google Play Games store window that opens with it.
 is used (screenshots + taps), nothing is mirrored or recorded and the PC stays free. The running emulator is
 picked automatically.
 
+**Google Play Games without moving the PC mouse**: on the Device page, leave **Use background input** enabled
+(the default). The bot posts input messages to the game window rather than moving the system cursor or refocusing
+an already-open game. Some Google Play Games versions may ignore background input; if that happens, disable
+this option or use Android over ADB instead. Starting a game that is not already open may still activate it.
+
 Account roles: **Main** (loots, donates) · **Looter** (loots in every mode, also in the cycle, and requests) · **Loot + request** (loots in "Loot all", only requests in donation modes) · **Feeder** (only requests) · **Skip**.
 
 Accounts are switched the way the old completeid/XpIncrease scripts did it: one 0.5 s drag moves the Supercell ID
@@ -99,6 +104,8 @@ Emergency stop: F10, or push the mouse into a screen corner.
 - **Smart deployment**: finds the scouted base and drops troops on a ring just
   outside it, reads each troop's count, checks that every tap really deployed a unit,
   moves spots that land in the red area and stops when a card is empty.
+- **Event Lavaloon**: optionally deploys the entire event stack when exactly one troop-bar card
+  shows `x50`; multiple matching cards are skipped rather than guessed.
 - **Recovery**: knows the home, army, search, battle, results, reward chest, daily
   reward, character dialogs, chat, donate window, settings, account list and the
   "Anyone there?" popup, and gets back to the village from any of them. Every problem

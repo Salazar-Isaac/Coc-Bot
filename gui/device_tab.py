@@ -50,6 +50,10 @@ class DeviceTab(QWidget):
                            "Used to start the game when it is not running."))
         self.window_title = QLineEdit()
         pl.addWidget(field("Window title starts with", self.window_title))
+        self.background_input = Toggle()
+        pl.addWidget(SettingRow("Use background input", "Does not move the cursor or refocus an open game. "
+                                "Google Play Games may ignore background messages.",
+                                self.background_input))
         dev.add(self.pc_box)
 
         self.adb_box = QWidget()
@@ -124,6 +128,7 @@ class DeviceTab(QWidget):
 
         for w in (self.shortcut, self.window_title, self.adb_path, *self.hotkeys.values()):
             w.textChanged.connect(self.changed)
+        self.background_input.toggled.connect(self.changed)
         self.serial.editTextChanged.connect(self.changed)
         self.profile.currentIndexChanged.connect(self.changed)
         self.minimize.toggled.connect(self.changed)
@@ -182,6 +187,7 @@ class DeviceTab(QWidget):
         self.shortcut.setCursorPosition(0)
         self.shortcut.setToolTip(self.shortcut.text())
         self.window_title.setText(d.get("window_title", "Clash of Clans"))
+        self.background_input.setChecked(d.get("background_input", True))
         self.adb_path.setText(d.get("adb_path", ""))
         self.serial.setCurrentText(d.get("adb_serial", ""))
         self.reload_profiles(settings.get("profile"))
@@ -204,6 +210,7 @@ class DeviceTab(QWidget):
         d["type"] = "adb" if self.adb_card.isChecked() else "pc"
         d["shortcut_path"] = self.shortcut.text().strip()
         d["window_title"] = self.window_title.text().strip() or "Clash of Clans"
+        d["background_input"] = self.background_input.isChecked()
         d["adb_path"] = self.adb_path.text().strip()
         d["adb_serial"] = self.serial.currentText().strip()
         settings["profile"] = self.profile.currentText() or settings.get("profile")

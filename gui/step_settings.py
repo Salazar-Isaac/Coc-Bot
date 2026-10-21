@@ -140,9 +140,12 @@ class AttackAllSettings(StepSettings):
                       "attack. Empty = keep each account's army.", self.recipe))
         self.must_edrag = Toggle()
         self.must_clone = Toggle()
+        self.event_lavaloons = Toggle()
         atk.add(SettingRow("Army must have E-Dragons", "Checked after the recipe; the log says which account's "
                            "recipe is missing them", self.must_edrag))
         atk.add(SettingRow("Army must have Clone spells", "Checked after the recipe", self.must_clone))
+        atk.add(SettingRow("Use event Lavaloon troops", "Deploy all troops from the unique troop-bar card "
+                           "showing x50. Leave off when the event is not active.", self.event_lavaloons))
         atk.add(divider())
         self.plan = PlanPicker()
         atk.add(self.plan)
@@ -237,7 +240,8 @@ class AttackAllSettings(StepSettings):
         self.cols.add(more, 0)
 
         self._connect(self.accounts_field, self.battle_seconds, self.recipe, self.must_edrag, self.must_clone,
-                      self.plan, *self.watch.values(), self.full_rule, self.full_mode, *self.margin.values(),
+                      self.event_lavaloons, self.plan, *self.watch.values(), self.full_rule, self.full_mode,
+                      *self.margin.values(),
                       *self.full_at.values(), self.max_searches, self.max_attacks, self.stuck, self.smart_deploy,
                       self.count_troops, self.zoom)
         for chip in self.watch.values():
@@ -282,6 +286,7 @@ class AttackAllSettings(StepSettings):
         must = lo.get("army_must_have", d.get("army_must_have", ["edrag", "clone"])) or []
         self.must_edrag.setChecked("edrag" in must)
         self.must_clone.setChecked("clone" in must)
+        self.event_lavaloons.setChecked(bool(lo.get("event_lavaloons", False)))
         self.plan.reload(lo.get("attack_plan", "edrag_spread"))
         for r in config.RESOURCES:
             self.watch[r].setChecked(bool((lo.get("watch") or {}).get(r)))
@@ -309,6 +314,7 @@ class AttackAllSettings(StepSettings):
         lo["army_recipe"] = self.recipe.text().strip()
         lo["army_must_have"] = [k for t, k in ((self.must_edrag, "edrag"), (self.must_clone, "clone"))
                                 if t.isChecked()]
+        lo["event_lavaloons"] = self.event_lavaloons.isChecked()
         lo["attack_plan"] = self.plan.plan()
         lo["watch"] = self.watched()
         lo["full_rule"] = self.full_rule.currentData()
@@ -471,9 +477,13 @@ class LootCurrentSettings(StepSettings):
         army.add(block("Army recipe", "Set before the first attack. Empty = keep the account's army.", self.recipe))
         army.add(divider())
         self.plan = PlanPicker()
+        self.event_lavaloons = Toggle()
         army.add(self.plan)
+        army.add(SettingRow("Use event Lavaloon troops", "Deploy all troops from the unique troop-bar card "
+                            "showing x50. Leave off when the event is not active.", self.event_lavaloons))
         self.cols.add(army, 1)
-        self._connect(self.account, self.max_attacks, self.battle_seconds, self.recipe, self.plan)
+        self._connect(self.account, self.max_attacks, self.battle_seconds, self.recipe, self.plan,
+                      self.event_lavaloons)
         self.account.currentIndexChanged.connect(self._remember)
 
     def _remember(self, *_):
@@ -503,6 +513,7 @@ class LootCurrentSettings(StepSettings):
         self.battle_seconds.setValue(int(st.get("battle_seconds", 60) or 60))
         self.recipe.setText(str(st.get("army_recipe", "") or ""))
         self.plan.reload(st.get("attack_plan") or "edrag_spread")
+        self.event_lavaloons.setChecked(bool((settings.get("loot") or {}).get("event_lavaloons", False)))
 
     def apply(self, settings, accounts):
         st = step_out(settings, self.key)
@@ -511,6 +522,7 @@ class LootCurrentSettings(StepSettings):
         st["army_recipe"] = self.recipe.text().strip()
         st["attack_plan"] = self.plan.plan()
         st["max_attacks"] = self.max_attacks.value()
+        settings.setdefault("loot", {})["event_lavaloons"] = self.event_lavaloons.isChecked()
 
 
 # ----------------------------------------------------------------------------- Builder Base attack

@@ -172,8 +172,11 @@ class SettingsPanel(QWidget):
         self.device = DeviceTab()
         self.bodies.update({"donate": self.donate, "accounts": self.accounts, "device": self.device})
         self.attack = self.bodies["attack_all"]
+        self.loot_current = self.bodies["loot_current"]
         self.base_choice = self.bodies["base_choice"]
         self.general = self.bodies["general"]
+        self.attack.event_lavaloons.toggled.connect(self.loot_current.event_lavaloons.setChecked)
+        self.loot_current.event_lavaloons.toggled.connect(self.attack.event_lavaloons.setChecked)
 
         self.sections = {}
         for step in STEPS:
