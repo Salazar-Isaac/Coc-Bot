@@ -119,7 +119,7 @@ DEFAULT_PLANS = {
     },
     "valkyrie_sneaky_minion": {
         "title": "Valkyries / Sneaky Goblins / Super Minions",
-        "description": "Continuous randomized perimeter drag, optional Super Dragon, siege, randomized hero abilities, then 11 Earthquake clicks.",
+        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
         "style": "perimeter_hero_earthquake",
         "optional_units": [{"template": "battle/super_dragon", "type": "troop", "points": "ring"}],
         "siege_templates": ["battle/log_launcher", "battle/siege_barracks"],
@@ -361,6 +361,12 @@ def _spread(points, n):
     return [points[int(i * len(points) / n)] for i in range(n)]
 
 
+def _clockwise_perimeter(points, centre):
+    """Order perimeter points clockwise from the top of the base."""
+    return sorted(points, key=lambda p: (math.atan2(p[1] - centre[1], p[0] - centre[0])
+                                         + math.pi / 2) % (2 * math.pi))
+
+
 def _nudge(pt, centre, outward=True, step=34):
     """Move a point away from (or toward) the base centre."""
     x, y = pt
@@ -586,7 +592,7 @@ def _template_card_step(template, frame, slots, by_key):
 
 
 def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, card_of, ring, centre):
-    """Run the continuous perimeter drag followed by optional units, heroes, and Earthquakes."""
+    """Deploy the primary troop and heroes around the base, then optional units, siege, and Earthquakes."""
     points = plan["points"]
     handled = {str(step.get("key") or "").lower() for step in steps}
 
@@ -621,13 +627,19 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
     main = next((step for step in steps if step.get("role") == "primary"), None)
     if main is None:
         main = next((step for step in steps if step_type(step) == "troop"), None)
-    main_card = card_of(main) if main else None
-    if main is not None and main_card is None:
+    main_card = None
+    if main is not None:
         slot = main.get("slot")
         if isinstance(slot, int) and 1 <= slot <= len(slots):
             main_card = slots[slot - 1]
+        if main_card is None:
+            main_card = card_of(main)
     if main_card is None or slot_empty(frame, main_card):
         log.warning("Perimeter strategy aborted: its primary troop card is not in the deploy bar")
+        deploy_siege()
+        return handled
+    if not ring:
+        log.warning("Perimeter strategy aborted: no safe deploy points were found just outside the base")
         deploy_siege()
         return handled
     log.info("Selecting primary troop from troop-bar slot %d using key %s",
@@ -642,22 +654,10 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         log.warning("Perimeter strategy aborted: its primary troop card became empty before deployment")
         deploy_siege()
         return handled
-    before_count = read_count(before_frame, main_card)
-
-    corner_names = ("left", "top", "right", "bottom")
-    start_options = (0, 2, 1) if space.w / space.h <= 1.7 else (0, 2)
-    start = random.choice(start_options)
-    direction = random.choice((-1, 1))
-    order = [corner_names[(start + direction * i) % len(corner_names)] for i in range(5)]
-    path = [space.center(*points["corners"][name]) for name in order]
-    durations = [round(1000 * random.uniform(0.9, 1.1)) for _ in range(4)]
-    bot.drag_path(path, durations)
-    after_frame = bot.shot()
-    after_count = read_count(after_frame, main_card)
-    if not slot_empty(after_frame, main_card) and (
-            before_count is None or after_count is None or after_count >= before_count):
-        log.warning("Perimeter drag did not deploy the primary troop (count %s -> %s); "
-                    "skipping the remaining strategy steps", before_count, after_count)
+    troop_spots = _clockwise_perimeter(ring, centre)
+    log.info("Deploying primary troop by individual taps clockwise around the base")
+    if not _drop(bot, main_card, troop_spots, centre):
+        log.warning("Primary troop could not be deployed around the base")
         deploy_siege()
         return handled
 
@@ -678,17 +678,24 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
 
     deploy_siege()
 
-    heroes = [step for step in steps if step_type(step) == "hero"]
-    random.shuffle(heroes)
-    for step in heroes:
-        cx = card_of(step)
-        current = bot.shot()
-        if cx is None or slot_empty(current, cx) or not select(bot, step, slots):
+    heroes = []
+    for step in steps:
+        if step_type(step) != "hero":
             continue
-        base = points.get(step.get("points"), points.get("ring", []))
-        desired = [space.center(*point) for point in base]
-        spots = [min(ring, key=lambda p: (p[0] - desired[0][0]) ** 2 + (p[1] - desired[0][1]) ** 2)] \
-            if ring and desired else desired
+        cx = card_of(step)
+        if cx is not None and not slot_empty(bot.shot(), cx):
+            heroes.append((step, cx))
+    random.shuffle(heroes)
+    hero_spots = _spread(_clockwise_perimeter(ring, centre), len(heroes)) if ring else []
+    for index, (step, cx) in enumerate(heroes):
+        current = bot.shot()
+        if slot_empty(current, cx) or not select(bot, step, slots):
+            continue
+        if hero_spots:
+            spots = [hero_spots[index]]
+        else:
+            base = points.get(step.get("points"), points.get("ring", []))
+            spots = [space.center(*point) for point in base]
         if not spots:
             log.warning("No deploy point configured for hero %s", step.get("key"))
             continue
@@ -869,9 +876,13 @@ def deploy(bot, plan):
                     if not (event_cx is not None and step_type(step) == "troop" and card_of(step) == event_cx)]
     active_plan = dict(plan, steps=active_steps)
 
-    ring = deployzone.deploy_line(frame) if smart else []
-    if smart and len(ring) < 8:
-        log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
+    perimeter_strategy = plan.get("style") == "perimeter_hero_earthquake"
+    ring = deployzone.deploy_line(frame) if smart or perimeter_strategy else []
+    if (smart or perimeter_strategy) and len(ring) < 8:
+        if perimeter_strategy:
+            log.warning("Could not find a safe perimeter outside the base (%d points)", len(ring))
+        else:
+            log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
         bot.save_error("no-deploy-zone")
         ring = []
     if ring:

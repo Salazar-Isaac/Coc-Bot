@@ -409,7 +409,7 @@
   },
   "valkyrie_sneaky_minion": {
     "title": "Valkyries / Sneaky Goblins / Super Minions",
-    "description": "Continuous randomized perimeter drag, optional Super Dragon, siege, randomized hero abilities, then 11 Earthquake clicks.",
+    "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
     "style": "perimeter_hero_earthquake",
     "optional_units": [
       {
