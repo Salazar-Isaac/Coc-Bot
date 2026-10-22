@@ -111,15 +111,15 @@ def building_mask(frame):
     return (keep * 255).astype(np.uint8)
 
 
-def deploy_line(frame, count=24, margin=70):
+def deploy_geometry(frame, count=24, margin=70):
     """`count` points spread evenly on a line around the whole base, `margin` px (about two
     tiles) outside its outline, so they are just outside the no-deploy (red) area. Points that
     would be off the map or under a button are pulled back toward the base, never closer than
-    most of the margin. Returns [] if no base was found."""
+    most of the margin. Returns (points, centre), or ([], None) if no base was found."""
     mask = building_mask(frame)
     pts = cv2.findNonZero(mask)
     if pts is None or len(pts) < 2000:
-        return []
+        return [], None
     h, w = mask.shape
     hull = cv2.convexHull(pts)
     filled = np.zeros_like(mask)
@@ -128,7 +128,7 @@ def deploy_line(frame, count=24, margin=70):
     grown = cv2.dilate(filled, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * kx + 1, 2 * ky + 1)))
     contours, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     if not contours:
-        return []
+        return [], None
     outline = max(contours, key=cv2.contourArea)[:, 0, :]
     m = cv2.moments(hull)
     cx, cy = (m["m10"] / m["m00"], m["m01"] / m["m00"]) if m["m00"] else (w / 2, h / 2)
@@ -147,7 +147,12 @@ def deploy_line(frame, count=24, margin=70):
             if in_diamond(px, py, inset=-MAP_GROW + 0.02) and not ui[py, px]:
                 points.append((px, py))
                 break
-    return points[:count]
+    return points[:count], (int(round(cx)), int(round(cy)))
+
+
+def deploy_line(frame, count=24, margin=70):
+    """Return safe points outside the base perimeter."""
+    return deploy_geometry(frame, count, margin)[0]
 
 
 def draw(frame, points):

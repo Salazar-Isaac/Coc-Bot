@@ -82,11 +82,16 @@ The **Valkyries / Sneaky Goblins / Super Minions** plan selects the primary troo
 key/slot and deploys it with individual taps clockwise around safe points just outside the detected
 base footprint; it never drags the camera. Available heroes are spread around the same perimeter,
 then their abilities are activated. The plan also deploys an optional Super Dragon, an available siege
-machine, and 11 Earthquake clicks. On ADB, put the main troop in slot 1, siege in slot 3, heroes in
-slots 4-9, and Earthquake in slot 10. Choose Curve or Random region under **Earthquake placement**.
-Capture the Super Dragon, Log Launcher, and Siege Barracks troop-card templates to recognize the
+machine, and one Earthquake click per spell in a small circle around the detected base center. On ADB, put the
+main troop in slot 1, siege in slot 3, heroes in slots 4-9, and Earthquake in slot 10. Capture the
+Super Dragon, Log Launcher, and Siege Barracks troop-card templates to recognize the
 optional Super Dragon and prioritize Log Launcher over Siege Barracks; without siege templates, the
 plan deploys the first detected siege card (or its configured slot on ADB).
+The attack-plan selector shows that plan's applicable tuning sliders with numeric inputs; values are
+saved separately per strategy. For example, perimeter plans tune deployment-point count, the Valkyrie
+plan also tunes Earthquake circle radius, and Troop Spam tunes swipe duration. Custom plans can add
+`tunable_options` entries in `config/attack_plans.json`; each entry defines a `key`, `label`, `min`,
+`max`, `step`, and `default`, with optional `description` and `suffix`.
 
 ## Village chores (Village page)
 

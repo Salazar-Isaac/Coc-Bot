@@ -1,6 +1,9 @@
 {
   "edrag_spread": {
     "description": "Spells on 3 sides, E-Dragons + Lava + Baby all round, heroes on 4 sides, siege last",
+    "tunable_options": [
+      {"key": "perimeter_points", "label": "Perimeter deployment points", "description": "Number of positions used around the base.", "min": 4, "max": 24, "step": 1, "default": 12}
+    ],
     "offsets": [
       [
         -15,
@@ -160,6 +163,9 @@
   },
   "edrag_clone": {
     "description": "E-Dragons in 3 groups (left, top, right), a Clone on each group as it lands, then siege + heroes; other spells on the dragons' way",
+    "tunable_options": [
+      {"key": "group_spread_px", "label": "Group spread", "description": "Spacing between units in each dragon group.", "min": 4, "max": 40, "step": 1, "default": 15, "suffix": " px"}
+    ],
     "offsets": [
       [
         0,
@@ -326,6 +332,9 @@
     "title": "Troop Spam",
     "description": "Swipe troop-bar slot 1 around the perimeter, then deploy the siege, heroes, and earthquake spells.",
     "style": "troop_spam",
+    "tunable_options": [
+      {"key": "swipe_duration_ms", "label": "Swipe duration", "description": "Duration of each side-to-side swipe.", "min": 300, "max": 1400, "step": 50, "default": 800, "suffix": " ms"}
+    ],
     "points": {
       "corners": {
         "left": [
@@ -377,6 +386,9 @@
   "edrag_perimeter": {
     "title": "E-Dragon Perimeter",
     "description": "Deploy troop-bar slot 1 (put E-Dragons first), then the siege, heroes, and earthquake spells.",
+    "tunable_options": [
+      {"key": "perimeter_points", "label": "Perimeter deployment points", "description": "Number of positions used around the base.", "min": 4, "max": 24, "step": 1, "default": 12}
+    ],
     "points": {
       "ring": [
         [683, 876],
@@ -409,8 +421,12 @@
   },
   "valkyrie_sneaky_minion": {
     "title": "Valkyries / Sneaky Goblins / Super Minions",
-    "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
+    "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
     "style": "perimeter_hero_earthquake",
+    "tunable_options": [
+      {"key": "perimeter_points", "label": "Troop deployment points", "description": "Number of positions used for the clockwise troop deployment.", "min": 4, "max": 24, "step": 1, "default": 16},
+      {"key": "earthquake_radius", "label": "Earthquake circle radius", "description": "Radius of the spell taps around the detected base center.", "min": 20, "max": 100, "step": 2, "default": 48, "suffix": " px"}
+    ],
     "optional_units": [
       {
         "template": "battle/super_dragon",

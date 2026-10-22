@@ -5,14 +5,15 @@ import os
 
 from PySide6.QtCore import QByteArray, QMimeData, QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPen
-from PySide6.QtWidgets import QApplication, QCompleter, QLabel, QLineEdit, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QCompleter, QHBoxLayout, QLabel, QLineEdit, QSlider,
+                               QSizePolicy, QVBoxLayout, QWidget)
 
 from bot import flow
 from bot.actions import attack
 from gui import icons
 from gui import theme as T
 from gui.components import Button, FlowLayout, IconButton, SettingRow, Tween, _popup_style, hbox, label
-from gui.widgets import Combo
+from gui.widgets import Combo, Spin
 
 # words in attack plan names (config/attack_plans.json) shown nicer in the dropdown: edrag_clone -> E-Dragons + Clone
 PLAN_WORDS = {"edrag": "E-Dragons", "edrags": "E-Dragons", "lalo": "LaLo", "pekka": "P.E.K.K.A", "clone": "+ Clone",
@@ -494,8 +495,33 @@ class OrderList(QWidget):
 
 
 # ----------------------------------------------------------------------------- attack plan
+class PlanOptionControl(QWidget):
+    """A plan tuning option with linked slider and exact numeric input."""
+
+    def __init__(self, definition, parent=None):
+        super().__init__(parent)
+        minimum = int(definition.get("min", 0))
+        maximum = int(definition.get("max", 100))
+        step = max(1, int(definition.get("step", 1)))
+        suffix = str(definition.get("suffix", ""))
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(minimum, maximum)
+        self.slider.setSingleStep(step)
+        self.slider.setPageStep(step)
+        self.value = Spin(minimum, maximum, suffix=suffix)
+        self.value.setSingleStep(step)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        lay.addWidget(self.slider, 1)
+        lay.addWidget(self.value)
+        self.slider.valueChanged.connect(self.value.setValue)
+        self.value.valueChanged.connect(self.slider.setValue)
+        self.value.setValue(int(definition.get("default", minimum)))
+
+
 class PlanPicker(QWidget):
-    """Attack plan combo (config/attack_plans.json) with "Edit plans" and the plan's description."""
+    """Attack plan picker with per-plan tuning controls and saved values."""
 
     changed = Signal()
 
@@ -503,6 +529,9 @@ class PlanPicker(QWidget):
         super().__init__(parent)
         self._plans = {}
         self._wanted = "edrag_spread"
+        self._values = {}
+        self._controls = {}
+        self._active_key = self._wanted
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 2, 0, 4)
         lay.setSpacing(6)
@@ -511,12 +540,21 @@ class PlanPicker(QWidget):
         edit.setToolTip("Opens config/attack_plans.json")
         edit.clicked.connect(lambda: os.startfile(attack.PLANS_PATH))
         self.desc = label("", "rowDesc", wrap=True)
+        self.options_box = QWidget()
+        self.options_layout = QVBoxLayout(self.options_box)
+        self.options_layout.setContentsMargins(0, 4, 0, 0)
+        self.options_layout.setSpacing(2)
         lay.addLayout(hbox(label(title, "rowTitle"), None, edit))
         lay.addWidget(self.combo)
         lay.addWidget(self.desc)
+        lay.addWidget(self.options_box)
         self.combo.currentIndexChanged.connect(self._changed)
 
-    def reload(self, selected=None):
+    def reload(self, selected=None, values=None):
+        if values is not None:
+            self._save_visible_values()
+            self._values = {key: dict(value) for key, value in values.items() if isinstance(value, dict)}
+            self._clear_options()
         selected = selected or self._wanted
         self._wanted = selected
         self.combo.blockSignals(True)
@@ -533,17 +571,51 @@ class PlanPicker(QWidget):
             self.combo.addItem(f"{plan_title(selected)} (not in attack_plans.json)", selected)
         self.combo.select(selected)
         self.combo.blockSignals(False)
-        self._show_desc()
+        self._refresh_plan()
 
     def plan(self):
         return self.combo.currentData() or self._wanted or "edrag_spread"
 
-    def _show_desc(self):
-        plan = self._plans.get(self.combo.currentData()) or {}
+    def options(self):
+        self._save_visible_values()
+        return {key: dict(value) for key, value in self._values.items()}
+
+    def _save_visible_values(self):
+        key = self._active_key
+        if key and self._controls:
+            self._values.setdefault(key, {}).update(
+                {name: control.value.value() for name, control in self._controls.items()})
+
+    def _clear_options(self):
+        while self.options_layout.count():
+            item = self.options_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._controls = {}
+
+    def _refresh_plan(self):
+        self._save_visible_values()
+        self._clear_options()
+        key = self.plan()
+        self._active_key = key
+        plan = self._plans.get(key) or {}
         self.desc.setText(plan.get("description", ""))
         self.desc.setVisible(bool(plan.get("description")))
+        values = self._values.setdefault(key, {})
+        for definition in plan.get("tunable_options", []):
+            name = definition.get("key")
+            if not name:
+                continue
+            control = PlanOptionControl(definition, self)
+            control.value.setValue(int(values.get(name, definition.get("default", definition.get("min", 0)))))
+            control.value.valueChanged.connect(self.changed)
+            self._controls[name] = control
+            self.options_layout.addWidget(SettingRow(definition.get("label", name),
+                                                       definition.get("description", ""), control, 220))
+        self.options_box.setVisible(bool(self._controls))
 
     def _changed(self, *_):
         self._wanted = self.combo.currentData() or self._wanted
-        self._show_desc()
+        self._refresh_plan()
         self.changed.emit()

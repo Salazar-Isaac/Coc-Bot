@@ -44,6 +44,10 @@ PLANS_PATH = os.path.join(paths.CONFIG, "attack_plans.json")
 DEFAULT_PLANS = {
     "edrag_spread": {
         "description": "Spells on 3 sides, E-Dragons + Lava + Baby all round, heroes on 4 sides, siege last",
+        "tunable_options": [
+            {"key": "perimeter_points", "label": "Perimeter deployment points", "description": "Number of positions used around the base.",
+             "min": 4, "max": 24, "step": 1, "default": 12},
+        ],
         "offsets": [[-15, -15], [0, 0], [15, 15]],
         "points": {
             "spells": [[240, 525], [913, 10], [1708, 520]],
@@ -70,6 +74,10 @@ DEFAULT_PLANS = {
         "title": "Troop Spam",
         "description": "Swipe troop-bar slot 1 around the perimeter, then deploy the siege, heroes, and earthquake spells.",
         "style": "troop_spam",
+        "tunable_options": [
+            {"key": "swipe_duration_ms", "label": "Swipe duration", "description": "Duration of each side-to-side swipe.",
+             "min": 300, "max": 1400, "step": 50, "default": 800, "suffix": " ms"},
+        ],
         "points": {
             "corners": {
                 "left": [240, 525],
@@ -98,6 +106,10 @@ DEFAULT_PLANS = {
     "edrag_perimeter": {
         "title": "E-Dragon Perimeter",
         "description": "Deploy E-Dragons around the perimeter, then the siege, heroes, and earthquake spells.",
+        "tunable_options": [
+            {"key": "perimeter_points", "label": "Perimeter deployment points", "description": "Number of positions used around the base.",
+             "min": 4, "max": 24, "step": 1, "default": 12},
+        ],
         "points": {
             "ring": [[683, 876], [491, 714], [240, 525], [515, 312], [751, 137], [913, 10],
                      [1177, 125], [1438, 306], [1708, 520], [1539, 675], [1298, 848]],
@@ -119,8 +131,14 @@ DEFAULT_PLANS = {
     },
     "valkyrie_sneaky_minion": {
         "title": "Valkyries / Sneaky Goblins / Super Minions",
-        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
+        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
         "style": "perimeter_hero_earthquake",
+        "tunable_options": [
+            {"key": "perimeter_points", "label": "Troop deployment points", "description": "Number of positions used for the clockwise troop deployment.",
+             "min": 4, "max": 24, "step": 1, "default": 16},
+            {"key": "earthquake_radius", "label": "Earthquake circle radius", "description": "Radius of the spell taps around the detected base center.",
+             "min": 20, "max": 100, "step": 2, "default": 48, "suffix": " px"},
+        ],
         "optional_units": [{"template": "battle/super_dragon", "type": "troop", "points": "ring"}],
         "siege_templates": ["battle/log_launcher", "battle/siege_barracks"],
         "points": {
@@ -169,8 +187,29 @@ def get_plan(name):
     plans = load_plans()
     if name not in plans:
         log.warning("Attack plan '%s' not found; using edrag_spread", name)
-        return copy.deepcopy(DEFAULT_PLANS["edrag_spread"])
-    return plans[name]
+        name = "edrag_spread"
+    plan = copy.deepcopy(plans[name])
+    plan["_plan_key"] = name
+    return plan
+
+
+def _resolve_plan_options(plan, saved):
+    """Validate saved integer tuning values against the selected plan's definitions."""
+    resolved = {}
+    for definition in plan.get("tunable_options", []):
+        key = definition.get("key")
+        if not key:
+            continue
+        minimum = int(definition.get("min", 0))
+        maximum = int(definition.get("max", 100))
+        default = int(definition.get("default", minimum))
+        try:
+            value = int(saved.get(key, default))
+        except (TypeError, ValueError):
+            log.warning("Invalid attack plan option %s=%r; using default %d", key, saved.get(key), default)
+            value = default
+        resolved[key] = max(minimum, min(maximum, value))
+    return resolved
 
 
 def step_type(step):
@@ -467,7 +506,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
     return deployed
 
 
-def _deploy_troop_spam(bot, step, slots, card_of, points):
+def _deploy_troop_spam(bot, step, slots, card_of, points, duration=800):
     """Deploy the selected troop along the four sides, like the legacy TroopSpam strategy."""
     cx = card_of(step)
     if cx is not None and slot_empty(bot.shot(), cx):
@@ -488,88 +527,17 @@ def _deploy_troop_spam(bot, step, slots, card_of, points):
         y1 += random.randint(-10, 10)
         x2 += random.randint(-10, 10)
         y2 += random.randint(-10, 10)
-        bot.swipe((x1, y1), (x2, y2), 800)
+        bot.swipe((x1, y1), (x2, y2), duration)
 
 
-def _sample_arc(anchors, count):
-    """Sample a circular arc from left to right that passes through its top anchor."""
-    (lx, ly), (tx, ty), (rx, ry) = anchors
-    d = 2 * (lx * (ty - ry) + tx * (ry - ly) + rx * (ly - ty))
-    if count < 2:
-        return [(int(round(lx)), int(round(ly)))]
-    if abs(d) < 1e-6:
-        cx, cy = 2 * tx - (lx + rx) / 2, 2 * ty - (ly + ry) / 2
-        return [(int(round((1 - t) ** 2 * lx + 2 * (1 - t) * t * cx + t ** 2 * rx)),
-                 int(round((1 - t) ** 2 * ly + 2 * (1 - t) * t * cy + t ** 2 * ry)))
-                for t in (i / (count - 1) for i in range(count))]
-    l2, t2, r2 = lx * lx + ly * ly, tx * tx + ty * ty, rx * rx + ry * ry
-    ox = (l2 * (ty - ry) + t2 * (ry - ly) + r2 * (ly - ty)) / d
-    oy = (l2 * (rx - tx) + t2 * (lx - rx) + r2 * (tx - lx)) / d
-    radius = math.hypot(lx - ox, ly - oy)
-
-    def angle(point):
-        return math.atan2(point[1] - oy, point[0] - ox)
-
-    start, middle, end = angle((lx, ly)), angle((tx, ty)), angle((rx, ry))
-    span = (end - start) % (2 * math.pi)
-    middle_span = (middle - start) % (2 * math.pi)
-    sweep = span if middle_span <= span else span - 2 * math.pi
-    return [(int(round(ox + radius * math.cos(start + i / (count - 1) * sweep))),
-             int(round(oy + radius * math.sin(start + i / (count - 1) * sweep))))
-            for i in range(count)]
-
-
-def _inside_polygon(x, y, polygon):
-    inside = False
-    j = len(polygon) - 1
-    for i, (ix, iy) in enumerate(polygon):
-        jx, jy = polygon[j]
-        if (iy > y) != (jy > y) and x < (jx - ix) * (y - iy) / (jy - iy) + ix:
-            inside = not inside
-        j = i
-    return inside
-
-
-def _polygon_double_area(polygon):
-    return sum(x1 * y2 - x2 * y1
-               for (x1, y1), (x2, y2) in zip(polygon, polygon[1:] + polygon[:1]))
-
-
-def _earthquake_points(anchors, width, height, method):
-    """Return eleven bounded curve or random-region Earthquake points."""
-    def bounded(points):
-        return [(max(0, min(width - 1, x)), max(0, min(height - 1, y))) for x, y in points]
-
-    def curve():
-        arc = _sample_arc(anchors, 11)
-        if random.choice((True, False)):
-            arc.reverse()
-        return bounded([(x + random.randint(-100, 100), y + random.randint(-100, 100)) for x, y in arc])
-
-    if method == "curve":
-        return curve()
-    if method != "random":
-        log.warning("Unknown Earthquake placement %r; using curve placement", method)
-        return curve()
-    dense = _sample_arc(anchors, 49)
-    line_y = round((height - 1) * 0.6)
-    polygon = dense + [(dense[-1][0], line_y), (dense[0][0], line_y)]
-    if len(polygon) < 3 or abs(_polygon_double_area(polygon)) < 2:
-        log.warning("Earthquake random region is degenerate; using curve placement")
-        return curve()
-    min_x = max(0, min(p[0] for p in polygon))
-    max_x = min(width - 1, max(p[0] for p in polygon))
-    min_y = max(0, min(p[1] for p in polygon))
-    max_y = min(height - 1, max(p[1] for p in polygon))
+def _earthquake_points(centre, width, height, count=11, radius=48):
+    """Return a small clockwise circle of Earthquake points around the base centre."""
     points = []
-    for _ in range(11):
-        for _ in range(1000):
-            point = (random.randint(min_x, max_x), random.randint(min_y, max_y))
-            if _inside_polygon(*point, polygon):
-                points.append(point)
-                break
-        else:
-            return curve()
+    for i in range(count):
+        angle = -math.pi / 2 + 2 * math.pi * i / count
+        x = round(centre[0] + radius * math.cos(angle))
+        y = round(centre[1] + radius * math.sin(angle))
+        points.append((max(0, min(width - 1, x)), max(0, min(height - 1, y))))
     return points
 
 
@@ -655,6 +623,9 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         deploy_siege()
         return handled
     troop_spots = _clockwise_perimeter(ring, centre)
+    point_count = plan.get("_tuning", {}).get("perimeter_points")
+    if point_count is not None:
+        troop_spots = _spread(troop_spots, min(point_count, len(troop_spots)))
     log.info("Deploying primary troop by individual taps clockwise around the base")
     if not _drop(bot, main_card, troop_spots, centre):
         log.warning("Primary troop could not be deployed around the base")
@@ -710,15 +681,16 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         if cx is None or slot_empty(current, cx):
             log.warning("Earthquake spell card is not in the deploy bar")
             return handled
+        spell_count = read_count(current, cx)
         if not select(bot, earthquake, slots):
             return handled
-        anchor_points = points.get(earthquake.get("points"), points.get("spells", []))
-        anchors = [space.center(*point) for point in anchor_points[:3]]
-        if len(anchors) != 3:
-            log.warning("Earthquake placement needs three anchor points")
-            return handled
-        method = (bot.settings.get("loot") or {}).get("earthquake_method", "curve")
-        for x, y in _earthquake_points(anchors, space.w, space.h, method):
+        radius = plan.get("_tuning", {}).get("earthquake_radius", 48)
+        if spell_count is None or spell_count <= 0:
+            log.warning("Could not read Earthquake spell count; deploying the default 11 taps")
+            spell_count = 11
+        spell_points = _earthquake_points(centre, space.w, space.h, count=spell_count, radius=radius)
+        log.info("Deploying %d Earthquake spell(s) in a circle around the base", spell_count)
+        for x, y in spell_points:
             bot.tap(x, y, jitter=0)
     return handled
 
@@ -801,8 +773,9 @@ def deploy_clone_groups(bot, plan, frame, slots, by_key, card_of, ring, centre):
         # the others along the ring at that spot (same distance from the base: no red area)
         tx, ty = centre[1] - spot[1], spot[0] - centre[0]
         d = math.hypot(tx, ty) or 1.0
+        group_spread = plan.get("_tuning", {}).get("group_spread_px", GROUP_SPREAD)
         for i in range(1, n):
-            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.s(GROUP_SPREAD)
+            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.s(group_spread)
             bot.tap(int(spot[0] + tx / d * k), int(spot[1] + ty / d * k), jitter=2)
             time.sleep(0.07)
         if clone_x is not None and cast < clones:
@@ -852,6 +825,11 @@ def _land(bot, cx, spot, centre, tries=4):
 
 def deploy(bot, plan):
     s = bot.settings["loot"]
+    plan = dict(plan)
+    plan_key = plan.get("_plan_key", s.get("attack_plan", ""))
+    saved_options = s.get("attack_strategy_options") or {}
+    plan_options = saved_options.get(plan_key, {}) if isinstance(saved_options, dict) else {}
+    plan["_tuning"] = _resolve_plan_options(plan, plan_options if isinstance(plan_options, dict) else {})
     smart, verify = s.get("smart_deploy", True), s.get("count_troops", True)
     offsets = plan.get("offsets") or [[0, 0]]
     frame = bot.shot()
@@ -877,7 +855,10 @@ def deploy(bot, plan):
     active_plan = dict(plan, steps=active_steps)
 
     perimeter_strategy = plan.get("style") == "perimeter_hero_earthquake"
-    ring = deployzone.deploy_line(frame) if smart or perimeter_strategy else []
+    if smart or perimeter_strategy:
+        ring, detected_centre = deployzone.deploy_geometry(frame)
+    else:
+        ring, detected_centre = [], None
     if (smart or perimeter_strategy) and len(ring) < 8:
         if perimeter_strategy:
             log.warning("Could not find a safe perimeter outside the base (%d points)", len(ring))
@@ -885,10 +866,15 @@ def deploy(bot, plan):
             log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
         bot.save_error("no-deploy-zone")
         ring = []
-    if ring:
+    if perimeter_strategy and detected_centre is not None:
+        centre = detected_centre
+    elif ring:
         centre = (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))
     else:
         centre = space.center(deployzone.DIAMOND["cx"], deployzone.DIAMOND["cy"])
+    perimeter_count = plan["_tuning"].get("perimeter_points")
+    if perimeter_count is not None and ring and not perimeter_strategy:
+        ring = _spread(_clockwise_perimeter(ring, centre), min(perimeter_count, len(ring)))
 
     def plan_points(step):
         pts = plan["points"].get(step["points"], []) if isinstance(step["points"], str) else step["points"]
@@ -917,7 +903,8 @@ def deploy(bot, plan):
             log.debug("Key %s is not on the troop bar: this army has no such unit", step.get("key"))
             continue
         if plan.get("style") == "troop_spam" and kind == "troop":
-            _deploy_troop_spam(bot, step, slots, card_of, plan["points"])
+            _deploy_troop_spam(bot, step, slots, card_of, plan["points"],
+                                plan["_tuning"].get("swipe_duration_ms", 800))
             if key:
                 handled.add(key)
             continue
@@ -926,6 +913,8 @@ def deploy(bot, plan):
         if not select(bot, step, slots):
             continue
         base_pts = plan_points(step) if isinstance(step.get("points"), list) or step.get("points") in plan["points"] else []
+        if perimeter_count is not None and step.get("points") == "ring" and not ring and base_pts:
+            base_pts = _spread(_clockwise_perimeter(base_pts, centre), min(perimeter_count, len(base_pts)))
         if kind == "spell" and step.get("points") == "ring":
             # e.g. Clone right after the dragons: just inside the ring, spread around the base
             src = ring or base_pts
