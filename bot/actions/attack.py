@@ -570,7 +570,7 @@ def _earthquake_points(anchors, width, height, method):
 def _template_card_step(template, frame, slots, by_key):
     """Find an optional troop card by its captured troop-bar icon template."""
     if not vision.templates.has(template):
-        log.debug("Optional troop skipped; template %s has not been captured", template)
+        log.debug("Troop card template %s has not been captured", template)
         return None
     region = (0, max(0, frame.shape[0] - space.s(140)), frame.shape[1], space.s(120))
     matches = vision.find_all(frame, template, region=region)
@@ -581,8 +581,6 @@ def _template_card_step(template, frame, slots, by_key):
         if slot_empty(frame, cx):
             continue
         key = next((k for k, x in by_key.items() if x == cx), "")
-        if by_key and not key:
-            continue
         return {"key": key, "slot": slots.index(cx) + 1, "type": "troop"}
     return None
 
@@ -591,16 +589,60 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
     """Run the continuous perimeter drag followed by optional units, heroes, and Earthquakes."""
     points = plan["points"]
     handled = {str(step.get("key") or "").lower() for step in steps}
+
+    def deploy_siege():
+        siege_steps = []
+        for template in plan.get("siege_templates", []):
+            match = _template_card_step(template, bot.shot(), slots, by_key)
+            if match:
+                siege_steps = [dict(match, type="siege")]
+                break
+        if not siege_steps:
+            if by_key:
+                indexed = {k: x for k, x in by_key.items() if k in "zxcv"}
+                siege_steps = [{"key": key, "slot": slots.index(cx) + 1, "type": "siege"}
+                               for key, cx in sorted(indexed.items(), key=lambda item: "zxcv".index(item[0]))]
+            if not siege_steps:
+                siege_steps = [step for step in steps if step_type(step) == "siege"]
+        for step in siege_steps:
+            cx = card_of(step)
+            current = bot.shot()
+            if cx is None or slot_empty(current, cx):
+                continue
+            log.info("Deploying siege machine from troop-bar slot %d using key %s",
+                     slots.index(cx) + 1, step.get("key") or "(tap)")
+            if select(bot, step, slots):
+                spots = ring or [space.center(*p) for p in points.get(step.get("points", "ring"), [])]
+                if _drop(bot, cx, spots, centre, single=True):
+                    return True
+        log.warning("No siege machine was found in the troop bar")
+        return False
+
     main = next((step for step in steps if step.get("role") == "primary"), None)
     if main is None:
         main = next((step for step in steps if step_type(step) == "troop"), None)
     main_card = card_of(main) if main else None
+    if main is not None and main_card is None:
+        slot = main.get("slot")
+        if isinstance(slot, int) and 1 <= slot <= len(slots):
+            main_card = slots[slot - 1]
     if main_card is None or slot_empty(frame, main_card):
         log.warning("Perimeter strategy aborted: its primary troop card is not in the deploy bar")
+        deploy_siege()
         return handled
+    log.info("Selecting primary troop from troop-bar slot %d using key %s",
+             slots.index(main_card) + 1, main.get("key") or "(tap)")
     if not select(bot, main, slots):
         log.warning("Perimeter strategy aborted: its primary troop card could not be selected")
+        deploy_siege()
         return handled
+    time.sleep(0.15)
+    before_frame = bot.shot()
+    if slot_empty(before_frame, main_card):
+        log.warning("Perimeter strategy aborted: its primary troop card became empty before deployment")
+        deploy_siege()
+        return handled
+    before_count = read_count(before_frame, main_card)
 
     corner_names = ("left", "top", "right", "bottom")
     start_options = (0, 2, 1) if space.w / space.h <= 1.7 else (0, 2)
@@ -610,6 +652,14 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
     path = [space.center(*points["corners"][name]) for name in order]
     durations = [round(1000 * random.uniform(0.9, 1.1)) for _ in range(4)]
     bot.drag_path(path, durations)
+    after_frame = bot.shot()
+    after_count = read_count(after_frame, main_card)
+    if not slot_empty(after_frame, main_card) and (
+            before_count is None or after_count is None or after_count >= before_count):
+        log.warning("Perimeter drag did not deploy the primary troop (count %s -> %s); "
+                    "skipping the remaining strategy steps", before_count, after_count)
+        deploy_siege()
+        return handled
 
     optional = plan.get("optional_units", [])
     for definition in optional:
@@ -626,31 +676,7 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         spots = ring or [space.center(*p) for p in points.get(definition.get("points", "ring"), [])]
         _drop(bot, cx, spots, centre)
 
-    siege_steps = []
-    for template in plan.get("siege_templates", []):
-        match = _template_card_step(template, bot.shot(), slots, by_key)
-        if match:
-            siege_steps = [dict(match, type="siege")]
-            break
-    if not siege_steps:
-        if by_key:
-            indexed = {k: x for k, x in by_key.items() if k in "zxcv"}
-            siege_steps = [{"key": key, "slot": slots.index(cx) + 1, "type": "siege"}
-                           for key, cx in sorted(indexed.items(), key=lambda item: "zxcv".index(item[0]))]
-        if not siege_steps:
-            siege_steps = [step for step in steps if step_type(step) == "siege"]
-    siege_deployed = False
-    for step in siege_steps:
-        cx = card_of(step)
-        current = bot.shot()
-        if cx is None or slot_empty(current, cx):
-            continue
-        if select(bot, step, slots):
-            spots = ring or [space.center(*p) for p in points.get(step.get("points", "ring"), [])]
-            siege_deployed = _drop(bot, cx, spots, centre, single=True)
-            break
-    if not siege_deployed:
-        log.warning("No siege machine was found in the troop bar")
+    deploy_siege()
 
     heroes = [step for step in steps if step_type(step) == "hero"]
     random.shuffle(heroes)
@@ -823,16 +849,19 @@ def deploy(bot, plan):
     offsets = plan.get("offsets") or [[0, 0]]
     frame = bot.shot()
     slots = detect_slots(frame)
-    by_key = card_keys(frame, slots) if (bot.device.supports_keys and verify and slots) else {}
+    needs_key_map = verify or plan.get("style") == "perimeter_hero_earthquake"
+    by_key = card_keys(frame, slots) if (bot.device.supports_keys and needs_key_map and slots) else {}
     if by_key:
         log.debug("Troop bar keys: %s", " ".join(sorted(by_key, key=by_key.get)))
 
     def card_of(step):
         """X of the card a step uses: by its key hint on PC, else by its slot number."""
         if by_key:
-            return by_key.get((step.get("key") or "").lower())
+            cx = by_key.get((step.get("key") or "").lower())
+            if cx is not None:
+                return cx
         n = step.get("slot")
-        return slots[n - 1] if n and n <= len(slots) else None
+        return slots[n - 1] if isinstance(n, int) and 1 <= n <= len(slots) else None
 
     event_slot = event_lavaloon_slot(frame, slots) if s.get("event_lavaloons", False) else None
     event_cx = slots[event_slot - 1] if event_slot is not None else None

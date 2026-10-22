@@ -78,13 +78,13 @@ troop-bar slot 1), alongside saved plans such as "E-Dragons + Clone". The select
 Loot all and Loot current account. On ADB, these presets assume the usual order: troop in slot 1, siege in
 slot 4, heroes in slots 5-8, and the first spell in slot 9; edit `config/attack_plans.json` if your army
 differs.
-The **Valkyries / Sneaky Goblins / Super Minions** plan keeps one continuous drag through the perimeter
-corners, then deploys the siege, available heroes and their abilities, and 11 Earthquake clicks. Choose
-Curve or Random region under **Earthquake placement**. Put the main troop in slot 1, siege in slot 3,
-heroes in slots 4-9, and Earthquake in slot 10 for ADB. Capture the Super Dragon, Log Launcher, and
-Siege Barracks troop-card templates from the **Templates** page to recognize the optional Super Dragon
-and prioritize Log Launcher over Siege Barracks; without siege templates, the plan uses the first
-detected siege card (or its configured slot on ADB).
+The **Valkyries / Sneaky Goblins / Super Minions** plan selects the primary troop with its configured
+key/slot, keeps one continuous drag through the perimeter corners, then deploys an available siege
+machine, available heroes and their abilities, and 11 Earthquake clicks. On ADB, put the main troop in
+slot 1, siege in slot 3, heroes in slots 4-9, and Earthquake in slot 10. Choose Curve or Random region
+under **Earthquake placement**. Capture the Super Dragon, Log Launcher, and Siege Barracks troop-card
+templates to recognize the optional Super Dragon and prioritize Log Launcher over Siege Barracks;
+without siege templates, the plan deploys the first detected siege card (or its configured slot on ADB).
 
 ## Village chores (Village page)
 
