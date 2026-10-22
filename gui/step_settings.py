@@ -149,6 +149,9 @@ class AttackAllSettings(StepSettings):
         atk.add(divider())
         self.plan = PlanPicker()
         atk.add(self.plan)
+        self.earthquake_method = Combo([("curve", "Curve placement"), ("random", "Random region")])
+        atk.add(SettingRow("Earthquake placement", "Curve follows the left/top/right anchors; random samples "
+                           "the area below the arc.", self.earthquake_method))
         self.cols.add(atk, 0)
 
         # --- when is an account full
@@ -240,7 +243,7 @@ class AttackAllSettings(StepSettings):
         self.cols.add(more, 0)
 
         self._connect(self.accounts_field, self.battle_seconds, self.recipe, self.must_edrag, self.must_clone,
-                      self.event_lavaloons, self.plan, *self.watch.values(), self.full_rule, self.full_mode,
+                      self.event_lavaloons, self.plan, self.earthquake_method, *self.watch.values(), self.full_rule, self.full_mode,
                       *self.margin.values(),
                       *self.full_at.values(), self.max_searches, self.max_attacks, self.stuck, self.smart_deploy,
                       self.count_troops, self.zoom)
@@ -288,6 +291,7 @@ class AttackAllSettings(StepSettings):
         self.must_clone.setChecked("clone" in must)
         self.event_lavaloons.setChecked(bool(lo.get("event_lavaloons", False)))
         self.plan.reload(lo.get("attack_plan", "edrag_spread"))
+        self.earthquake_method.select(lo.get("earthquake_method", "curve"))
         for r in config.RESOURCES:
             self.watch[r].setChecked(bool((lo.get("watch") or {}).get(r)))
             margin = lo.get("full_margin") or {}
@@ -316,6 +320,7 @@ class AttackAllSettings(StepSettings):
                                 if t.isChecked()]
         lo["event_lavaloons"] = self.event_lavaloons.isChecked()
         lo["attack_plan"] = self.plan.plan()
+        lo["earthquake_method"] = self.earthquake_method.currentData()
         lo["watch"] = self.watched()
         lo["full_rule"] = self.full_rule.currentData()
         lo["full_mode"] = self.full_mode.currentData()
@@ -479,11 +484,14 @@ class LootCurrentSettings(StepSettings):
         self.plan = PlanPicker()
         self.event_lavaloons = Toggle()
         army.add(self.plan)
+        self.earthquake_method = Combo([("curve", "Curve placement"), ("random", "Random region")])
+        army.add(SettingRow("Earthquake placement", "Curve follows the left/top/right anchors; random samples "
+                            "the area below the arc.", self.earthquake_method))
         army.add(SettingRow("Use event Lavaloon troops", "Deploy all troops from the unique troop-bar card "
                             "showing x50. Leave off when the event is not active.", self.event_lavaloons))
         self.cols.add(army, 1)
         self._connect(self.account, self.max_attacks, self.battle_seconds, self.recipe, self.plan,
-                      self.event_lavaloons)
+                      self.earthquake_method, self.event_lavaloons)
         self.account.currentIndexChanged.connect(self._remember)
 
     def _remember(self, *_):
@@ -513,7 +521,9 @@ class LootCurrentSettings(StepSettings):
         self.battle_seconds.setValue(int(st.get("battle_seconds", 60) or 60))
         self.recipe.setText(str(st.get("army_recipe", "") or ""))
         self.plan.reload(st.get("attack_plan") or "edrag_spread")
-        self.event_lavaloons.setChecked(bool((settings.get("loot") or {}).get("event_lavaloons", False)))
+        lo = settings.get("loot") or {}
+        self.earthquake_method.select(lo.get("earthquake_method", "curve"))
+        self.event_lavaloons.setChecked(bool(lo.get("event_lavaloons", False)))
 
     def apply(self, settings, accounts):
         st = step_out(settings, self.key)
@@ -522,7 +532,9 @@ class LootCurrentSettings(StepSettings):
         st["army_recipe"] = self.recipe.text().strip()
         st["attack_plan"] = self.plan.plan()
         st["max_attacks"] = self.max_attacks.value()
-        settings.setdefault("loot", {})["event_lavaloons"] = self.event_lavaloons.isChecked()
+        lo = settings.setdefault("loot", {})
+        lo["earthquake_method"] = self.earthquake_method.currentData()
+        lo["event_lavaloons"] = self.event_lavaloons.isChecked()
 
 
 # ----------------------------------------------------------------------------- Builder Base attack

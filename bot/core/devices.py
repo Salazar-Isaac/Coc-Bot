@@ -128,6 +128,17 @@ class Device:
     def _drag_native(self, x1, y1, x2, y2, ms):
         self._swipe_native(x1, y1, x2, y2, ms)
 
+    def drag_path(self, points, durations):
+        """Drag through every point without releasing, using one duration per segment."""
+        if len(points) < 2 or len(durations) != len(points) - 1:
+            raise ValueError("A drag path needs at least two points and one duration per segment")
+        self.prepare()
+        native = [self.to_native(x, y) for x, y in points]
+        self._drag_path_native(native, durations)
+
+    def _drag_path_native(self, _points, _durations):
+        raise NotImplementedError("This device does not support continuous multi-point drags")
+
     def flick(self, x1, y1, x2, y2):
         """A fast fling (XpIncrease's siege move): press, jump to the end, let go - the row keeps
         sliding to its end."""
@@ -289,6 +300,34 @@ class PcDevice(Device):
         finally:
             if self.background_input:
                 self.window.post_mouse(win32con.WM_LBUTTONUP, *self._client(x2, y2))
+            else:
+                self._pg.mouseUp()
+
+    def _drag_path_native(self, points, durations):
+        if not self.background_input:
+            start = self._screen(*points[0])
+            self._pg.moveTo(*start)
+            self._pg.mouseDown()
+        else:
+            start = self._client(*points[0])
+            self.window.post_mouse(win32con.WM_LBUTTONDOWN, *start, win32con.MK_LBUTTON)
+        try:
+            time.sleep(0.08)
+            for (x1, y1), (x2, y2), ms in zip(points, points[1:], durations):
+                if self.background_input:
+                    a = self._client(x1, y1)
+                    b = self._client(x2, y2)
+                    steps = max(1, int(ms / 15))
+                    for i in range(1, steps + 1):
+                        x = round(a[0] + (b[0] - a[0]) * i / steps)
+                        y = round(a[1] + (b[1] - a[1]) * i / steps)
+                        self.window.post_mouse(win32con.WM_MOUSEMOVE, x, y, win32con.MK_LBUTTON)
+                        time.sleep(ms / 1000 / steps)
+                else:
+                    self._pg.moveTo(*self._screen(x2, y2), duration=ms / 1000)
+        finally:
+            if self.background_input:
+                self.window.post_mouse(win32con.WM_LBUTTONUP, *self._client(*points[-1]))
             else:
                 self._pg.mouseUp()
 
@@ -527,6 +566,45 @@ class AdbDevice(Device):
         ms = max(60, int(ms))                        # 0 ms is a tap at the far end on Android, not a flick
         self._sh(f"input swipe {x1} {y1} {x2} {y2} {ms}")
         time.sleep(ms / 1000 + 0.1)
+
+    def _drag_path_native(self, points, durations):
+        if self._touchscreen is None:
+            self._touchscreen = self._find_touchscreen()
+        if not self._touchscreen:
+            raise RuntimeError("No touchscreen event device is available for a continuous ADB drag")
+        dev, max_x, max_y = self._touchscreen
+        width, height = self.native_size()
+        coords = [(round(x * max_x / max(1, width - 1)),
+                   round(y * max_y / max(1, height - 1))) for x, y in points]
+        commands = []
+
+        def event(kind, code, value):
+            commands.append(f"sendevent {dev} {kind} {code} {value}")
+
+        def report():
+            commands.append(f"sendevent {dev} 0 0 0")
+
+        event(3, 47, 0)
+        event(3, 57, 900)
+        event(3, 53, coords[0][0])
+        event(3, 54, coords[0][1])
+        event(1, 330, 1)
+        report()
+        commands.append("sleep 0.080")
+        for (x1, y1), (x2, y2), ms in zip(coords, coords[1:], durations):
+            steps = max(1, int(ms / 16))
+            for i in range(1, steps + 1):
+                event(3, 53, round(x1 + (x2 - x1) * i / steps))
+                event(3, 54, round(y1 + (y2 - y1) * i / steps))
+                report()
+                commands.append(f"sleep {ms / 1000 / steps:.3f}")
+        event(3, 57, -1)
+        event(1, 330, 0)
+        report()
+        result = self._run("shell", "(" + "; ".join(commands) + ") 2>&1",
+                           timeout=max(20, sum(durations) // 1000 + 15))
+        if any(error in result.lower() for error in ("denied", "could not", "not found")):
+            raise RuntimeError(f"Continuous ADB drag failed: {result.strip().splitlines()[0]}")
 
     def key(self, name):
         code = ANDROID_KEYS.get(name)

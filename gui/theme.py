@@ -321,6 +321,11 @@ def logo_pixmap(size, dpr=1.0):
 
 
 def app_icon():
+    path = os.path.join(ASSETS, "coc-bot.ico")
+    if os.path.isfile(path):
+        icon = QIcon(path)
+        if not icon.isNull():
+            return icon
     icon = QIcon()
     for s in (16, 20, 24, 32, 40, 48, 64, 128, 256):
         icon.addPixmap(_render_svg(LOGO_SVG, s))

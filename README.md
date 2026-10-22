@@ -18,6 +18,9 @@ To check an existing install at any time: `python tools/check_setup.py`
 ## Start
 
 Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.py`.
+To build the Windows app with its logo embedded in the executable, run `build.bat`. The app is
+created in `dist/Coc-Bot/`; `run.bat` and a newly created desktop shortcut use it automatically.
+The build carries over existing settings, accounts and attack plans from `config/`.
 
 ## Modes
 
@@ -69,8 +72,19 @@ The same applies to the Builder Base.
 ## Army
 
 "Army recipe to use before looting" (Loot page) switches every account to a Saved Recipe by name
-(e.g. your E-Dragon + Clone recipe called "loot") before it attacks. The "E-Dragons + Clone" plan reads
-the key on each troop card, so it works with whatever the account has.
+(e.g. your E-Dragon + Clone recipe called "loot") before it attacks. The attack-plan dropdown includes
+**Troop Spam** (swipe troop-bar slot 1 around the perimeter) and **E-Dragon Perimeter** (put E-Dragons in
+troop-bar slot 1), alongside saved plans such as "E-Dragons + Clone". The selected plan is used by both
+Loot all and Loot current account. On ADB, these presets assume the usual order: troop in slot 1, siege in
+slot 4, heroes in slots 5-8, and the first spell in slot 9; edit `config/attack_plans.json` if your army
+differs.
+The **Valkyries / Sneaky Goblins / Super Minions** plan keeps one continuous drag through the perimeter
+corners, then deploys the siege, available heroes and their abilities, and 11 Earthquake clicks. Choose
+Curve or Random region under **Earthquake placement**. Put the main troop in slot 1, siege in slot 3,
+heroes in slots 4-9, and Earthquake in slot 10 for ADB. Capture the Super Dragon, Log Launcher, and
+Siege Barracks troop-card templates from the **Templates** page to recognize the optional Super Dragon
+and prioritize Log Launcher over Siege Barracks; without siege templates, the plan uses the first
+detected siege card (or its configured slot on ADB).
 
 ## Village chores (Village page)
 

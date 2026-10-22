@@ -136,6 +136,10 @@ class Bot:
         control.checkpoint()
         self.device.drag(a[0], a[1], b[0], b[1], ms)
 
+    def drag_path(self, points, durations):
+        control.checkpoint()
+        self.device.drag_path(points, durations)
+
     def key(self, k):
         control.checkpoint()
         return self.device.key(k)

@@ -12,7 +12,8 @@ Smart deployment (Loot Settings):
   * smart_deploy - instead of fixed points, drop troops on a ring just outside
     the scouted base's buildings (see deployzone.py). Heroes go to the ring point
     nearest the plan's hero spot. Spells always use the plan's points.
-  * afterwards any troop still left on the bar is dropped on the ring.
+  * afterwards any troop still left on the bar is dropped on the ring (except
+    for strategies that deliberately use a different deployment gesture).
 """
 
 import copy
@@ -20,6 +21,7 @@ import json
 import logging
 import math
 import os
+import random
 import re
 import time
 
@@ -63,7 +65,93 @@ DEFAULT_PLANS = {
             {"key": "r", "slot": 8, "points": "champion", "type": "hero"},
             {"key": "z", "slot": 4, "points": "ring", "type": "siege"},
         ],
-    }
+    },
+    "troop_spam": {
+        "title": "Troop Spam",
+        "description": "Swipe troop-bar slot 1 around the perimeter, then deploy the siege, heroes, and earthquake spells.",
+        "style": "troop_spam",
+        "points": {
+            "corners": {
+                "left": [240, 525],
+                "top": [913, 10],
+                "right": [1708, 520],
+                "bottom": [683, 876],
+            },
+            "ring": [[683, 876], [491, 714], [240, 525], [515, 312], [751, 137], [913, 10],
+                     [1177, 125], [1438, 306], [1708, 520], [1539, 675], [1298, 848]],
+            "king": [[491, 714]],
+            "queen": [[751, 137]],
+            "warden": [[1438, 306]],
+            "champion": [[1298, 848]],
+            "spells": [[240, 525], [913, 10], [1708, 520]],
+        },
+        "steps": [
+            {"key": "1", "slot": 1, "points": "ring", "type": "troop"},
+            {"key": "z", "slot": 4, "points": "ring", "type": "siege"},
+            {"key": "q", "slot": 5, "points": "king", "type": "hero"},
+            {"key": "w", "slot": 6, "points": "queen", "type": "hero"},
+            {"key": "e", "slot": 7, "points": "warden", "type": "hero"},
+            {"key": "r", "slot": 8, "points": "champion", "type": "hero"},
+            {"key": "a", "slot": 9, "points": "spells", "type": "spell"},
+        ],
+    },
+    "edrag_perimeter": {
+        "title": "E-Dragon Perimeter",
+        "description": "Deploy E-Dragons around the perimeter, then the siege, heroes, and earthquake spells.",
+        "points": {
+            "ring": [[683, 876], [491, 714], [240, 525], [515, 312], [751, 137], [913, 10],
+                     [1177, 125], [1438, 306], [1708, 520], [1539, 675], [1298, 848]],
+            "spells": [[240, 525], [913, 10], [1708, 520]],
+            "king": [[491, 714]],
+            "queen": [[751, 137]],
+            "warden": [[1438, 306]],
+            "champion": [[1298, 848]],
+        },
+        "steps": [
+            {"key": "1", "slot": 1, "points": "ring", "type": "troop"},
+            {"key": "z", "slot": 4, "points": "ring", "type": "siege"},
+            {"key": "q", "slot": 5, "points": "king", "type": "hero"},
+            {"key": "w", "slot": 6, "points": "queen", "type": "hero"},
+            {"key": "e", "slot": 7, "points": "warden", "type": "hero"},
+            {"key": "r", "slot": 8, "points": "champion", "type": "hero"},
+            {"key": "a", "slot": 9, "points": "spells", "type": "spell"},
+        ],
+    },
+    "valkyrie_sneaky_minion": {
+        "title": "Valkyries / Sneaky Goblins / Super Minions",
+        "description": "Continuous randomized perimeter drag, optional Super Dragon, siege, randomized hero abilities, then 11 Earthquake clicks.",
+        "style": "perimeter_hero_earthquake",
+        "optional_units": [{"template": "battle/super_dragon", "type": "troop", "points": "ring"}],
+        "siege_templates": ["battle/log_launcher", "battle/siege_barracks"],
+        "points": {
+            "corners": {
+                "left": [240, 525],
+                "top": [913, 10],
+                "right": [1708, 520],
+                "bottom": [683, 876],
+            },
+            "ring": [[683, 876], [491, 714], [240, 525], [515, 312], [751, 137], [913, 10],
+                     [1177, 125], [1438, 306], [1708, 520], [1539, 675], [1298, 848]],
+            "spells": [[240, 525], [913, 10], [1708, 520]],
+            "queen": [[491, 714]],
+            "warden": [[751, 137]],
+            "champion": [[1438, 306]],
+            "king": [[1298, 848]],
+            "prince": [[1177, 125]],
+            "dragonduke": [[1539, 675]],
+        },
+        "steps": [
+            {"key": "1", "slot": 1, "points": "ring", "type": "troop", "role": "primary"},
+            {"key": "z", "slot": 3, "points": "ring", "type": "siege"},
+            {"key": "q", "slot": 4, "points": "queen", "type": "hero"},
+            {"key": "w", "slot": 5, "points": "warden", "type": "hero"},
+            {"key": "e", "slot": 6, "points": "champion", "type": "hero"},
+            {"key": "r", "slot": 7, "points": "king", "type": "hero"},
+            {"key": "t", "slot": 8, "points": "prince", "type": "hero"},
+            {"key": "y", "slot": 9, "points": "dragonduke", "type": "hero"},
+            {"key": "a", "slot": 10, "points": "spells", "type": "spell"},
+        ],
+    },
 }
 
 
@@ -72,7 +160,9 @@ def load_plans():
         with open(PLANS_PATH, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_PLANS, f, indent=2)
     with open(PLANS_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        plans = copy.deepcopy(DEFAULT_PLANS)
+        plans.update(json.load(f))
+        return plans
 
 
 def get_plan(name):
@@ -87,7 +177,7 @@ def step_type(step):
     if step.get("type"):
         return step["type"]
     k = (step.get("key") or "").lower()
-    if k in ("q", "w", "e", "r"):
+    if k in ("q", "w", "e", "r", "t", "y"):
         return "hero"
     if k in ("a", "s", "d", "f", "g"):
         return "spell"
@@ -124,7 +214,7 @@ def detect_slots(frame, region=None):
     return cards
 
 
-KEY_ORDER = {"troop": "123456789", "siege": "ZXCV", "hero": "QWERT", "spell": "ASDFGHJKL"}
+KEY_ORDER = {"troop": "123456789", "siege": "ZXCV", "hero": "QWERTY", "spell": "ASDFGHJKL"}
 OCR_FIX = {"艺": "Z", "乙": "Z", "2Z": "Z", "0": "Q", "O": "Q", "V": "W", "VV": "W", "5": "S", "$": "S",
            "|": "1", "I": "1", "L": "1", "l": "1", "B": "8"}
 
@@ -144,7 +234,7 @@ def _hint_templates():
 
 def card_keys(frame, slots):
     """Read the keyboard hint printed on each card ("1", "Z", "Q", "A"...). Returns {key: card x}.
-    OCR slips are fixed from the bar's fixed order: troops 1,2,3.. siege Z.. heroes Q,W,E,R.. spells A,S,D.."""
+    OCR slips are fixed from the bar's fixed order: troops 1,2,3.. siege Z.. heroes Q,W,E,R,T,Y.. spells A,S,D.."""
     y = space.point(0, 1026)[1]
     hints = _hint_templates()
     raw = []
@@ -314,12 +404,13 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
         spots = sorted(set(good), key=lambda g: (g[0] - ref[0]) ** 2 + (g[1] - ref[1]) ** 2)[:max(1, len(wanted))]
     if not spots:
         log.warning("No usable deploy spots left")
-        return
+        return False
     moves = {}
     count = None if single else (count_override if count_override is not None else read_count(frame, cx))
     by_count = count is not None
     left = count if by_count else 1
     queue = _spread(spots, left)
+    deployed = False
     tries, max_tries = 0, left * 2 + 10
     while left > 0 and queue and tries < max_tries:
         control.checkpoint()
@@ -335,7 +426,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
             frame = bot.shot()
             if slot_empty(frame, cx):
                 good.append((x, y))
-                return
+                return True
             if by_count:
                 now = read_count(frame, cx)
                 if now is not None and now < left:
@@ -346,9 +437,10 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
                     break
             elif np.abs(_card(frame, cx) - card0).mean() > 12:
                 good.append((x, y))
-                return                                      # the single unit is on the field
+                return True                                 # the single unit is on the field
         if ok:
             good.append((x, y))
+            deployed = True
         log.debug("tap %s: %s, %s left (%.2fs)", (x, y), "ok" if ok else "no effect", left, waited)
         if not ok:
             # illegal spot: inside the red zone -> move it out; beyond the map -> move it in.
@@ -366,6 +458,236 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
                 reselect()                         # in case a stray tap selected something else
         if not queue and left > 0:
             queue = [p for p in (fixed(p) for p in _spread(spots, left)) if p is not None]
+    return deployed
+
+
+def _deploy_troop_spam(bot, step, slots, card_of, points):
+    """Deploy the selected troop along the four sides, like the legacy TroopSpam strategy."""
+    cx = card_of(step)
+    if cx is not None and slot_empty(bot.shot(), cx):
+        return
+    if not select(bot, step, slots):
+        return
+    corners = ("top", "right", "bottom", "left")
+    start = random.choice((1, 3))
+    direction = random.choice((1, -1))
+    order = [corners[(start + i * direction) % len(corners)] for i in range(len(corners) + 1)]
+    anchors = points["corners"]
+    for current, following in zip(order, order[1:]):
+        if cx is not None and slot_empty(bot.shot(), cx):
+            break
+        x1, y1 = space.center(*anchors[current])
+        x2, y2 = space.center(*anchors[following])
+        x1 += random.randint(-10, 10)
+        y1 += random.randint(-10, 10)
+        x2 += random.randint(-10, 10)
+        y2 += random.randint(-10, 10)
+        bot.swipe((x1, y1), (x2, y2), 800)
+
+
+def _sample_arc(anchors, count):
+    """Sample a circular arc from left to right that passes through its top anchor."""
+    (lx, ly), (tx, ty), (rx, ry) = anchors
+    d = 2 * (lx * (ty - ry) + tx * (ry - ly) + rx * (ly - ty))
+    if count < 2:
+        return [(int(round(lx)), int(round(ly)))]
+    if abs(d) < 1e-6:
+        cx, cy = 2 * tx - (lx + rx) / 2, 2 * ty - (ly + ry) / 2
+        return [(int(round((1 - t) ** 2 * lx + 2 * (1 - t) * t * cx + t ** 2 * rx)),
+                 int(round((1 - t) ** 2 * ly + 2 * (1 - t) * t * cy + t ** 2 * ry)))
+                for t in (i / (count - 1) for i in range(count))]
+    l2, t2, r2 = lx * lx + ly * ly, tx * tx + ty * ty, rx * rx + ry * ry
+    ox = (l2 * (ty - ry) + t2 * (ry - ly) + r2 * (ly - ty)) / d
+    oy = (l2 * (rx - tx) + t2 * (lx - rx) + r2 * (tx - lx)) / d
+    radius = math.hypot(lx - ox, ly - oy)
+
+    def angle(point):
+        return math.atan2(point[1] - oy, point[0] - ox)
+
+    start, middle, end = angle((lx, ly)), angle((tx, ty)), angle((rx, ry))
+    span = (end - start) % (2 * math.pi)
+    middle_span = (middle - start) % (2 * math.pi)
+    sweep = span if middle_span <= span else span - 2 * math.pi
+    return [(int(round(ox + radius * math.cos(start + i / (count - 1) * sweep))),
+             int(round(oy + radius * math.sin(start + i / (count - 1) * sweep))))
+            for i in range(count)]
+
+
+def _inside_polygon(x, y, polygon):
+    inside = False
+    j = len(polygon) - 1
+    for i, (ix, iy) in enumerate(polygon):
+        jx, jy = polygon[j]
+        if (iy > y) != (jy > y) and x < (jx - ix) * (y - iy) / (jy - iy) + ix:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _polygon_double_area(polygon):
+    return sum(x1 * y2 - x2 * y1
+               for (x1, y1), (x2, y2) in zip(polygon, polygon[1:] + polygon[:1]))
+
+
+def _earthquake_points(anchors, width, height, method):
+    """Return eleven bounded curve or random-region Earthquake points."""
+    def bounded(points):
+        return [(max(0, min(width - 1, x)), max(0, min(height - 1, y))) for x, y in points]
+
+    def curve():
+        arc = _sample_arc(anchors, 11)
+        if random.choice((True, False)):
+            arc.reverse()
+        return bounded([(x + random.randint(-100, 100), y + random.randint(-100, 100)) for x, y in arc])
+
+    if method == "curve":
+        return curve()
+    if method != "random":
+        log.warning("Unknown Earthquake placement %r; using curve placement", method)
+        return curve()
+    dense = _sample_arc(anchors, 49)
+    line_y = round((height - 1) * 0.6)
+    polygon = dense + [(dense[-1][0], line_y), (dense[0][0], line_y)]
+    if len(polygon) < 3 or abs(_polygon_double_area(polygon)) < 2:
+        log.warning("Earthquake random region is degenerate; using curve placement")
+        return curve()
+    min_x = max(0, min(p[0] for p in polygon))
+    max_x = min(width - 1, max(p[0] for p in polygon))
+    min_y = max(0, min(p[1] for p in polygon))
+    max_y = min(height - 1, max(p[1] for p in polygon))
+    points = []
+    for _ in range(11):
+        for _ in range(1000):
+            point = (random.randint(min_x, max_x), random.randint(min_y, max_y))
+            if _inside_polygon(*point, polygon):
+                points.append(point)
+                break
+        else:
+            return curve()
+    return points
+
+
+def _template_card_step(template, frame, slots, by_key):
+    """Find an optional troop card by its captured troop-bar icon template."""
+    if not vision.templates.has(template):
+        log.debug("Optional troop skipped; template %s has not been captured", template)
+        return None
+    region = (0, max(0, frame.shape[0] - space.s(140)), frame.shape[1], space.s(120))
+    matches = vision.find_all(frame, template, region=region)
+    for match in sorted(matches, key=lambda m: m.score, reverse=True):
+        if not slots:
+            break
+        cx = min(slots, key=lambda slot: abs(slot - match.x))
+        if slot_empty(frame, cx):
+            continue
+        key = next((k for k, x in by_key.items() if x == cx), "")
+        if by_key and not key:
+            continue
+        return {"key": key, "slot": slots.index(cx) + 1, "type": "troop"}
+    return None
+
+
+def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, card_of, ring, centre):
+    """Run the continuous perimeter drag followed by optional units, heroes, and Earthquakes."""
+    points = plan["points"]
+    handled = {str(step.get("key") or "").lower() for step in steps}
+    main = next((step for step in steps if step.get("role") == "primary"), None)
+    if main is None:
+        main = next((step for step in steps if step_type(step) == "troop"), None)
+    main_card = card_of(main) if main else None
+    if main_card is None or slot_empty(frame, main_card):
+        log.warning("Perimeter strategy aborted: its primary troop card is not in the deploy bar")
+        return handled
+    if not select(bot, main, slots):
+        log.warning("Perimeter strategy aborted: its primary troop card could not be selected")
+        return handled
+
+    corner_names = ("left", "top", "right", "bottom")
+    start_options = (0, 2, 1) if space.w / space.h <= 1.7 else (0, 2)
+    start = random.choice(start_options)
+    direction = random.choice((-1, 1))
+    order = [corner_names[(start + direction * i) % len(corner_names)] for i in range(5)]
+    path = [space.center(*points["corners"][name]) for name in order]
+    durations = [round(1000 * random.uniform(0.9, 1.1)) for _ in range(4)]
+    bot.drag_path(path, durations)
+
+    optional = plan.get("optional_units", [])
+    for definition in optional:
+        optional_step = _template_card_step(definition["template"], bot.shot(), slots, by_key)
+        if optional_step is None:
+            if not vision.templates.has(definition["template"]):
+                log.info("Optional troop skipped: capture its icon as template %s", definition["template"])
+            continue
+        cx = card_of(optional_step)
+        if cx == main_card:
+            continue
+        if not select(bot, optional_step, slots):
+            continue
+        spots = ring or [space.center(*p) for p in points.get(definition.get("points", "ring"), [])]
+        _drop(bot, cx, spots, centre)
+
+    siege_steps = []
+    for template in plan.get("siege_templates", []):
+        match = _template_card_step(template, bot.shot(), slots, by_key)
+        if match:
+            siege_steps = [dict(match, type="siege")]
+            break
+    if not siege_steps:
+        if by_key:
+            indexed = {k: x for k, x in by_key.items() if k in "zxcv"}
+            siege_steps = [{"key": key, "slot": slots.index(cx) + 1, "type": "siege"}
+                           for key, cx in sorted(indexed.items(), key=lambda item: "zxcv".index(item[0]))]
+        if not siege_steps:
+            siege_steps = [step for step in steps if step_type(step) == "siege"]
+    siege_deployed = False
+    for step in siege_steps:
+        cx = card_of(step)
+        current = bot.shot()
+        if cx is None or slot_empty(current, cx):
+            continue
+        if select(bot, step, slots):
+            spots = ring or [space.center(*p) for p in points.get(step.get("points", "ring"), [])]
+            siege_deployed = _drop(bot, cx, spots, centre, single=True)
+            break
+    if not siege_deployed:
+        log.warning("No siege machine was found in the troop bar")
+
+    heroes = [step for step in steps if step_type(step) == "hero"]
+    random.shuffle(heroes)
+    for step in heroes:
+        cx = card_of(step)
+        current = bot.shot()
+        if cx is None or slot_empty(current, cx) or not select(bot, step, slots):
+            continue
+        base = points.get(step.get("points"), points.get("ring", []))
+        desired = [space.center(*point) for point in base]
+        spots = [min(ring, key=lambda p: (p[0] - desired[0][0]) ** 2 + (p[1] - desired[0][1]) ** 2)] \
+            if ring and desired else desired
+        if not spots:
+            log.warning("No deploy point configured for hero %s", step.get("key"))
+            continue
+        if _drop(bot, cx, spots, centre, single=True):
+            time.sleep(0.15)
+            select(bot, step, slots)
+
+    earthquake = next((step for step in steps if step_type(step) == "spell"), None)
+    if earthquake:
+        cx = card_of(earthquake)
+        current = bot.shot()
+        if cx is None or slot_empty(current, cx):
+            log.warning("Earthquake spell card is not in the deploy bar")
+            return handled
+        if not select(bot, earthquake, slots):
+            return handled
+        anchor_points = points.get(earthquake.get("points"), points.get("spells", []))
+        anchors = [space.center(*point) for point in anchor_points[:3]]
+        if len(anchors) != 3:
+            log.warning("Earthquake placement needs three anchor points")
+            return handled
+        method = (bot.settings.get("loot") or {}).get("earthquake_method", "curve")
+        for x, y in _earthquake_points(anchors, space.w, space.h, method):
+            bot.tap(x, y, jitter=0)
+    return handled
 
 
 CLONE_IN = 55          # a Clone goes this far inside a dragon group's spot: where the dragons fly to
@@ -539,16 +861,25 @@ def deploy(bot, plan):
     handled = set()
     bot.deploy_spots = []
     bot.deploy_started = time.monotonic()       # the battle clock starts here (not while reading the base)
-    if plan.get("style") == "clone_groups" and verify:
+    if plan.get("style") == "perimeter_hero_earthquake":
+        handled = _deploy_perimeter_hero_earthquake(
+            bot, plan, active_steps, frame, slots, by_key, card_of, ring, centre)
+    elif plan.get("style") == "clone_groups" and verify:
         handled = deploy_clone_groups(bot, active_plan, frame, slots, by_key, card_of, ring, centre)
     for step in active_steps:
         control.checkpoint()
         kind = step_type(step)
-        if (step.get("key") or "").lower() in handled:
+        key = (step.get("key") or "").lower()
+        if key in handled:
             continue
         cx = card_of(step)
         if by_key and cx is None:
             log.debug("Key %s is not on the troop bar: this army has no such unit", step.get("key"))
+            continue
+        if plan.get("style") == "troop_spam" and kind == "troop":
+            _deploy_troop_spam(bot, step, slots, card_of, plan["points"])
+            if key:
+                handled.add(key)
             continue
         if cx is not None and slot_empty(bot.shot(), cx):
             continue                         # nothing of this unit left
@@ -605,6 +936,8 @@ def deploy(bot, plan):
     if verify and slots:
         frame = bot.shot()
         for step in active_steps:
+            if (step.get("key") or "").lower() in handled:
+                continue
             cx = card_of(step)
             if step_type(step) != "troop" or cx is None:
                 continue

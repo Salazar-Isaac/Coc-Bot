@@ -115,10 +115,16 @@ def make_shortcut():
         shell = win32com.client.Dispatch("WScript.Shell")
         desktop = shell.SpecialFolders("Desktop")
         lnk = shell.CreateShortcut(os.path.join(desktop, "Coc-Bot.lnk"))
-        lnk.TargetPath = pythonw if os.path.exists(pythonw) else sys.executable
-        lnk.Arguments = f'"{os.path.join(ROOT, "main.py")}"'
-        lnk.WorkingDirectory = ROOT
-        if os.path.exists(ico):
+        exe = os.path.join(ROOT, "dist", "Coc-Bot", "Coc-Bot.exe")
+        if os.path.exists(exe):
+            lnk.TargetPath = exe
+            lnk.Arguments = ""
+            lnk.WorkingDirectory = os.path.dirname(exe)
+            lnk.IconLocation = exe
+        else:
+            lnk.TargetPath = pythonw if os.path.exists(pythonw) else sys.executable
+            lnk.Arguments = f'"{os.path.join(ROOT, "main.py")}"'
+            lnk.WorkingDirectory = ROOT
             lnk.IconLocation = ico
         lnk.Description = "Clash of Clans bot"
         lnk.Save()

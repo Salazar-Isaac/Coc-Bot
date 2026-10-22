@@ -1,5 +1,7 @@
 __pycache__/
 logs/
+build/
+dist/
 config/state.json
 gui/assets/coc-bot.ico
 config/accounts.json
