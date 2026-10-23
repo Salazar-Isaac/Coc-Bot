@@ -17,10 +17,11 @@ To check an existing install at any time: `python tools/check_setup.py`
 
 ## Start
 
-Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.py`.
-To build the Windows app with its logo embedded in the executable, run `build.bat`. The app is
-created in `dist/Coc-Bot/`; `run.bat` and a newly created desktop shortcut use it automatically.
-The build carries over existing settings, accounts and attack plans from `config/`.
+Double-click `run.vbs` to start the app without a command window. It launches `run.bat` invisibly;
+after setup, the app runs from Python source. For troubleshooting, run `run.bat` directly to see
+console messages. To build the Windows app with its logo embedded in the executable, run `build.bat`;
+it is created in `dist/Coc-Bot/`. `run.bat` uses that executable only if no Python launcher is
+available. The build carries over existing settings, accounts and attack plans from `config/`.
 
 ## Modes
 
@@ -30,6 +31,7 @@ The build carries over existing settings, accounts and attack plans from `config
 | **Loot current account only** | Loots the open account. With "When full: Wait for me" you spend the resources, press Continue (F8) and it loots again. |
 | **Loot + Donate cycle** | Like XpIncrease, always starting on Main: not enough elixir for a whole round ("Main keeps at least" + what the last round cost) → Main and the Looter accounts loot until full. Enough → Main first donates to requests that are still open, then every Looter / "Loot + request" / Feeder account empties its Clan Castle and requests → Main donates → repeat while the elixir covers another round → loot again. |
 | **Donate only** | The same without looting: stops when Main's elixir is too low for a round. |
+| **Builder Base current account** | Farms only the account already open in the game. It does not open the account switcher. |
 | **Loot + Upgrade** | Accounts #1-#15 of the Accounts page (Buggu01 … Buggu7; set on the Upgrades page) loot until full; on the ones ticked "Upgrade" (all but the Main and Omi ji) the upgrade plan runs before looting (if there are resources) and after looting. |
 | **Builder Base upgrades** | The same accounts' Builder Base: attacks as set on the Builder Base page, and the Builder Base plan before and after - new buildings first, then your list (default Cannon, Archer Tower, Mortar), then the Builder Hall when the list is maxed (gear up). |
 | **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |

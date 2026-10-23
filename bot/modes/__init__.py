@@ -1,4 +1,4 @@
-"""Bot modes. Each module in this folder registers one or more modes with @register.
+"""Bot modes. Imported modules in this folder register modes with @register.
 
 To add a new mode later, create bot/modes/<name>.py:
 
@@ -8,11 +8,9 @@ To add a new mode later, create bot/modes/<name>.py:
     def run(bot, state):
         ...
 
-It then appears in the Mode list of the window automatically.
+Then import it in load_all so it is included in source and packaged builds.
 """
 
-import importlib
-import pkgutil
 from dataclasses import dataclass
 from typing import Callable
 
@@ -39,7 +37,7 @@ def register(key, title, description, uses_accounts=True, ready=True, order=100)
 
 
 def load_all():
-    for info in pkgutil.iter_modules(__path__):
-        if not info.name.startswith("_") and info.name != "common":
-            importlib.import_module(f"{__name__}.{info.name}")
+    from . import donate as _donate
+    from . import flow as _flow
+
     return MODES

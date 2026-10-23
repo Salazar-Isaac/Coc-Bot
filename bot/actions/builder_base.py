@@ -10,6 +10,7 @@ actions/research.py (the "Builder Base upgrade" / "research" steps of the window
 """
 
 import logging
+import random
 import time
 
 import cv2
@@ -32,17 +33,30 @@ class NoArmy(BotError):
 
 
 def is_builder_base(frame):
-    return vision.find(frame, BB_MARK) is not None
+    return vision.find(frame, BB_MARK, any_brightness=True) is not None
 
 
 def where(bot):
     """'main', 'builder' or None (unknown)."""
     f = bot.shot()
-    if vision.find(f, BB_MARK):
+    if is_builder_base(f):
         return "builder"
     if detect(f) == "home":
         return "main"
     return None
+
+
+def _dismiss_star_bonus(bot, frame):
+    key = "bb/star_bonus_okay"
+    if not vision.templates.has(key):
+        return False
+    match = vision.find(frame, key, any_brightness=True)
+    if not match:
+        return False
+    bot.tap_match(match)
+    control.sleep(0.6)
+    log.info("Dismissed Builder Base Star Bonus")
+    return True
 
 
 def go_home_bb(bot, timeout=60.0):
@@ -52,9 +66,11 @@ def go_home_bb(bot, timeout=60.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         f = bot.shot()
-        if vision.find(f, BB_MARK):
+        if _dismiss_star_bonus(bot, f):
+            continue
+        if is_builder_base(f):
             return True
-        for key, tap in (("bb/star_bonus_okay", None), ("bb/return_home", None), ("bb/menu_close", None),
+        for key, tap in (("bb/return_home", None), ("bb/menu_close", None),
                          ("upgrade/close", None), ("lab/close", None), ("shop/close", None)):
             if vision.templates.has(key):
                 m = vision.find(f, key)
@@ -101,6 +117,7 @@ def _find_boat(bot, here):
 
 def travel(bot, to):
     """Sail to the Builder Base (to='builder') or back to the home village (to='main')."""
+    _dismiss_star_bonus(bot, bot.shot())
     here = where(bot)
     if here == to:
         return True
@@ -143,9 +160,7 @@ def travel(bot, to):
                 bot.tap_match(boat, jitter=3)
             retapped = True
         f = bot.shot()
-        m = vision.templates.has("bb/star_bonus_okay") and vision.find(f, "bb/star_bonus_okay")
-        if m:
-            bot.tap_match(m)
+        _dismiss_star_bonus(bot, f)
     raise BotError("The boat did not sail (is the boat repaired on this account?)")
 
 
@@ -237,23 +252,56 @@ def _base_outline(frame):
 
 
 def deploy_spots(frame):
-    """Spots just outside the base, best first: outside the red line (stage 1) or outside the
-    building cluster (stage 2). Each next spot is a bit further out, for retries."""
+    """Generate deploy spots outside the detected base, excluding occupied and UI-covered points."""
     line = red_line(frame)
     pts = cv2.findNonZero(line)
     if pts is not None and len(pts) >= 1500:
-        hull, gap = cv2.convexHull(pts), 30
+        hull, clearance = cv2.convexHull(pts), 45
     else:
-        hull, gap = _base_outline(frame), 90
+        hull, clearance = _base_outline(frame), 90
     if hull is None:
-        return [space.center(330, 540), space.center(250, 540)]
-    lx, ly = hull[hull[:, :, 0].argmin()][0]           # left corner of the base
-    return [(int(lx - gap - 35 * i), int(ly)) for i in range(4)]
+        return []
+
+    h, w = frame.shape[:2]
+    polygon = hull.reshape(-1, 2).astype(np.float32)
+    center = polygon.mean(axis=0)
+    ui = _ui(h, w)
+    spots = []
+    max_radius = int(np.hypot(w, h))
+    for angle in range(0, 360, 30):
+        radians = np.deg2rad(angle)
+        dx, dy = np.cos(radians), np.sin(radians)
+        edge = 0
+        for radius in range(0, max_radius, 5):
+            point = (float(center[0] + dx * radius), float(center[1] + dy * radius))
+            if cv2.pointPolygonTest(polygon, point, False) < 0:
+                break
+            edge = radius
+
+        added = 0
+        for extra in range(clearance, clearance + 241, 20):
+            x = int(round(center[0] + dx * (edge + extra)))
+            y = int(round(center[1] + dy * (edge + extra)))
+            if not (35 <= x < w - 35 and 35 <= y < h - 35):
+                continue
+            distance = cv2.pointPolygonTest(polygon, (float(x), float(y)), True)
+            if distance > -clearance or np.any(ui[max(0, y - 8):y + 9, max(0, x - 8):x + 9]):
+                continue
+            spots.append((x, y))
+            added += 1
+            if added == 2:
+                break
+    return spots
 
 
 def _drop_all(bot, spots):
-    """Drop every available unit at the first spot that works (moving out if a tap does nothing)."""
+    """Deploy units across a shuffled set of safe spots, moving outward if a tap does nothing."""
     from .attack import _card, detect_slots
+    spots = list(spots)
+    if not spots:
+        log.warning("No safe Builder Base deployment spots detected; skipping deployment")
+        return 0
+    random.shuffle(spots)
     f = bot.shot()
     keys, slots = _troop_keys(f)
     order = [k for k in ["q"] + [str(i) for i in range(1, 10)] if k in keys]
@@ -263,18 +311,19 @@ def _drop_all(bot, spots):
         for _ in range(len(spots)):
             before = _card(bot.shot(), cx)
             bot.key(k)
-            control.sleep(0.12)
+            control.sleep(random.uniform(0.08, 0.2))
             bot.tap(*spots[spot_i], jitter=6)
-            control.sleep(0.35)
+            control.sleep(random.uniform(0.25, 0.55))
+            spot_i = (spot_i + 1) % len(spots)
             if np.abs(_card(bot.shot(), cx) - before).mean() > 8:
                 dropped += 1
                 break
-            spot_i = min(spot_i + 1, len(spots) - 1)        # nothing happened: step further out
     if not order:                                     # no hints read: tap every card instead
         for cx in detect_slots(f):
             bot.tap(cx, space.point(0, 1000)[1], jitter=3)
-            control.sleep(0.12)
+            control.sleep(random.uniform(0.08, 0.2))
             bot.tap(*spots[-1], jitter=6)
+            control.sleep(random.uniform(0.25, 0.55))
             dropped += 1
     return dropped
 

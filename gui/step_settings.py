@@ -21,6 +21,7 @@ from gui.widgets import BigSpin, Combo, Spin
 
 NIGHT = "#8c9bff"          # accent of the Builder Base
 STEP_COLORS = {"attack_all": T.GOLD, "loot_current": "#5cc8ff", "donate": T.ELIXIR_HI, "bb_attack": NIGHT,
+               "bb_attack_current": NIGHT,
                "home_upgrade": T.GOLD_HI, "walls": T.ELIXIR_HI, "bb_upgrade": NIGHT, "raid": "#ff9f43", "home_research": T.GREEN, "bb_research": NIGHT}
 NAMES = T.RESOURCE_NAME
 TH_LEVELS = [str(t) for t in range(19, 10, -1)]
@@ -536,15 +537,19 @@ class LootCurrentSettings(StepSettings):
 # ----------------------------------------------------------------------------- Builder Base attack
 class BBAttackSettings(StepSettings):
     key = "bb_attack"
+    current_only = False
 
     def __init__(self, parent=None):
         super().__init__(parent)
         who = Card("Accounts and army", "Accounts without a Builder Base yet are skipped automatically.",
                    icon="boat", color=NIGHT)
-        self.accounts_field = AccountsField()
-        self.accounts_field.step = self.key
-        who.add(self.accounts_field)
-        who.add(divider())
+        if not self.current_only:
+            self.accounts_field = AccountsField()
+            self.accounts_field.step = self.key
+            who.add(self.accounts_field)
+            who.add(divider())
+        else:
+            who.subtitle_label.setText("Uses the account already open in the game; it never switches accounts.")
         self.army = Combo(BB_ARMIES)
         self.army.setMinimumWidth(200)
         who.add(block("Army", "Battle Machine + this unit in every slot (rebuilt only when it differs). Units the "
@@ -580,7 +585,8 @@ class BBAttackSettings(StepSettings):
                       self.battle_seconds, self.stuck, self.full_margin)
 
     def load(self, settings, accounts):
-        self.accounts_field.set_text(step_cfg(settings, self.key).get("accounts", ""))
+        if self.accounts_field is not None:
+            self.accounts_field.set_text(step_cfg(settings, self.key).get("accounts", ""))
         b = copy.deepcopy(BUILDER_DEFAULTS)
         b.update(settings.get("builder") or {})
         self.army.blockSignals(True)
@@ -593,10 +599,12 @@ class BBAttackSettings(StepSettings):
         self.battle_seconds.setValue(int(b.get("battle_seconds", 60) or 0))
         self.stuck.setValue(int(b.get("stuck_attacks", 3) or 3))
         self.full_margin.setValue(int(b.get("full_margin", 50000) or 0))
-        self.set_accounts(accounts)
+        if self.accounts_field is not None:
+            self.set_accounts(accounts)
 
     def apply(self, settings, accounts):
-        step_out(settings, self.key)["accounts"] = self.accounts_field.text()
+        if self.accounts_field is not None:
+            step_out(settings, self.key)["accounts"] = self.accounts_field.text()
         b = settings.setdefault("builder", {})          # after_main, upgrade, research, ... are kept as they are
         b["army"] = self.army.currentData() or "auto"
         b["collect"] = self.collect.isChecked()
@@ -606,6 +614,11 @@ class BBAttackSettings(StepSettings):
         b["battle_seconds"] = self.battle_seconds.value()
         b["stuck_attacks"] = self.stuck.value()
         b["full_margin"] = self.full_margin.value()
+
+
+class BBAttackCurrentSettings(BBAttackSettings):
+    key = "bb_attack_current"
+    current_only = True
 
 
 # ----------------------------------------------------------------------------- upgrades and research
@@ -832,6 +845,7 @@ class GeneralSettings(StepSettings):
 
 
 BODIES = {"attack_all": AttackAllSettings, "base_choice": BaseChoiceSettings, "loot_current": LootCurrentSettings,
-          "bb_attack": BBAttackSettings, "home_upgrade": HomeUpgradeSettings, "walls": WallsSettings,
+          "bb_attack": BBAttackSettings, "bb_attack_current": BBAttackCurrentSettings,
+          "home_upgrade": HomeUpgradeSettings, "walls": WallsSettings,
           "bb_upgrade": BBUpgradeSettings, "raid": RaidSettings,
           "home_research": HomeResearchSettings, "bb_research": BBResearchSettings, "general": GeneralSettings}

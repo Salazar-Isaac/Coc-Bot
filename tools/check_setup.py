@@ -111,21 +111,15 @@ def make_shortcut():
         ico = os.path.join(ROOT, "gui", "assets", "coc-bot.ico")
         os.makedirs(os.path.dirname(ico), exist_ok=True)
         app_icon().pixmap(256, 256).save(ico, "ICO")
-        pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
         shell = win32com.client.Dispatch("WScript.Shell")
         desktop = shell.SpecialFolders("Desktop")
         lnk = shell.CreateShortcut(os.path.join(desktop, "Coc-Bot.lnk"))
-        exe = os.path.join(ROOT, "dist", "Coc-Bot", "Coc-Bot.exe")
-        if os.path.exists(exe):
-            lnk.TargetPath = exe
-            lnk.Arguments = ""
-            lnk.WorkingDirectory = os.path.dirname(exe)
-            lnk.IconLocation = exe
-        else:
-            lnk.TargetPath = pythonw if os.path.exists(pythonw) else sys.executable
-            lnk.Arguments = f'"{os.path.join(ROOT, "main.py")}"'
-            lnk.WorkingDirectory = ROOT
-            lnk.IconLocation = ico
+        launcher = os.path.join(ROOT, "run.vbs")
+        wscript = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32", "wscript.exe")
+        lnk.TargetPath = wscript
+        lnk.Arguments = f'"{launcher}"'
+        lnk.WorkingDirectory = ROOT
+        lnk.IconLocation = ico
         lnk.Description = "Clash of Clans bot"
         lnk.Save()
         line(OK, f"Desktop shortcut created: {os.path.join(desktop, 'Coc-Bot.lnk')}")

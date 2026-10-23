@@ -421,11 +421,7 @@
   },
   "valkyrie_sneaky_minion": {
     "title": "Valkyries / Sneaky Goblins / Super Minions",
-<<<<<<< HEAD
     "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
-=======
-    "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
     "style": "perimeter_hero_earthquake",
     "tunable_options": [
       {"key": "perimeter_points", "label": "Troop deployment points", "description": "Number of positions used for the clockwise troop deployment.", "min": 4, "max": 24, "step": 1, "default": 16},

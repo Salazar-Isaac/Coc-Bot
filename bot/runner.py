@@ -41,7 +41,10 @@ class Runner(threading.Thread):
         reason = "finished"
         try:
             load_all()
-            mode = MODES.get(self.mode_key) or MODES["flow"]      # the old modes are flows now
+            mode = MODES.get(self.mode_key) or MODES.get("flow")  # the old modes are flows now
+            if mode is None:
+                available = ", ".join(sorted(MODES)) or "none"
+                raise RuntimeError(f"Could not load bot mode {self.mode_key!r}; available modes: {available}")
             profile.use(self.settings.get("profile", profile.name))
             vision.templates.reload()
             vision.digits.reload()
@@ -64,6 +67,7 @@ class Runner(threading.Thread):
             restarts = 0
             while True:
                 try:
+                    self.bot.status(action="Checking the game screen")
                     ensure_game(self.bot)
                     mode.run(self.bot, state)
                     break

@@ -210,6 +210,25 @@ def _run_once(bot, ctx, key):
             raise StopRun("Main's elixir is low: Donate only is done (Loot + Donate loots it back)")
     elif key == "loot_current":
         _loot_current(bot, ctx)
+    elif key == "bb_attack_current":
+        _bb_attack_current(bot)
+
+
+def _bb_attack_current(bot):
+    """Farm the Builder Base of the currently open account without using the account switcher."""
+    player = account_actions.read_player(bot)
+    account = bot.current_acc or config.new_account(player or "Current account")
+
+    def run():
+        if not builder_base.travel(bot, "builder"):
+            raise BotError("Could not reach the current account's Builder Base")
+        if bot.settings.get("builder", {}).get("collect", True):
+            builder_base.collect(bot)
+        builder_base.attacks(bot, account)
+        if not builder_base.travel(bot, "main"):
+            raise BotError("Could not return from the current account's Builder Base")
+
+    with_recovery(bot, f"Builder Base attacks on {account['name']}", run, attempts=2)
 
 
 @contextlib.contextmanager

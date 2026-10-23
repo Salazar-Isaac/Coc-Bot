@@ -131,11 +131,7 @@ DEFAULT_PLANS = {
     },
     "valkyrie_sneaky_minion": {
         "title": "Valkyries / Sneaky Goblins / Super Minions",
-<<<<<<< HEAD
         "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
-=======
-        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
         "style": "perimeter_hero_earthquake",
         "tunable_options": [
             {"key": "perimeter_points", "label": "Troop deployment points", "description": "Number of positions used for the clockwise troop deployment.",
@@ -627,12 +623,9 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         deploy_siege()
         return handled
     troop_spots = _clockwise_perimeter(ring, centre)
-<<<<<<< HEAD
     point_count = plan.get("_tuning", {}).get("perimeter_points")
     if point_count is not None:
         troop_spots = _spread(troop_spots, min(point_count, len(troop_spots)))
-=======
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
     log.info("Deploying primary troop by individual taps clockwise around the base")
     if not _drop(bot, main_card, troop_spots, centre):
         log.warning("Primary troop could not be deployed around the base")
@@ -862,14 +855,10 @@ def deploy(bot, plan):
     active_plan = dict(plan, steps=active_steps)
 
     perimeter_strategy = plan.get("style") == "perimeter_hero_earthquake"
-<<<<<<< HEAD
     if smart or perimeter_strategy:
         ring, detected_centre = deployzone.deploy_geometry(frame)
     else:
         ring, detected_centre = [], None
-=======
-    ring = deployzone.deploy_line(frame) if smart or perimeter_strategy else []
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
     if (smart or perimeter_strategy) and len(ring) < 8:
         if perimeter_strategy:
             log.warning("Could not find a safe perimeter outside the base (%d points)", len(ring))

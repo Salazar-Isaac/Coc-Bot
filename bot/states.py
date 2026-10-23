@@ -268,7 +268,7 @@ def detect(frame):
                 return name
             continue
         for k in have:
-            if vision.find(frame, k):
+            if vision.find(frame, k, any_brightness=name == "bb_home"):
                 return name
     return "unknown"
 

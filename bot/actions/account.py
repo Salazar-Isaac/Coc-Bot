@@ -114,7 +114,12 @@ def open_switcher(bot):
         raise BotError("Settings did not open")
     bot.tap_point("settings.switch_id")
     if not bot.wait("sid/switch_id_label", 10, interval=0.15):
-        raise BotError("Supercell ID panel did not open")
+        frame = bot.shot()
+        visible = read_switcher(bot, frame)
+        if not any(same_name(text, account["name"])
+                   for text, _, _ in visible for account in bot.accounts):
+            raise BotError("Supercell ID panel did not open")
+        log.info("Supercell ID panel recognized from its account list")
     # the list slides in: wait until the name column stops moving (max 1.2 s)
     prev = None
     for _ in range(12):
@@ -159,6 +164,30 @@ def read_player(bot, frame=None):
     return text.strip() if text and conf > 0.6 else ""
 
 
+def _switcher_alias(frame, name_box):
+    """The in-game player name shown below an account's Supercell ID name."""
+    x, y, w, h = name_box
+    box = (int(x), int(y + h + 3), max(int(w), space.s(220)), space.s(26))
+    text, conf = vision.text_reader.read_line(frame, box)
+    return text.strip() if text and conf > 0.65 else ""
+
+
+def _current_switcher_account(bot, frame):
+    """Identify the active account by matching its switcher alias to the village player name."""
+    player = read_player(bot, frame)
+    if not player:
+        return None
+    matches = []
+    for name, _, name_box in read_switcher(bot, frame):
+        alias = _switcher_alias(frame, name_box)
+        if not alias or not same_name(player, alias):
+            continue
+        accounts = [a for a in bot.accounts if same_name(a["name"], name)]
+        if len(accounts) == 1:
+            matches.append((accounts[0], alias))
+    return matches[0] if len(matches) == 1 else None
+
+
 def same_clan(a, b):
     """Two readings of a clan name are the same clan: names shown cut off ('#White Devil...' / '#WhiteDevi')
     and small misreadings ('OMCH' / 'OMCHI') still match; 'OMCHI' and '#White Devil' do not."""
@@ -183,11 +212,20 @@ def read_clan(bot, frame=None):
 
 
 def on_account(bot, account, check_name=False):
-    """True if the bot switched to this account in this run (and, with check_name - after the game
-    reloaded - its in-game name still matches). In-game names are not unique (several accounts can
-    be called the same), so they never identify an account on their own."""
-    if bot.current_account != account["name"]:
+    """Check the tracked account, or verify a unique saved player-name mapping at startup."""
+    current = bot.current_account
+    if current is not None and current != account["name"]:
         return False
+    if current is None:
+        matches = [a for a in bot.accounts if a.get("player") and account.get("player")
+                   and same_name(a["player"], account["player"])]
+        if not account.get("player") or len(matches) != 1 or matches[0]["name"] != account["name"]:
+            return False
+        seen = read_player(bot)
+        if not seen:
+            bot.sleep(0.6)
+            seen = read_player(bot)
+        return bool(seen and same_name(seen, account["player"]))
     if check_name and account.get("player"):
         seen = read_player(bot)
         if not seen:
@@ -211,6 +249,18 @@ def switch_to(bot, account, state=None):
         account.pop(k)                                # per-visit flags (army recipe set, ...)
     bot.status(account=name, action="Switching account")
     open_switcher(bot)
+    active = _current_switcher_account(bot, bot.shot())
+    if active:
+        active_account, alias = active
+        active_account["player"] = alias
+        bot.current_account, bot.current_acc = active_account["name"], active_account
+        config.save_accounts(bot.accounts)
+        if same_name(active_account["name"], name):
+            log.info("Already on %s (verified from the Supercell ID account list)", name)
+            if not go_home(bot, 30):
+                raise BotError(f"Could not close the account switcher for '{name}'")
+            return True
+        log.info("Currently on %s; switching to %s", active_account["name"], name)
     save = state is not None or bot.state is not None   # (a test without a run has nothing to save to)
     if state is None:
         state = bot.state if bot.state is not None else {}

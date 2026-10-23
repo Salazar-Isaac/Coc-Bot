@@ -17,6 +17,7 @@ from gui.components import Card, ChoiceCard, FlowLayout, Pill, SettingRow, Toggl
 from gui.widgets import Combo
 
 SHORT = {"attack_all": "Loot", "loot_current": "Loot current", "donate": "Donate", "bb_attack": "Builder loot",
+         "bb_attack_current": "Current account",
          "home_upgrade": "Home upgrade", "walls": "Walls", "bb_upgrade": "Builder upgrade", "home_research": "Lab research",
          "bb_research": "Star Lab research", "raid": "Capital raid"}
 

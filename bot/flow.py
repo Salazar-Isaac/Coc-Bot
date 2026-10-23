@@ -32,6 +32,8 @@ STEPS = [
          "Main donates; the requesting accounts empty their Clan Castle and request", False, ""),
     Step("bb_attack", "Builder Base attack", "boat",
          "Attack on the Builder Base only (Star Bonus, then until full)", True, "builder"),
+    Step("bb_attack_current", "Builder Base current account", "boat",
+         "Attack on the Builder Base of the account that is already open", False, "builder"),
     Step("home_upgrade", "Home village upgrade", "hammer",
          "Put free builders on the buildings you choose, in your order", True, "home"),
     Step("walls", "Wall upgrade", "blocks",
@@ -76,6 +78,9 @@ OPTIONS = [
            "crosshair", ("loot_current",), {}),
     Option("bb_loot", "Loot", "Builder Base loot", "Builder Base attacks on each account, no home attacks",
            "boat", ("bb_attack",), {"bb_attack": LOOTERS}),
+    Option("bb_loot_current", "Loot", "Builder Base current account",
+           "Attack only the account that is already open; never switch accounts",
+           "boat", ("bb_attack_current",), {}),
     Option("home_bb_loot", "Loot", "Home + Builder loot", "Each account loots its village, then its Builder Base",
            "swords", ("attack_all", "bb_attack"), {"attack_all": LOOTERS, "bb_attack": LOOTERS}),
     Option("donate_only", "Donate", "Donate only", "The others request, the Main donates while it has elixir",
@@ -199,6 +204,7 @@ DEFAULT_STEPS = {
                      "max_attacks": 0},       # account "" = the one open now; max_attacks 0 = until stopped
     "donate": {},                             # settings["donate"] and the roles on the Accounts list
     "bb_attack": {"accounts": "1-15"},        # army, battle time, limits: settings["builder"]
+    "bb_attack_current": {},
     "home_upgrade": {"accounts": "3-15", "buildings": list(DEFAULT_HOME_BUILDINGS), "max_per_visit": 5,
                      "keep_gold": 300000},                 # gold never spent: searching bases costs gold
     "walls": {"accounts": "3-15", "keep_gold": 300000, "keep_elixir": 0},   # kept: searching bases costs gold
