@@ -131,12 +131,9 @@ DEFAULT_PLANS = {
     },
     "valkyrie_sneaky_minion": {
         "title": "Valkyries / Sneaky Goblins / Super Minions",
-<<<<<<< HEAD
-        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
-=======
-        "description": "Tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and 11 Earthquake clicks.",
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
+        "description": "Use the current army; tap-deploy the primary troop clockwise around the base, then deploy optional units, siege, heroes, and all available Earthquake spells.",
         "style": "perimeter_hero_earthquake",
+        "use_current_army": True,
         "tunable_options": [
             {"key": "perimeter_points", "label": "Troop deployment points", "description": "Number of positions used for the clockwise troop deployment.",
              "min": 4, "max": 24, "step": 1, "default": 16},
@@ -181,10 +178,18 @@ def load_plans():
     if not os.path.exists(PLANS_PATH):
         with open(PLANS_PATH, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_PLANS, f, indent=2)
-    with open(PLANS_PATH, encoding="utf-8") as f:
-        plans = copy.deepcopy(DEFAULT_PLANS)
-        plans.update(json.load(f))
-        return plans
+    try:
+        with open(PLANS_PATH, encoding="utf-8") as f:
+            configured = json.load(f)
+    except (OSError, ValueError) as exc:
+        log.warning("Could not load attack plans from %s: %s; using built-in plans", PLANS_PATH, exc)
+        return copy.deepcopy(DEFAULT_PLANS)
+    if not isinstance(configured, dict):
+        log.warning("Attack plans in %s must be a JSON object; using built-in plans", PLANS_PATH)
+        return copy.deepcopy(DEFAULT_PLANS)
+    plans = copy.deepcopy(DEFAULT_PLANS)
+    plans.update(configured)
+    return plans
 
 
 def get_plan(name):
@@ -627,12 +632,9 @@ def _deploy_perimeter_hero_earthquake(bot, plan, steps, frame, slots, by_key, ca
         deploy_siege()
         return handled
     troop_spots = _clockwise_perimeter(ring, centre)
-<<<<<<< HEAD
     point_count = plan.get("_tuning", {}).get("perimeter_points")
     if point_count is not None:
         troop_spots = _spread(troop_spots, min(point_count, len(troop_spots)))
-=======
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
     log.info("Deploying primary troop by individual taps clockwise around the base")
     if not _drop(bot, main_card, troop_spots, centre):
         log.warning("Primary troop could not be deployed around the base")
@@ -862,14 +864,10 @@ def deploy(bot, plan):
     active_plan = dict(plan, steps=active_steps)
 
     perimeter_strategy = plan.get("style") == "perimeter_hero_earthquake"
-<<<<<<< HEAD
     if smart or perimeter_strategy:
         ring, detected_centre = deployzone.deploy_geometry(frame)
     else:
         ring, detected_centre = [], None
-=======
-    ring = deployzone.deploy_line(frame) if smart or perimeter_strategy else []
->>>>>>> 6622c70713e7caacfe178610ec471859ebe67475
     if (smart or perimeter_strategy) and len(ring) < 8:
         if perimeter_strategy:
             log.warning("Could not find a safe perimeter outside the base (%d points)", len(ring))

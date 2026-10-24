@@ -7,15 +7,12 @@ echo   Coc-Bot setup
 echo ============================================
 echo.
 
-rem --- find Python (python on PATH, else the py launcher) ---
-set "PY="
-python --version >nul 2>&1 && set "PY=python"
-if not defined PY (
-    py -3 --version >nul 2>&1 && set "PY=py -3"
-)
-if not defined PY (
-    echo Python was not found.
-    echo Install Python 3.10 or newer from https://www.python.org/downloads/
+rem --- use the required Python version, regardless of the PATH default ---
+set "PY=py -3.12"
+%PY% --version >nul 2>&1
+if errorlevel 1 (
+    echo Python 3.12 was not found.
+    echo Install Python 3.12 from https://www.python.org/downloads/
     echo and tick "Add python.exe to PATH" during the install. Then run setup.bat again.
     echo.
     pause

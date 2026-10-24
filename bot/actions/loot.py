@@ -47,12 +47,18 @@ def is_full(bot, account, res):
 
 def min_loot(settings, account=None):
     """The loot a base needs: by the attacking account's Town Hall ("Base choice per Town Hall",
-    like completeid.py: more for a higher Town Hall), else the same minimum for all."""
+    like completeid.py: more for a higher Town Hall). If its Town Hall is unknown, use the lowest
+    configured Town Hall row; fall back to the fixed minimum only when the table has no usable rows."""
     lo = settings["loot"]
     table = lo.get("min_loot_th") or {}
     th = str((account or {}).get("th") or "")
-    if lo.get("min_loot_mode", "th") == "th" and th in table:
-        return table[th]
+    if lo.get("min_loot_mode", "th") == "th":
+        if isinstance(table.get(th), dict):
+            return table[th]
+        rows = [(int(level), values) for level, values in table.items()
+                if str(level).isdigit() and isinstance(values, dict)]
+        if rows:
+            return min(rows, key=lambda row: row[0])[1]
     return lo["min_loot"]
 
 
@@ -227,9 +233,14 @@ def ensure_army(bot, account):
     """Before the first attack of a visit: the army must have the units you require (Attack settings,
     default E-Dragon + Clone). The army trained now is kept if it has them; else your recipe ("loot"),
     the recipe that worked on this account before, then every other saved recipe is tried, and the
-    one that works is remembered for this account. Returns False if no army of the account has them:
-    then it does not attack with a wrong army."""
+    one that works is remembered for this account. Plans may instead explicitly use the current army."""
     s = bot.settings["loot"]
+    plan = attack.get_plan(s.get("attack_plan") or "edrag_spread")
+    if plan.get("use_current_army"):
+        log.info("%s: using current army for attack plan '%s'",
+                 account["name"], plan.get("title") or s.get("attack_plan"))
+        account["_army_checked"] = True
+        return True
     check = list(s.get("army_must_have", ["edrag", "clone"]) or [])
     name = s.get("army_recipe") or ""
     if account.get("_army_checked") is not None:

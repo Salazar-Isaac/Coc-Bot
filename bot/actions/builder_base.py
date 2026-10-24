@@ -35,6 +35,18 @@ def is_builder_base(frame):
     return vision.find(frame, BB_MARK) is not None
 
 
+def _tap_attack_button(bot):
+    frame = bot.shot()
+    if not vision.find(frame, BB_MARK):
+        raise BotError("Not in the Builder Base")
+    if not vision.templates.has("bb/attack_button"):
+        raise BotError("Builder Base battle icon template is missing")
+    m = vision.find(frame, "bb/attack_button", region=(0, 0, frame.shape[1], frame.shape[0]))
+    if not m:
+        raise BotError("Builder Base battle icon not found on screen")
+    bot.tap_match(m)
+
+
 def where(bot):
     """'main', 'builder' or None (unknown)."""
     f = bot.shot()
@@ -90,12 +102,7 @@ def _find_boat(bot, here):
             control.sleep(0.6)
         m, sc = vision.find_scaled(bot.shot(), "boat/icon")
         if m:
-            # the boat is under its icon; near the bottom the button bar covers the boat: tap just under
-            # the icon then (the bubble itself is the boat's too)
-            y = int(m.y + 80 * sc)
-            if y > space.point(0, 930)[1]:
-                y = int(m.y + 45 * sc)
-            return type(m)(m.x, y, m.score, m.box)
+            return m
     return None
 
 
@@ -130,18 +137,22 @@ def travel(bot, to):
         raise BotError("Could not find the boat back to the home village")
     bot.tap_match(boat, jitter=3)
     start = time.monotonic()
-    retapped = False
+    retried = False
     while time.monotonic() - start < 60:              # loading the other village can take a while
         control.sleep(1.0)
         now = where(bot)
         if now == to:
             log.info("Now in the %s village", "Builder Base" if to == "builder" else "home")
             return True
-        if now == here and not retapped and time.monotonic() - start > 8:
-            boat = _find_boat(bot, here)                # the tap did not register: tap the boat again
+        if now == here and not retried and time.monotonic() - start > 20:
+            boat = _find_boat(bot, here)                # first tap the bubble; retry on the hull only if needed
             if boat:
-                bot.tap_match(boat, jitter=3)
-            retapped = True
+                scale = boat.box[2] / vision.templates.image("boat/icon").shape[1]
+                y = int(boat.y + 80 * scale)
+                if y > space.point(0, 930)[1]:
+                    y = int(boat.y + 45 * scale)
+                bot.tap(boat.x, y, jitter=3)
+            retried = True
         f = bot.shot()
         m = vision.templates.has("bb/star_bonus_okay") and vision.find(f, "bb/star_bonus_okay")
         if m:
@@ -284,7 +295,7 @@ def attack(bot):
     if not go_home_bb(bot, 20):
         raise BotError("Not in the Builder Base")
     before = status(bot)
-    bot.tap_point("bb.attack")
+    _tap_attack_button(bot)
     if not bot.wait("bb/find_now", 6):
         raise BotError("Builder Base attack menu did not open")
     bot.sleep(0.3)
@@ -395,7 +406,15 @@ def attacks(bot, account):
     name = account.get("name", "?")
     bot.status(action="Builder Base attack")
     if cfg.get("army", "auto") != "keep" and account.get("_bb_army") != cfg.get("army", "auto"):
-        set_army(bot, cfg.get("army", "auto"))
+        try:
+            unit = set_army(bot, cfg.get("army", "auto"))
+        except BotError as e:
+            log.warning("%s Builder Base army setup failed: %s", name, e)
+            bot.save_error("bb-army")
+            return 0
+        if not unit:
+            log.warning("%s Builder Base army setup failed; no attacks this visit", name)
+            return 0
         account["_bb_army"] = cfg.get("army", "auto")      # once per visit
     attacks, stuck, prev = 0, 0, None
     max_attacks = cfg.get("max_attacks", 20)
@@ -429,14 +448,19 @@ def attacks(bot, account):
                 break
             account["_bb_army_retry"] = True
             log.info("%s Builder Base: %s - choosing the army again", name, e)
-            if not set_army(bot, cfg.get("army", "auto") if cfg.get("army", "auto") != "keep" else "auto"):
+            try:
+                unit = set_army(bot, cfg.get("army", "auto") if cfg.get("army", "auto") != "keep" else "auto")
+            except BotError as setup_error:
+                log.warning("%s Builder Base army setup failed: %s", name, setup_error)
+                bot.save_error("bb-army")
+                break
+            if not unit:
                 log.warning("%s Builder Base: no army - no attacks this visit", name)
                 break
         except BotError as e:
             log.warning("%s Builder Base attack: %s", name, e)
             bot.save_error("bb-attack")
-            if not go_home_bb(bot, 45):
-                break
+            break
     return attacks
 
 
@@ -468,13 +492,13 @@ def set_army(bot, choice):
         return None
     wanted = AUTO_ORDER if choice == "auto" else [choice] + [u for u in AUTO_ORDER if u != choice]
     # since the 2026-10 UI: Battle -> "Edit Army" in the Start Attack window -> Choose Army
-    bot.tap_point("bb.attack")
-    if bot.wait("bb/find_now", 5, interval=0.25):
-        bot.tap_point("bb.edit_army")
+    _tap_attack_button(bot)
+    if not bot.wait("bb/find_now", 5, interval=0.25):
+        raise BotError("Builder Base attack menu did not open")
+    bot.tap_point("bb.edit_army")
     if not bot.wait("bb/army_title", 5, interval=0.25):
-        log.warning("Builder Base army screen did not open")
-        go_home_bb(bot, 15)
-        return None
+        bot.tap_template("bb/menu_close", timeout=2, after=0.2)
+        raise BotError("Builder Base army screen did not open")
     try:
         bot.sleep(0.4)
         f = bot.shot()

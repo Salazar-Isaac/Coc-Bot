@@ -1,7 +1,10 @@
 @echo off
 cd /d "%~dp0"
-if exist "dist\Coc-Bot\Coc-Bot.exe" (
-    start "" "dist\Coc-Bot\Coc-Bot.exe" %*
-    exit /b
+py -3.12 --version >nul 2>&1
+if errorlevel 1 (
+    echo Python 3.12 was not found. Run setup.bat or install Python 3.12.
+    pause
+    exit /b 1
 )
-where pythonw >nul 2>&1 && (start "" pythonw main.py) || (start "" pyw -3 main.py)
+py -3.12 main.py %*
+if errorlevel 1 pause

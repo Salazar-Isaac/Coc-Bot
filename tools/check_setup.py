@@ -29,8 +29,8 @@ def check_python():
     v = sys.version_info
     if platform.system() != "Windows":
         line(FAIL, f"Windows is required (this is {platform.system()})")
-    if v < (3, 9):
-        line(FAIL, f"Python {v.major}.{v.minor} is too old: install Python 3.10 or newer")
+    if v[:2] != (3, 12):
+        line(FAIL, f"Python 3.12 is required (this is Python {v.major}.{v.minor})")
     else:
         line(OK, f"Python {v.major}.{v.minor}.{v.micro} ({sys.executable})")
 
@@ -115,17 +115,10 @@ def make_shortcut():
         shell = win32com.client.Dispatch("WScript.Shell")
         desktop = shell.SpecialFolders("Desktop")
         lnk = shell.CreateShortcut(os.path.join(desktop, "Coc-Bot.lnk"))
-        exe = os.path.join(ROOT, "dist", "Coc-Bot", "Coc-Bot.exe")
-        if os.path.exists(exe):
-            lnk.TargetPath = exe
-            lnk.Arguments = ""
-            lnk.WorkingDirectory = os.path.dirname(exe)
-            lnk.IconLocation = exe
-        else:
-            lnk.TargetPath = pythonw if os.path.exists(pythonw) else sys.executable
-            lnk.Arguments = f'"{os.path.join(ROOT, "main.py")}"'
-            lnk.WorkingDirectory = ROOT
-            lnk.IconLocation = ico
+        lnk.TargetPath = pythonw if os.path.exists(pythonw) else sys.executable
+        lnk.Arguments = f'"{os.path.join(ROOT, "main.py")}"'
+        lnk.WorkingDirectory = ROOT
+        lnk.IconLocation = ico
         lnk.Description = "Clash of Clans bot"
         lnk.Save()
         line(OK, f"Desktop shortcut created: {os.path.join(desktop, 'Coc-Bot.lnk')}")

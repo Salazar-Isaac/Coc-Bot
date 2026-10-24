@@ -421,7 +421,8 @@ class BaseChoiceSettings(StepSettings):
         self.fixed_box.setVisible(not th)
         self.explain.setText(
             "Attack a base only when it has at least this much (by the attacking account's Town Hall). Only the "
-            "resources you watch count. “Any” = not checked." if th else
+            "resources you watch count. If the Town Hall is unknown, the lowest Town Hall row is used. "
+            "“Any” = not checked." if th else
             "Attack a base only when it has at least this much, whatever the account's Town Hall. Only the "
             "resources you watch count. “Any” = not checked.")
 

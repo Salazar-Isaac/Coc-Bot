@@ -8,12 +8,9 @@ echo ============================================
 echo.
 
 set "PY="
-python --version >nul 2>&1 && set "PY=python"
+py -3.12 --version >nul 2>&1 && set "PY=py -3.12"
 if not defined PY (
-    py -3 --version >nul 2>&1 && set "PY=py -3"
-)
-if not defined PY (
-    echo Python was not found. Install Python 3.10 or newer and try again.
+    echo Python 3.12 was not found. Install Python 3.12 and try again.
     pause
     exit /b 1
 )
